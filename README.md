@@ -491,6 +491,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-sql.mjs              analyse syntaxique du SQL
 │   ├── check-install-integrity.mjs  paquets installés à moitié extraits
 │   ├── alias-loader.mjs           résolution de « @/ » pour node:test
+│   ├── register-alias.mjs         branchement du chargeur, avant les tests
 │   ├── stubs/                     doublures des paquets natifs, pour les tests
 │   ├── check-env-guard.test.mjs   la garde sur les clés d'API
 │   ├── check-recovery-link.test.mjs  les liens reçus, les ordres du flux, les adresses
@@ -506,7 +507,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-pending-action.test.mjs  l'indicateur d'action, jusqu'à la relecture
 │   ├── check-password-policy.test.mjs  où s'applique la borne, et le chemin normal de l'inscription
 │   ├── check-weak-password.test.mjs  le signalement d'un mot de passe faible, et sa place
-│   └── check-screen-modes.test.mjs  les cinq visages de l'écran de connexion, et leurs branches
+│   ├── check-screen-modes.test.mjs  les cinq visages de l'écran de connexion, et leurs branches
+│   └── check-inventory.test.mjs   ce que le lanceur exécute, et ce que le README en décrit
 └── .github/workflows/             CI et build EAS
 ```
 
@@ -1227,6 +1229,44 @@ sens** : un commentaire glissé dans la carte et citant une comparaison ne fait
 rien tomber, et le même commentaire fait tomber le banc dès que ce nettoyage est
 désactivé.
 
+**`check-inventory` regarde le dépôt, pas l'application.** `npm run test` lance
+`node … --test` **sans chemin** : Node découvre donc les fichiers de test par leur
+**nom**, selon une liste de motifs figée. Un fichier qui importe `node:test` mais
+dont le nom n'entre dans aucun de ces motifs n'est jamais exécuté — et
+`npm run test` sort en succès, avec un test de moins, indéfiniment. C'est la
+forme la plus discrète du garde-fou qui n'existe pas : écrit, versionné, lu par le
+prochain mainteneur, et ne mesurant rien.
+
+Les motifs ne sont pas recopiés de la documentation, ils ont été **éprouvés** :
+un fichier sonde contenant un test qui échoue toujours, déposé dans `scripts/`
+sous cinq noms, et le total relevé après chaque dépôt.
+
+| Nom éprouvé         | Total   | Verdict       |
+| ------------------- | ------- | ------------- |
+| `zz-sonde.mjs`      | 170     | non découvert |
+| `zz-sonde-non.mjs`  | 170     | non découvert |
+| `zz-sonde.spec.mjs` | 170     | non découvert |
+| `zz-sonde-test.mjs` | **171** | découvert     |
+| `zz-sonde.test.mjs` | **171** | découvert     |
+
+`.spec.mjs` — le nom qu'un développeur venu de Jest écrit sans y penser — passe
+donc inaperçu. Et la sonde a d'abord été nommée `zz-sonde-non-test.mjs`, qui a
+été **découverte** : elle finit par `-test.mjs`, ce que son nom semblait
+précisément nier. Le contrôle retient une seule forme, `*.test.mjs`, celle du
+dépôt — pas la plus large que Node accepterait.
+
+Le second défaut est un document qui décrit un dépôt qui a changé. Le README
+nomme ses bancs à deux endroits — l'arborescence du §5 et la liste du §9 — et le
+§9 ouvre sur « Seize fichiers de test, et rien d'autre », une affirmation
+d'**exhaustivité** que rien ne reliait au disque. Un banc ajouté sans ligne dans
+le README, ou une ligne restée après un renommage, passait sans bruit. C'était
+déjà le cas : `register-alias.mjs`, le fichier sans lequel aucun test ne
+s'exécute, n'était décrit nulle part. Cinq tests tiennent désormais le disque,
+l'arborescence, la liste, et le mot qui les compte. Falsifié en treize scénarios —
+neuf font tomber le banc, chacun sur le test attendu, et quatre témoins le
+laissent vert : description d'une ligne réécrite, deux lignes permutées, et un
+script de plus correctement branché et décrit.
+
 ### Diagnostic Expo
 
 ```bash
@@ -1505,12 +1545,12 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Quinze fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Seize fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
-  `check-pending-action`, `check-password-policy`, `check-weak-password` et
-  `check-screen-modes`
+  `check-pending-action`, `check-password-policy`, `check-weak-password`,
+  `check-screen-modes` et `check-inventory`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui
@@ -1526,7 +1566,11 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   endroits où une
   erreur ne produit ni exception ni message d'erreur, seulement un comportement
   faux, un texte illisible, un bouton qui semble n'avoir rien fait ou une phrase
-  fausse sur les données de l'adhérent. Les trois
+  fausse sur les données de l'adhérent. `check-inventory` ne regarde pas
+  l'application, mais **ce dépôt-ci** : que chaque banc soit nommé pour être
+  exécuté — un `.spec.mjs` ne l'est pas, mesuré —, qu'aucun script de `scripts/`
+  ne reste sans exécutant, et que ce fichier décrive exactement ce qui existe, au
+  mot près du décompte. Les trois
   paquets natifs dont
   dépend le stockage sont remplacés par des doublures branchées par
   `scripts/alias-loader.mjs`, ce qui n'ajoute aucune dépendance. **Aucun écran
@@ -1564,6 +1608,11 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lit pas les `paths` de `tsconfig.json` ; `scripts/alias-loader.mjs` comble
   l'écart sans dépendance. Le monter a ouvert au test tout `src/`, ce qui était
   la condition pour vérifier la traduction des erreurs.
+- **`check-inventory` ne balaie que `scripts/`.** Un banc écrit en JavaScript
+  sous un nom découvert mais rangé ailleurs — `src/`, par exemple — lui échappe,
+  puisque le balayage part de ce dossier. Et il tient l'**existence** des lignes
+  du README, pas leur justesse : une description fausse passe, seuls un nom
+  absent ou un nom en trop le font tomber.
 - **La portabilité a été mesurée ici, pas sur une autre machine.** Le clone
   vérifié l'a été sous Windows, avec le même Node et le même `core.autocrlf=true`
   — c'est-à-dire dans les conditions les plus défavorables pour les fins de ligne,
