@@ -28,6 +28,17 @@
  * `length === 0 ? … : …`. Rendu sans garde, il coexisterait avec la liste, et
  * l'échec d'un rafraîchissement remplacerait le contenu affiché par un écran
  * d'erreur — exactement ce que `useAsyncData` conserve `data` pour éviter.
+ *
+ * Un dernier contrôle est venu du dossier lui-même : **aucun écran n'est
+ * orphelin**. Le cas s'est présenté à la main, en cherchant qui montait
+ * `ConfigurationScreen` : le relevé ne portait que sur `src/`, et il concluait
+ * qu'aucune route ne l'atteignait — alors que `App.tsx`, à la racine, le monte.
+ * Le défaut n'existait pas ; la mesure était fausse. C'est le même piège que
+ * celui des commentaires : une recherche dont la portée est trop étroite rend une
+ * réponse fausse avec l'assurance d'une réponse vraie. Le test qui suit garde la
+ * bonne portée, et il tient une propriété qu'aucun autre banc ne voyait : un
+ * écran que rien ne monte passe le typage, le lint et le contrôle des contrastes,
+ * et il reste mort.
  */
 
 import assert from 'node:assert/strict';
@@ -234,4 +245,69 @@ test("l'état vide est la seule porte d'`AsyncFallback`", () => {
   }
 
   assert.deepEqual(fautifs, []);
+});
+
+/**
+ * Toutes les sources de l'application : `src/`, plus les deux fichiers de la
+ * racine qui montent le reste.
+ *
+ * `App.tsx` est **indispensable** ici. C'est lui qui monte `ConfigurationScreen`,
+ * l'écran de secours affiché quand les clés d'API manquent — et un relevé qui
+ * s'arrête à `src/` conclut à tort qu'aucune route ne l'atteint. L'erreur a été
+ * commise à la main, juste avant d'écrire ce test ; `check-env-guard` avait déjà
+ * la bonne portée pour la même raison.
+ */
+function sourcesDeLApplication() {
+  return [
+    ...fichiersSous('src', ['.ts', '.tsx']),
+    join(RACINE, 'App.tsx'),
+    join(RACINE, 'index.ts'),
+  ].map((chemin) => sansCommentaires(lireFichier(chemin)));
+}
+
+test('aucun écran n’est orphelin : chacun est monté quelque part', () => {
+  // Un écran que rien ne monte passe le typage, le lint, le contrôle des
+  // contrastes et tous les autres bancs — et il reste **mort**. Le cas est
+  // d'autant plus traître qu'il est invisible à la relecture : le fichier
+  // ressemble à tous les autres, et c'est son absence d'une ligne ailleurs qui
+  // fait le défaut. Le dossier est la source de vérité : un écran ajouté entre
+  // donc dans ce contrôle sans qu'on y pense.
+  assert.ok(ECRANS.length > 0, 'aucun fichier dans `src/screens` : le test ne vérifierait rien');
+
+  const sources = sourcesDeLApplication();
+  const orphelins = [];
+
+  for (const chemin of ECRANS) {
+    const relatif = relative(RACINE, chemin).replace(/\\/g, '/');
+    const noms = [
+      ...sansCommentaires(lireFichier(chemin)).matchAll(
+        /export\s+(?:const|function|class)\s+([A-Za-z_$][\w$]*)/g,
+      ),
+    ].map((trouve) => trouve[1]);
+
+    // Zéro export signifie que le motif ne correspond plus : le test deviendrait
+    // vert en ne mesurant rien, ce qui est le pire des états.
+    assert.ok(noms.length > 0, `${relatif} : aucun export de composant relevé`);
+
+    for (const nom of noms) {
+      // Le nom doit apparaître **au moins deux fois** hors commentaires : sa
+      // déclaration, et l'endroit qui le monte. Un nom cité seulement dans un
+      // commentaire ne compte pas — d'où le retrait préalable.
+      const motif = new RegExp(`\\b${nom.replace(/\$/g, '\\$')}\\b`, 'g');
+      const occurrences = sources.reduce(
+        (total, source) => total + (source.match(motif) ?? []).length,
+        0,
+      );
+
+      if (occurrences < 2) {
+        orphelins.push(`${relatif} : « ${nom} » n'apparaît qu'à sa déclaration`);
+      }
+    }
+  }
+
+  assert.deepEqual(
+    orphelins,
+    [],
+    "un écran que rien ne monte est un écran que l'adhérent ne verra jamais",
+  );
 });

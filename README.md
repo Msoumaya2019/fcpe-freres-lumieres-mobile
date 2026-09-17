@@ -64,6 +64,20 @@ choses qu'une lecture dispersée rendrait impossibles :
 Le client lui-même est construit dans `src/config/supabase.ts`, séparément : la
 lecture de la configuration est testable sans instancier de client.
 
+**Quand les clés manquent, l'application ne plante pas.** `App.tsx` monte
+`ConfigurationScreen` (`src/screens/ConfigurationScreen.tsx`) **à la place de tout
+le reste** tant que `isSupabaseConfigured` est faux. Conséquence voulue :
+`AuthProvider` n'est jamais monté, aucun écran n'a à gérer le cas « clés
+absentes », et `requireSupabase()` ne peut pas être appelé par erreur. C'est aussi
+ce qui permet à l'intégration continue de compiler le bundle **sans aucun secret**.
+
+Cet écran a deux publics, et deux messages. En développement il affiche les étapes
+de mise en place et un rappel sur la clé `service_role` ; en production il dit à
+l'adhérent que le problème ne vient ni de son compte ni de son téléphone, et qu'il
+doit le signaler au bureau. Afficher la procédure `.env.local` à un parent
+reviendrait à lui confier une marche qu'il ne peut pas exécuter, au moment précis
+où il faut lui dire qui contacter — c'est la même règle qu'`appErrorDetail()`.
+
 ### En développement
 
 `.env.local`, ignoré par Git (voir `.gitignore`, qui ignore `.env` et `.env.*`
@@ -330,7 +344,7 @@ affichée sous le champ — les deux se contredisaient.
 │   │   ├── types.ts               paramètres de routes typés
 │   │   ├── RootNavigator.tsx      connexion ⇄ application
 │   │   └── MainTabs.tsx           les quatre onglets
-│   ├── screens/                   les cinq écrans
+│   ├── screens/                   les cinq écrans, et celui des clés absentes
 │   ├── services/                  accès aux données, une fonction par requête
 │   ├── components/                bibliothèque d'interface
 │   ├── hooks/useAsyncData.ts      chargement avec états explicites
@@ -354,7 +368,7 @@ affichée sous le champ — les deux se contredisaient.
 │   ├── check-build-config.test.mjs  l'accord des versions, des permissions et des fins de ligne
 │   ├── check-input-limits.test.mjs  les limites de saisie, alignées sur la base
 │   ├── check-schema-types.test.mjs  le schéma SQL et son miroir TypeScript
-│   ├── check-async-wiring.test.mjs  le câblage asynchrone, et la porte de l'état vide
+│   ├── check-async-wiring.test.mjs  le câblage des écrans, la porte de l'état vide, les écrans orphelins
 │   ├── check-contrast.test.mjs    les contrastes de la palette, et les jetons morts
 │   ├── check-pending-action.test.mjs  l'indicateur d'action, jusqu'à la relecture
 │   ├── check-password-policy.test.mjs  où s'applique la borne de mot de passe
@@ -604,6 +618,27 @@ entre les deux — sans quoi un `ListEmptyComponent` posé ailleurs dans le fich
 blanchirait l'appel. Éprouvé dans les deux sens : la garde retirée fait tomber le
 test en nommant le fichier et la ligne, la même garde remise sur une seule ligne
 ne le fait pas tomber.
+
+**Sa cinquième promesse est née d'une fausse alerte, et c'est ce qui la rend
+utile.** En cherchant qui montait `ConfigurationScreen`, le relevé ne portait que
+sur `src/` : il répondait qu'aucune route ne l'atteignait. Le défaut n'existait
+pas — `App.tsx`, à la racine, le monte — mais la conclusion était fausse, et elle
+avait l'assurance d'une conclusion vraie. C'est la même famille que le piège des
+commentaires : **une recherche dont la portée est trop étroite ne rend pas une
+réponse incomplète, elle rend une réponse fausse.** Le banc qui suit a donc la
+bonne portée — `src/`, plus `App.tsx` et `index.ts`, les deux fichiers de la racine
+qui montent le reste — et il tient une propriété qu'aucun autre ne voyait : **aucun
+écran n'est orphelin**. Un écran que rien ne monte passe le typage, le lint, le
+contrôle des contrastes et tous les autres bancs, et il reste mort. Le dossier est
+la source de vérité, donc un écran ajouté entre dans le contrôle sans qu'on y
+pense.
+
+Falsifié en cinq scénarios. Deux retirent le montage (`App.tsx` n'importe plus
+l'écran de secours, `MainTabs` ne monte plus la discussion) et font tomber le test
+en nommant l'écran. Un troisième est celui qui compte : il retire le montage **et
+laisse un commentaire qui nomme l'écran** — le test tombe quand même, ce qui prouve
+qu'il ne lit pas la prose. Les deux derniers vérifient qu'un commentaire ajouté à
+côté d'un montage réel ne le fait pas tomber.
 
 **`check-pending-action` prolonge la promesse précédente, et il est né d'une mesure.**
 « Un écran qui écrit relit sa liste » ne dit pas **combien de temps** l'indicateur
