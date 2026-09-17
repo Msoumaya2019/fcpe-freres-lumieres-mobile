@@ -22,7 +22,11 @@ import {
 } from 'react';
 
 import { RECOVERY_REDIRECT_PATH, SIGNUP_REDIRECT_PATH } from '@/auth/redirectPaths';
-import { describeRecoveryError, parseRecoveryTokens } from '@/auth/recoveryLink';
+import {
+  describeLinkError,
+  isEmailConfirmationLink,
+  parseRecoveryTokens,
+} from '@/auth/recoveryLink';
 import { requireSupabase, supabase } from '@/config/supabase';
 import { toAppError } from '@/errors';
 import { fetchProfile } from '@/services/profiles';
@@ -56,8 +60,22 @@ export interface AuthContextValue {
    * écran, et lui seul décide de la navigation.
    */
   readonly passwordRecovery: boolean;
-  /** Message à afficher quand le lien reçu n'a pas pu aboutir (lien expiré). */
-  readonly recoveryError: string | null;
+  /**
+   * Ce qu'un lien reçu par e-mail vient d'apprendre, ou `null`.
+   *
+   * Un **seul** emplacement pour les deux flux et pour leurs deux issues, et
+   * c'est délibéré : un lien de confirmation abouti, un lien de confirmation
+   * expiré et un lien de réinitialisation expiré occupent le même bandeau, au
+   * même endroit de l'écran de connexion. Deux champs distincts les auraient
+   * fait se recouvrir, et l'ordre d'affichage serait devenu une règle implicite
+   * que rien ne tiendrait.
+   *
+   * La phrase est **déjà rédigée** — elle vient de `describeLinkError` ou de
+   * `src/errors/index.ts`. Elle doit donc passer par `userMessage()` à
+   * l'affichage, sans quoi `ErrorNotice` la remplacerait par le message
+   * générique.
+   */
+  readonly linkMessage: string | null;
   /**
    * Raisons pour lesquelles le serveur juge faible le mot de passe qu'il vient
    * d'**accepter** — `null` quand il n'a rien signalé.
@@ -83,7 +101,7 @@ export interface AuthContextValue {
   readonly completePasswordReset: (password: string) => Promise<void>;
   /** Abandonne la récupération : la session ouverte par le lien est fermée. */
   readonly cancelPasswordRecovery: () => Promise<void>;
-  readonly dismissRecoveryError: () => void;
+  readonly dismissLinkMessage: () => void;
 }
 
 interface AuthState {
@@ -91,7 +109,7 @@ interface AuthState {
   readonly session: Session | null;
   readonly profile: Profile | null;
   readonly passwordRecovery: boolean;
-  readonly recoveryError: string | null;
+  readonly linkMessage: string | null;
   readonly weakPasswordReasons: readonly string[] | null;
 }
 
@@ -118,7 +136,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     session: null,
     profile: null,
     passwordRecovery: false,
-    recoveryError: null,
+    linkMessage: null,
     weakPasswordReasons: null,
   }));
 
@@ -199,7 +217,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     };
   }, []);
 
-  // --- Lien de réinitialisation reçu par l'application ----------------------
+  // --- Liens reçus par l'application ----------------------------------------
   useEffect(() => {
     const client = supabase;
     if (client === null) {
@@ -211,10 +229,16 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     /**
      * Traite une adresse reçue de l'extérieur.
      *
-     * Deux cas seulement, et ils ne se recouvrent pas : le lien porte une
-     * session à compléter, ou il porte une erreur (expiré). Tout le reste est
-     * ignoré en silence — un lien de confirmation d'inscription, par exemple,
-     * dont le traitement n'a pas à changer ici.
+     * Trois cas, et ils ne se recouvrent pas : le lien ouvre une session à
+     * compléter (réinitialisation), il annonce une confirmation d'inscription
+     * **aboutie**, ou il porte une erreur. Le troisième est évalué en dernier
+     * parce qu'il est le seul à ne rien changer d'autre qu'un message.
+     *
+     * Un lien de confirmation abouti **n'ouvre aucune session** : `signUp` a
+     * déjà notifié la connexion au moment de l'inscription, et
+     * `detectSessionInUrl` vaut `false`. Le jeton que GoTrue joint au retour est
+     * la preuve que l'adresse est confirmée, pas un moyen d'entrer — l'adhérent
+     * revient donc ici pour se connecter, et l'application doit le lui dire.
      */
     const handleUrl = (url: string | null): void => {
       if (url === null) {
@@ -239,7 +263,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
         // avant l'appel est juste quel que soit le moment où la notification
         // arrive. Le détail ci-dessus explique le défaut, il ne le conditionne
         // pas — une version future de la bibliothèque ne peut pas le rendre faux.
-        setState((previous) => ({ ...previous, passwordRecovery: true, recoveryError: null }));
+        setState((previous) => ({ ...previous, passwordRecovery: true, linkMessage: null }));
 
         // Un échec tardif ne doit rien réécrire si l'adhérent a annulé
         // entre-temps : `passwordRecovery` vaut alors déjà `false`, et poser un
@@ -251,7 +275,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
           }
           setState((previous) =>
             previous.passwordRecovery
-              ? { ...previous, passwordRecovery: false, recoveryError: toAppError(error).message }
+              ? { ...previous, passwordRecovery: false, linkMessage: toAppError(error).message }
               : previous,
           );
         };
@@ -273,9 +297,25 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
         return;
       }
 
-      const message = describeRecoveryError(url);
+      // La confirmation est testée **avant** l'erreur, et l'ordre n'est pas
+      // indifférent : `isEmailConfirmationLink` exige l'absence de toute erreur,
+      // donc les deux branches s'excluent. Les interroger dans l'autre sens
+      // marcherait aussi, mais ferait dépendre la bonne nouvelle d'un contrôle
+      // négatif — c'est la branche positive qui doit se lire en premier.
+      if (isEmailConfirmationLink(url)) {
+        setState((previous) => ({
+          ...previous,
+          // La phrase est stockée **telle quelle**, sans marquage : le champ
+          // porte une chaîne, et c'est l'affichage qui appelle `userMessage`.
+          // Marquer ici ferait porter un `AppError` à un champ typé `string`.
+          linkMessage: 'Votre adresse est confirmée. Vous pouvez maintenant vous connecter.',
+        }));
+        return;
+      }
+
+      const message = describeLinkError(url);
       if (message !== null) {
-        setState((previous) => ({ ...previous, recoveryError: message }));
+        setState((previous) => ({ ...previous, linkMessage: message }));
       }
     };
 
@@ -349,9 +389,15 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     // L'écriture est inconditionnelle, y compris pour effacer. Ne poser la
     // valeur que lorsqu'elle existe laisserait le signalement d'un compte
     // survivre à la connexion d'un autre sur le même appareil.
+    //
+    // `linkMessage` est effacé dans le même mouvement, et pour une raison plus
+    // simple : le message d'un lien a fini son office dès que l'adhérent est
+    // entré. Le laisser ferait réapparaître « Votre adresse est confirmée » à la
+    // connexion suivante, sur un écran qui n'a plus rien à confirmer.
     setState((previous) => ({
       ...previous,
       weakPasswordReasons: data.weakPassword?.reasons ?? null,
+      linkMessage: null,
     }));
   }, []);
 
@@ -437,7 +483,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     // D'abord on referme le mode, sinon la déconnexion laisserait un instant
     // l'écran de choix du mot de passe affiché sans session pour l'appliquer.
     // `signOut` remet le drapeau à zéro de son côté.
-    setState((previous) => ({ ...previous, passwordRecovery: false, recoveryError: null }));
+    setState((previous) => ({ ...previous, passwordRecovery: false, linkMessage: null }));
 
     // Ensuite on attend que la session du lien soit posée **avant** de
     // déconnecter. `setSession` est un aller-retour réseau : déconnecter plus
@@ -457,11 +503,11 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     await signOut();
   }, [signOut]);
 
-  const dismissRecoveryError = useCallback(() => {
+  const dismissLinkMessage = useCallback(() => {
     // Rendre `previous` à l'identique quand il n'y a rien à effacer évite un
     // rendu inutile, React abandonnant la mise à jour.
     setState((previous) =>
-      previous.recoveryError === null ? previous : { ...previous, recoveryError: null },
+      previous.linkMessage === null ? previous : { ...previous, linkMessage: null },
     );
   }, []);
 
@@ -486,7 +532,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       session: state.session,
       profile: state.profile,
       passwordRecovery: state.passwordRecovery,
-      recoveryError: state.recoveryError,
+      linkMessage: state.linkMessage,
       weakPasswordReasons: state.weakPasswordReasons,
       signIn,
       signUp,
@@ -494,7 +540,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       requestPasswordReset,
       completePasswordReset,
       cancelPasswordRecovery,
-      dismissRecoveryError,
+      dismissLinkMessage,
       dismissWeakPassword,
     }),
     [
@@ -502,7 +548,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       state.session,
       state.profile,
       state.passwordRecovery,
-      state.recoveryError,
+      state.linkMessage,
       state.weakPasswordReasons,
       signIn,
       signUp,
@@ -510,7 +556,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       requestPasswordReset,
       completePasswordReset,
       cancelPasswordRecovery,
-      dismissRecoveryError,
+      dismissLinkMessage,
       dismissWeakPassword,
     ],
   );

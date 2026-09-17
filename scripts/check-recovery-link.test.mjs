@@ -77,7 +77,7 @@ function lireSource(cheminRelatif) {
     .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 }
 
-const { parseRecoveryTokens, describeRecoveryError } = await import(MODULE);
+const { parseRecoveryTokens, describeLinkError, isEmailConfirmationLink } = await import(MODULE);
 
 // Les adresses de retour vivent dans leur propre module, et non dans celui-ci :
 // ce sont des valeurs **sortantes**, que l'opérateur doit recopier dans le
@@ -177,10 +177,10 @@ test('accepte la même adresse dès qu’une paire suit le type', () => {
 });
 
 test('explique une erreur du fragment quand le type est dans la requête', () => {
-  // Même cause, conséquence plus grave : `describeRecoveryError` renvoyait
+  // Même cause, conséquence plus grave : `describeLinkError` renvoyait
   // `null`, donc un lien expiré ne produisait **rien** — exactement le silence
   // que ce fichier existe pour empêcher.
-  const message = describeRecoveryError(
+  const message = describeLinkError(
     'fcpefl://reinitialisation?type=recovery#error=access_denied&error_code=otp_expired',
   );
 
@@ -210,7 +210,7 @@ test('ne trouve rien dans une adresse sans paramètres', () => {
 });
 
 test("explique un lien expiré, au lieu de laisser l'écran muet", () => {
-  const message = describeRecoveryError(
+  const message = describeLinkError(
     'fcpefl://#error=access_denied&error_code=otp_expired' +
       '&error_description=Email+link+is+invalid+or+has+expired&type=recovery',
   );
@@ -223,28 +223,102 @@ test("explique un lien expiré, au lieu de laisser l'écran muet", () => {
 });
 
 test('explique aussi une erreur sans code précis', () => {
-  const message = describeRecoveryError('fcpefl://#error=server_error&type=recovery');
+  const message = describeLinkError('fcpefl://#error=server_error&type=recovery');
 
   assert.notEqual(message, null);
   assert.match(message, /Demandez-en un nouveau/);
 });
 
-test("ignore l'erreur d'un autre flux", () => {
-  const message = describeRecoveryError('fcpefl://#error=access_denied&type=signup');
+test("reconnaît le retour d'un lien de confirmation abouti", () => {
+  const confirmation =
+    'fcpefl://confirmation#access_token=jeton-acces&expires_in=3600' +
+    '&refresh_token=jeton-rafraichissement&token_type=bearer&type=signup';
 
-  assert.equal(message, null, "l'erreur d'inscription ne concerne pas la réinitialisation");
+  assert.equal(isEmailConfirmationLink(confirmation), true);
+});
+
+test("n'annonce pas une confirmation sans preuve qu'elle a abouti", () => {
+  const abouti = `fcpefl://confirmation${IMPLICIT_FRAGMENT.replace('type=recovery', 'type=signup')}`;
+
+  // Le témoin d'abord : sans lui, les refus ci-dessous pourraient passer pour
+  // des adresses mal formées plutôt que pour des décisions.
+  assert.equal(isEmailConfirmationLink(abouti), true);
+
+  // 1. Le `type` seul ne prouve rien. C'est le jeton d'accès — joint par GoTrue
+  //    **après** validation du lien côté serveur — qui atteste la confirmation.
+  assert.equal(isEmailConfirmationLink('fcpefl://confirmation#type=signup'), false);
+
+  // 2. Un lien expiré, tel que GoTrue le renvoie : `type=signup`, une erreur,
+  //    et **aucun** jeton. Ce cas est déjà écarté par la condition précédente —
+  //    c'est voulu, et le test suivant mesure la condition qui reste.
+  assert.equal(
+    isEmailConfirmationLink(
+      'fcpefl://confirmation#error=access_denied&error_code=otp_expired&type=signup',
+    ),
+    false,
+  );
+
+  // 3. Une réinitialisation n'est pas une confirmation, même avec un jeton.
+  assert.equal(isEmailConfirmationLink(`fcpefl://${IMPLICIT_FRAGMENT}`), false);
+
+  // 4. Le **chemin** ne dit rien : `fcpefl://confirmation` sans paramètres est
+  //    une adresse que GoTrue ne produit jamais. La confondre avec une
+  //    confirmation ferait annoncer un succès sur une URL vide.
+  assert.equal(isEmailConfirmationLink('fcpefl://confirmation'), false);
+});
+
+test("une erreur l'emporte sur un jeton, si les deux arrivent ensemble", () => {
+  // **Ce cas n'est pas produit par GoTrue aujourd'hui** : un échec ne porte
+  // aucun jeton, et la condition sur `access_token` suffit donc à l'écarter.
+  // Le contrôle sur l'erreur est un garde-fou, et il est mesuré **comme tel**.
+  //
+  // Il fallait un cas où les deux signaux coexistent, sans quoi le retirer ne
+  // faisait tomber aucun banc : c'est ce que la falsification a montré, le cas
+  // « lien expiré » passant alors pour une mauvaise raison.
+  assert.equal(
+    isEmailConfirmationLink(
+      'fcpefl://confirmation#access_token=jeton-acces&type=signup&error_code=otp_expired',
+    ),
+    false,
+  );
+});
+
+test("traduit aussi l'erreur d'un lien de confirmation", () => {
+  // Ce cas a changé de camp, et c'est le cœur de cette passe : l'erreur d'un
+  // lien de confirmation était écartée **sans message**, comme s'il ne s'était
+  // rien passé. Or c'est le cas le plus coûteux des deux — l'adresse n'est pas
+  // confirmée, donc l'adhérent ne peut pas se connecter, et rien ne le lui dit.
+  const expire = describeLinkError(
+    'fcpefl://#error=access_denied&error_code=otp_expired&type=signup',
+  );
+
+  assert.notEqual(expire, null, "l'échec d'une confirmation doit produire un message");
+  assert.match(expire, /confirmé/, 'le message doit nommer ce qui manque : la confirmation');
+  assert.match(expire, /demandez un nouveau lien/);
+  assert.doesNotMatch(
+    expire,
+    /réinitialisation|mot de passe/,
+    "un lien de confirmation ne doit pas envoyer l'adhérent vers le mot de passe",
+  );
+});
+
+test("ignore l'erreur d'un flux que l'application ne connaît pas", () => {
+  // `email_change` n'a ni écran ni traitement ici : lui donner le message d'un
+  // autre flux enverrait l'adhérent vers une action qui n'existe pas.
+  assert.equal(describeLinkError('fcpefl://#error=access_denied&type=email_change'), null);
+  assert.equal(describeLinkError('fcpefl://#error=access_denied&type=invite'), null);
 });
 
 test("n'annonce pas d'erreur sur une adresse qui n'en porte pas", () => {
-  assert.equal(describeRecoveryError(`fcpefl://${IMPLICIT_FRAGMENT}`), null);
-  assert.equal(describeRecoveryError('fcpefl://'), null);
+  assert.equal(describeLinkError(`fcpefl://${IMPLICIT_FRAGMENT}`), null);
+  assert.equal(describeLinkError('fcpefl://'), null);
 });
 
 test('un lien expiré ne fournit aucun jeton', () => {
   const expire = 'fcpefl://#error=access_denied&error_code=otp_expired&type=recovery';
 
   assert.equal(parseRecoveryTokens(expire), null);
-  assert.notEqual(describeRecoveryError(expire), null);
+  assert.notEqual(describeLinkError(expire), null);
 });
 
 // --- Les ordres d'exécution du flux de récupération -------------------------
@@ -340,7 +414,7 @@ test('« Annuler » attend la session du lien avant de déconnecter', () => {
   const corps = corpsDeFonction(
     source,
     'const cancelPasswordRecovery = useCallback(',
-    'const dismissRecoveryError = useCallback(',
+    'const dismissLinkMessage = useCallback(',
   );
 
   const attente = position(corps, 'await recoverySessionRef.current;');
@@ -350,6 +424,70 @@ test('« Annuler » attend la session du lien avant de déconnecter', () => {
     attente < deconnexion,
     'la session du lien doit être attendue avant la déconnexion : sinon elle arrive après, ' +
       "et « Annuler » rouvre ce qu'il vient de fermer",
+  );
+});
+
+// --- Ce qu'un lien apprend à l'écran, et quand cela s'efface -----------------
+//
+// Deux clauses, et la seconde est celle qu'on oublie : afficher un message est
+// visible, l'effacer ne l'est pas. Un message qui survit à la connexion
+// réapparaîtrait au lancement suivant, sur un écran qui n'a plus rien à
+// annoncer — le même défaut que le signalement de mot de passe faible, dont
+// l'écriture est inconditionnelle pour cette raison précise.
+
+test("le fournisseur annonce une confirmation d'inscription aboutie", () => {
+  const source = lireSource(AUTH_PROVIDER);
+  const corps = corpsDeFonction(
+    source,
+    'const handleUrl = (url: string | null)',
+    'const message = ',
+  );
+
+  // Le contrôle du lien **et** l'écriture du message : l'un sans l'autre ne
+  // servirait à rien, et c'est justement l'écriture qui manquait.
+  position(corps, 'isEmailConfirmationLink(url)');
+  assert.match(
+    corps,
+    /linkMessage:\s*'[^']*confirm[^']*'/i,
+    'une confirmation aboutie doit poser un message, sinon l’adhérent voit l’écran ' +
+      'de connexion s’ouvrir sans indication que son clic a fonctionné',
+  );
+
+  // La phrase doit nommer ce qui est confirmé **et** l'étape suivante : elle est
+  // lue par quelqu'un qui ne sait pas encore qu'il doit se connecter.
+  const phrase = corps.match(/linkMessage:\s*'([^']*)'/)[1];
+  assert.match(phrase, /adresse/i);
+  assert.match(phrase, /connecter/i);
+});
+
+test('le message d’un lien est effacé par la connexion réussie', () => {
+  const source = lireSource(AUTH_PROVIDER);
+  const corps = corpsDeFonction(
+    source,
+    'const signIn = useCallback(',
+    'const signUp = useCallback(',
+  );
+
+  // Effacement **inconditionnel**, et non conditionné à l'existence d'un
+  // message : c'est la forme qui survit à un changement d'ordre des appels.
+  assert.match(
+    corps,
+    /linkMessage:\s*null/,
+    'la connexion doit effacer le message du lien, sinon « Votre adresse est confirmée » ' +
+      'réapparaîtrait à la connexion suivante',
+  );
+
+  // Le contrôle qui rend le précédent utile : un `linkMessage` posé ailleurs
+  // dans `signIn` passerait aussi, et rouvrirait le défaut.
+  //
+  // L'espace après le deux-points est retiré avant comparaison : l'exiger
+  // ferait tomber ce test sur une remise en forme correcte, c'est-à-dire sur du
+  // code juste.
+  const ecritures = corps.match(/linkMessage:\s*[^,\n]+/g) ?? [];
+  assert.deepEqual(
+    ecritures.map((ecriture) => ecriture.replace(/\s+/g, '')),
+    ['linkMessage:null'],
+    'la connexion ne doit qu’effacer le message, jamais en poser un',
   );
 });
 

@@ -376,18 +376,41 @@ par un fragment d'URL. Le lien `fcpefl://confirmation#…&type=signup` n'ouvre d
 aucune session, et la confirmation a lieu côté serveur, au moment du clic. Le
 message d'attente le dit déjà — « Ouvrez-le pour activer votre compte, puis
 connectez-vous » — et un adhérent qui essaie avant de confirmer reçoit « Cette
-adresse e-mail n'a pas encore été confirmée… ». `parseRecoveryTokens` écarte les
-liens `type=signup`, sans quoi ils seraient pris pour des réinitialisations et
-connecteraient l'adhérent au lieu de lui demander un mot de passe.
+adresse e-mail n'a pas encore été confirmée… ».
 
-> **Limite connue, à combler avant diffusion.** `handleUrl` ignore le lien de
-> confirmation **en silence** : rien ne reconnaît `type=signup`, donc l'adhérent
-> qui clique voit l'application s'ouvrir sur l'écran de connexion, sans aucune
-> indication que son adresse est confirmée. Le silence est ici une lacune, pas un
-> choix. Le combler demande un état de plus dans `AuthProvider` (un avis
-> « adresse confirmée »), son affichage sur `ConnexionScreen`, et son effacement
-> à la connexion réussie — comme `weakPasswordReasons`, dont l'écriture est
-> inconditionnelle pour cette raison précise.
+**Le retour dans l'application est annoncé, et c'est un correctif.** Rien ne
+reconnaissait `type=signup` : l'adhérent qui cliquait voyait l'écran de connexion
+s'ouvrir **sans aucune indication** que son clic avait fonctionné. `handleUrl`
+reconnaît maintenant les deux issues, et elles occupent le **même** bandeau —
+`linkMessage` — parce que deux champs distincts se seraient recouverts, et que
+l'ordre d'affichage serait devenu une règle implicite que rien ne tiendrait :
+
+| Ce que porte le lien     | Ce que l'adhérent lit                                                                      |
+| ------------------------ | ------------------------------------------------------------------------------------------ |
+| confirmation aboutie     | « Votre adresse est confirmée. Vous pouvez maintenant vous connecter. »                    |
+| confirmation expirée     | « … Votre adresse n'est pas encore confirmée : demandez un nouveau lien à l'association… » |
+| réinitialisation expirée | « Demandez-en un nouveau depuis l'écran de connexion. »                                    |
+
+`isEmailConfirmationLink` exige **trois** conditions, et chacune écarte un cas
+réel : le `type`, un jeton d'accès — que GoTrue ne joint qu'après validation du
+lien côté serveur, c'est la **preuve** de la confirmation — et **l'absence de
+toute erreur**. Sans la troisième, un lien expiré annoncerait « votre adresse est
+confirmée », soit l'inverse exact de la vérité. Le contrôle est donc plus strict
+que nécessaire, et c'est voulu : un lien dont on ne saurait pas dire s'il a abouti
+ne doit rien annoncer.
+
+Le message est effacé **inconditionnellement** par une connexion réussie, comme
+`weakPasswordReasons` et pour la même raison : le laisser ferait réapparaître
+« Votre adresse est confirmée » à la connexion suivante, sur un écran qui n'a plus
+rien à confirmer.
+
+> **Ce qu'un lien de confirmation échoué laisse sans recours.** Le message dit
+> d'en demander un nouveau, mais l'application ne sait pas encore le faire.
+> `@supabase/auth-js` 2.116.0 expose pourtant `auth.resend({ type: 'signup',
+email })` — vérifié dans la copie installée, `GoTrueClient.resend` et
+> `ResendParams`. Un bouton « Renvoyer l'e-mail de confirmation » serait le remède
+> durable, à ajouter avant diffusion : il demande de traiter le cas d'une adresse
+> **déjà** confirmée, que le serveur refuse, donc un état de plus.
 
 **Un des deux états ne se lit pas dans l'écran, et c'est ce qui le rend fragile.**
 Dans l'état sans confirmation, `ConnexionScreen` n'appelle rien après une
@@ -426,7 +449,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   │   ├── AuthProvider.tsx       état de session, connexion, inscription,
 │   │   │                          réinitialisation, écoute des liens entrants
 │   │   ├── redirectPaths.ts       ★ les adresses de retour vers l'application
-│   │   └── recoveryLink.ts        ★ lecture du lien de réinitialisation
+│   │   └── recoveryLink.ts        ★ lecture des liens reçus par e-mail
 │   ├── navigation/
 │   │   ├── types.ts               paramètres de routes typés
 │   │   ├── RootNavigator.tsx      connexion ⇄ application
@@ -447,7 +470,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── alias-loader.mjs           résolution de « @/ » pour node:test
 │   ├── stubs/                     doublures des paquets natifs, pour les tests
 │   ├── check-env-guard.test.mjs   la garde sur les clés d'API
-│   ├── check-recovery-link.test.mjs  le lien, les ordres du flux, les adresses de retour
+│   ├── check-recovery-link.test.mjs  les liens reçus, les ordres du flux, les adresses
 │   ├── check-user-messages.test.mjs  les messages de l'adhérent, et l'ordre des règles
 │   ├── check-dates.test.mjs       les dates civiles et les jours impossibles
 │   ├── check-rls-guards.test.mjs  les colonnes sous verrou, insertion comprise
@@ -603,7 +626,7 @@ qu'aucun écran n'ait rien écrit de travers. `useAsyncData` range dans
 `errorMessage` le résultat d'un premier `appErrorMessage` ; `AsyncFallback` le
 remet à un `ErrorNotice`, qui en applique un second, ne reconnaît aucune règle, et
 remplace la phrase. Le message d'un lien expiré, produit par
-`describeRecoveryError`, subissait le même sort : l'adhérent lisait « Une erreur
+`describeLinkError`, subissait le même sort : l'adhérent lisait « Une erreur
 inattendue est survenue. Réessayez… » au lieu de « demandez un nouveau lien ».
 Mesuré sur cinq phrases, toutes perdues. Chaque message déjà rédigé est donc
 marqué à la frontière d'affichage, et deux tests couvrent la **composition** des
@@ -984,7 +1007,7 @@ le plus instructif des trois. La requête était lue avec
 la requête absorbait donc le début du fragment, et dans
 `?type=recovery#access_token=…`, `type` valait « recovery#access_token=… ». Deux
 conséquences, toutes deux muettes : un lien pourtant valide était refusé sans
-message, et `describeRecoveryError` renvoyait `null` sur un lien expiré — le
+message, et `describeLinkError` renvoyait `null` sur un lien expiré — le
 silence même que ce fichier existe pour empêcher. Le test antérieur, « le fragment
 l'emporte sur la requête », ne pouvait pas le voir : il place `type=recovery` des
 **deux** côtés, si bien que le fragment réécrivait la valeur corrompue. La
@@ -1002,6 +1025,18 @@ vide — un motif **absent** rend `-1`, donc « avant » n'importe quoi, et un m
 présent deux fois compare la mauvaise paire — donc chaque comparaison vérifie
 d'abord que les deux motifs existent et sont uniques. Falsifiés un par un :
 chaque clause inversée fait tomber exactement son test, avec son propre message.
+
+**Cinq tests de plus couvrent ce qu'un lien apprend à l'écran**, et l'un d'eux
+est né d'un défaut réel : le lien de confirmation d'inscription était reconnu
+pour être **écarté**, jamais pour être annoncé. L'adhérent qui cliquait voyait
+l'écran de connexion s'ouvrir sans un mot. Les tests éprouvent la reconnaissance
+du lien — trois conditions, dont l'absence d'erreur, sans laquelle un lien expiré
+annoncerait une confirmation —, la traduction des **deux** flux, et deux clauses
+de forme dans `AuthProvider` : le message est bien posé, et la connexion réussie
+l'efface. La seconde est celle qu'on oublie, parce qu'elle ne se voit pas : un
+message qui survit à la connexion réapparaît au lancement suivant. Le test refuse
+aussi toute **autre** écriture de `linkMessage` dans `signIn`, sans quoi un
+message posé là passerait inaperçu et rouvrirait le défaut.
 
 **Quatre tests tiennent les adresses de retour elles-mêmes**, et ils sont nés d'une
 mesure. Le schéma est déclaré **une seule fois**, dans `app.json`

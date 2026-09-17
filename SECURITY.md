@@ -97,6 +97,17 @@ d'authentification. Chacun a été **falsifié** — la clause inversée fait to
 exactement son test, avec son propre message — parce qu'un test d'ordre qui n'a
 jamais échoué ne prouve rien.
 
+**Un lien de confirmation d'inscription n'ouvre aucune session, et c'est
+délibéré.** Son retour porte lui aussi un jeton (`type=signup`), que
+`detectSessionInUrl: false` empêche déjà d'être utilisé — mais le convertir en
+session serait une **régression**, pas une commodité : l'adhérent entrerait sans
+jamais retaper le mot de passe qu'il vient de choisir, et le lien deviendrait une
+seconde porte d'entrée, valable jusqu'à son expiration. L'application annonce donc
+que l'adresse est confirmée, et renvoie vers la connexion.
+`isEmailConfirmationLink` exige un jeton d'accès **et** l'absence de toute erreur :
+un lien expiré porte `type=signup` lui aussi, et annoncer une confirmation serait
+alors l'inverse exact de la vérité.
+
 Le lien expire, et c'est le cas courant — on ouvre rarement son courrier dans la
 minute. Le code doit donc dire « ce lien a expiré, demandez-en un nouveau »
 plutôt que de ne rien afficher : un écran de connexion inchangé laisserait croire

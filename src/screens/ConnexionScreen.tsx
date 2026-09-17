@@ -251,8 +251,8 @@ export function ConnexionScreen() {
     signIn,
     signUp,
     passwordRecovery,
-    recoveryError,
-    dismissRecoveryError,
+    linkMessage,
+    dismissLinkMessage,
     cancelPasswordRecovery,
   } = useAuth();
 
@@ -269,19 +269,28 @@ export function ConnexionScreen() {
   const effectiveMode: Mode = passwordRecovery ? 'nouveau-mot-de-passe' : mode;
   const isSignUp = effectiveMode === 'inscription';
 
+  /**
+   * Efface ce que l'écran affichait, et ce que le **fournisseur** y avait mis.
+   *
+   * Les deux moitiés vont ensemble : `linkMessage` ne vit pas dans l'état local,
+   * mais il s'affiche ici. Le laisser en place pendant que l'adhérent passe à un
+   * autre formulaire ferait survivre « Votre adresse est confirmée » à un écran
+   * qui ne parle plus de cela.
+   */
   const clearMessages = useCallback(() => {
     setError(null);
     setNotice(null);
     setPassword('');
-  }, []);
+    dismissLinkMessage();
+  }, [dismissLinkMessage]);
 
   const goToForgotPassword = useCallback(() => {
     // Le message d'un lien expiré recommande justement de demander un nouveau
     // lien : le laisser affiché pendant que l'adhérent le fait serait redondant.
-    dismissRecoveryError();
+    dismissLinkMessage();
     clearMessages();
     setMode('mot-de-passe-oublie');
-  }, [clearMessages, dismissRecoveryError]);
+  }, [clearMessages, dismissLinkMessage]);
 
   const backToSignIn = useCallback(() => {
     clearMessages();
@@ -401,19 +410,25 @@ export function ConnexionScreen() {
           <AppText variant="caption">Écoles Frères Lumières — Montmagny</AppText>
         </View>
 
-        {/* Un lien expiré, ou illisible, se dit ici. Sans ce bandeau, l'adhérent
-            qui ouvre son e-mail le lendemain ne verrait rien du tout : il en
-            conclurait que le lien ne marche pas, pas qu'il a expiré.
+        {/* Ce qu'un lien reçu vient d'apprendre se dit ici, et c'est le **seul**
+            endroit où l'application parle d'un lien. Trois cas y arrivent, et
+            aucun ne doit rester muet :
+
+              - une confirmation d'inscription aboutie — sans ce bandeau,
+                l'adhérent voit l'écran de connexion s'ouvrir sans la moindre
+                indication que son clic a fonctionné ;
+              - un lien de confirmation expiré — son adresse n'est pas
+                confirmée, donc il ne peut pas entrer, et rien ne le lui dit ;
+              - un lien de réinitialisation expiré, ou illisible.
 
             Le message est marqué parce qu'il est **déjà** rédigé pour l'adhérent
-            — il vient de `describeRecoveryError`. Non marqué, il serait pris
-            pour un message technique non reconnu et remplacé par « Une erreur
-            inattendue est survenue. Réessayez… », c'est-à-dire par un conseil de
-            réessayer alors que le lien restera expiré : la raison d'être de ce
-            message disparaîtrait à l'affichage. */}
-        {recoveryError === null ? null : (
-          <ErrorNotice tone="info" error={userMessage(recoveryError)} />
-        )}
+            — il vient de `describeLinkError`, ou du fournisseur pour la
+            confirmation. Non marqué, il serait pris pour un message technique
+            non reconnu et remplacé par « Une erreur inattendue est survenue.
+            Réessayez… », c'est-à-dire par un conseil de réessayer alors que le
+            lien restera expiré : la raison d'être de ce message disparaîtrait à
+            l'affichage. */}
+        {linkMessage === null ? null : <ErrorNotice tone="info" error={userMessage(linkMessage)} />}
 
         <Card>
           {effectiveMode === 'nouveau-mot-de-passe' ? (

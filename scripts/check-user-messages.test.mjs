@@ -30,7 +30,7 @@
  * mal écrit : `useAsyncData` range dans `errorMessage` le résultat d'un premier
  * `appErrorMessage`, et `AsyncFallback` le remet à un `ErrorNotice`, qui en
  * applique un second. Même chose pour le message d'un lien expiré, produit par
- * `describeRecoveryError` puis affiché par l'écran de connexion. Mesuré : dans
+ * `describeLinkError` puis affiché par l'écran de connexion. Mesuré : dans
  * les deux cas la phrase était remplacée par le message générique.
  *
  * Les deux derniers tests couvrent cette **composition** — ce qu'aucun test ne
@@ -60,9 +60,11 @@ const RACINE = fileURLToPath(new URL('../', import.meta.url));
 
 const MODULE = new URL('../src/errors/index.ts', import.meta.url).href;
 const RECOVERY = new URL('../src/auth/recoveryLink.ts', import.meta.url).href;
+/** Le fournisseur porte une phrase destinée à l'adhérent, et elle est lue ici. */
+const AUTH_PROVIDER = join(RACINE, 'src/auth/AuthProvider.tsx');
 
 const { appErrorMessage, userMessage, AppError } = await import(MODULE);
-const { describeRecoveryError } = await import(RECOVERY);
+const { describeLinkError } = await import(RECOVERY);
 
 /** Tous les composants et écrans, récursivement. */
 function fichiersTsx() {
@@ -129,20 +131,52 @@ test('les phrases réellement affichées par les écrans sont préservées', () 
   }
 });
 
-test("le message d'un lien expiré survit à l'affichage", () => {
-  // Ce message ne vient pas d'un écran : il est produit par `recoveryLink`, puis
-  // affiché par un `ErrorNotice`, qui applique `appErrorMessage` une seconde
-  // fois. Sans le marquage, l'adhérent lisait « Une erreur inattendue est
-  // survenue. Réessayez… » au lieu de « demandez un nouveau lien » — soit
-  // l'inverse du conseil utile, puisque réessayer ne fera pas revivre le lien.
-  const expire = describeRecoveryError(
-    'fcpefl://#error=access_denied&error_code=otp_expired&type=recovery',
-  );
+test("les messages d'un lien reçu survivent à l'affichage", () => {
+  // Ces messages ne viennent pas d'un écran : ils sont produits par
+  // `recoveryLink`, puis affichés par un `ErrorNotice`, qui applique
+  // `appErrorMessage` une seconde fois. Sans le marquage, l'adhérent lisait
+  // « Une erreur inattendue est survenue. Réessayez… » au lieu de « demandez un
+  // nouveau lien » — soit l'inverse du conseil utile, puisque réessayer ne fera
+  // pas revivre le lien.
+  //
+  // Les **deux** flux sont éprouvés, et pas seulement celui d'origine : un lien
+  // de confirmation expiré produit désormais un message, et il traverse le même
+  // chemin d'affichage.
+  const liens = [
+    [
+      'réinitialisation expirée',
+      'fcpefl://#error=access_denied&error_code=otp_expired&type=recovery',
+    ],
+    ['confirmation expirée', 'fcpefl://#error=access_denied&error_code=otp_expired&type=signup'],
+    ['confirmation refusée', 'fcpefl://#error=server_error&type=signup'],
+  ];
 
-  assert.notEqual(expire, null);
-  assert.match(expire, /expiré/);
-  assert.match(appErrorMessage(expire), /erreur inattendue/);
-  assert.equal(appErrorMessage(userMessage(expire)), expire);
+  for (const [nom, adresse] of liens) {
+    const message = describeLinkError(adresse);
+
+    assert.notEqual(message, null, `${nom} : aucun message produit`);
+    assert.match(appErrorMessage(message), /erreur inattendue/, `${nom} : le générique attendu`);
+    assert.equal(
+      appErrorMessage(userMessage(message)),
+      message,
+      `${nom} : le marquage ne protège pas`,
+    );
+  }
+});
+
+test("le message d'une confirmation aboutie survit à l'affichage", () => {
+  // La phrase est **lue dans son fichier**, et non recopiée ici : c'est la seule
+  // façon qu'une reformulation dans `AuthProvider` reste couverte sans que
+  // quelqu'un pense à ce test. C'est aussi la forme qui a révélé, ailleurs, un
+  // banc devenu vert en n'éprouvant plus rien.
+  const source = sansCommentaires(readFileSync(AUTH_PROVIDER, 'utf8'));
+  const trouve = source.match(/linkMessage:\s*'([^']*confirm[^']*)'/i);
+
+  assert.notEqual(trouve, null, 'la phrase de confirmation est introuvable dans `AuthProvider`');
+
+  const phrase = trouve[1];
+  assert.match(appErrorMessage(phrase), /erreur inattendue/, 'le générique attendu');
+  assert.equal(appErrorMessage(userMessage(phrase)), phrase, 'le marquage ne protège pas');
 });
 
 test('un message déjà traduit ne survit qu’une fois marqué', () => {
@@ -165,10 +199,10 @@ test('aucune phrase déjà traduite n’est remise à ErrorNotice sans marquage'
   //
   // Les deux identifiants visés portent une phrase **déjà** traduite :
   // `errorMessage` sort d'un premier `appErrorMessage` (appliqué dans
-  // `useAsyncData`), `recoveryError` de `describeRecoveryError`. Les deux formes
+  // `useAsyncData`), `linkMessage` de `describeLinkError`. Les deux formes
   // sont visées — `error={errorMessage}` et `error={errorMessage ?? …}` — d'où un
   // motif volontairement privé de son accolade fermante.
-  const motifs = ['error={errorMessage', 'error={recoveryError'];
+  const motifs = ['error={errorMessage', 'error={linkMessage'];
   const fautifs = [];
 
   for (const chemin of fichiersTsx()) {

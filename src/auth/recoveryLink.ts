@@ -1,12 +1,29 @@
 /**
- * Lecture du lien de réinitialisation de mot de passe.
+ * Lecture des liens reçus par e-mail.
  *
  * POURQUOI CE FICHIER EXISTE
  * --------------------------
- * Le lien envoyé par e-mail renvoie l'adhérent vers l'application
+ * Les liens envoyés par e-mail renvoient l'adhérent vers l'application
  * (`fcpefl://…`) en transportant une session temporaire. Encore faut-il
  * l'extraire de l'URL, et c'est le seul endroit du projet où l'on analyse une
  * adresse reçue de l'extérieur.
+ *
+ * DEUX FLUX, UN SEUL ANALYSEUR
+ * ----------------------------
+ * Le même mécanisme transporte deux liens différents, et les confondre a un
+ * coût :
+ *
+ *   - `type=recovery` — réinitialisation. Le lien ouvre une session qu'il reste
+ *     à conclure par le choix d'un mot de passe ; la confondre avec une
+ *     confirmation connecterait l'adhérent au lieu de lui demander un mot de
+ *     passe.
+ *   - `type=signup` — confirmation d'inscription. Le lien **confirme l'adresse**
+ *     côté serveur, et ne connecte pas : l'application n'ouvre aucune session.
+ *     Rien ne le signalait, si bien que l'adhérent voyait l'écran de connexion
+ *     sans aucune indication que son clic avait abouti.
+ *
+ * Un lien de confirmation **échoué** revient avec `error_code` et `type=signup` :
+ * il était jusqu'ici écarté sans message, comme s'il ne s'était rien passé.
  *
  * POURQUOI PAS `URL`
  * ------------------
@@ -33,6 +50,7 @@ export interface RecoveryTokens {
 }
 
 const RECOVERY_TYPE = 'recovery';
+const CONFIRMATION_TYPE = 'signup';
 
 function decodeSafely(value: string): string {
   try {
@@ -113,17 +131,58 @@ export function parseRecoveryTokens(url: string): RecoveryTokens | null {
 }
 
 /**
- * Message à afficher quand le lien n'a pas pu aboutir, ou `null`.
+ * `true` quand l'URL est le retour d'un lien de confirmation d'inscription
+ * **abouti**.
+ *
+ * Trois conditions, et chacune écarte un cas réel :
+ *
+ *   - `type=signup` — sans lui, on lirait une réinitialisation ;
+ *   - un jeton d'accès présent — GoTrue ne le joint qu'après avoir validé le
+ *     lien côté serveur. C'est la **preuve** que l'adresse est confirmée, et
+ *     non une supposition tirée de la seule présence du `type` ;
+ *   - aucune erreur portée — un lien expiré revient avec `error_code`, et
+ *     annoncer « adresse confirmée » serait alors exactement l'inverse de la
+ *     vérité. C'est un **garde-fou** : l'échec ne porte aujourd'hui aucun jeton,
+ *     donc la condition précédente l'écarte déjà. Il est là pour que la règle ne
+ *     dépende pas de cette propriété d'un paquet tiers, et il est mesuré sur un
+ *     cas où les deux signaux coexistent — sans quoi le retirer ne ferait
+ *     tomber aucun banc.
+ *
+ * Le contrôle est volontairement plus strict que nécessaire : un lien de
+ * confirmation dont on ne saurait pas dire s'il a abouti ne doit rien annoncer.
+ */
+export function isEmailConfirmationLink(url: string): boolean {
+  const parameters = readParameters(url);
+
+  return (
+    parameters.get('type') === CONFIRMATION_TYPE &&
+    parameters.get('access_token') !== undefined &&
+    parameters.get('error_code') === undefined &&
+    parameters.get('error') === undefined
+  );
+}
+
+/**
+ * Message à afficher quand un lien reçu n'a pas pu aboutir, ou `null`.
  *
  * Sans ce cas, un lien expiré — ce qui arrive dès qu'un adhérent ouvre son
  * e-mail le lendemain — ne produirait **rien du tout** : l'application
  * s'ouvrirait sur l'écran de connexion, sans explication. L'adhérent en
  * conclurait que le lien ne fonctionne pas, pas qu'il a expiré.
  *
+ * Les **deux** flux sont traduits, et c'est délibéré : un lien de confirmation
+ * expiré laissait l'adhérent sans message **et** sans recours, alors que c'est
+ * le cas le plus coûteux des deux — son adresse n'est pas confirmée, donc il ne
+ * peut pas se connecter, et rien ne le lui dit.
+ *
+ * Un `type` **inconnu** (changement d'adresse, invitation) reste sans message :
+ * lui en donner un de réinitialisation serait trompeur, et il n'existe pas de
+ * flux correspondant dans cette application.
+ *
  * Le message d'origine est en anglais et destiné aux journaux : il est traduit
  * ici, comme partout ailleurs dans le projet.
  */
-export function describeRecoveryError(url: string): string | null {
+export function describeLinkError(url: string): string | null {
   const parameters = readParameters(url);
 
   const code = parameters.get('error_code') ?? parameters.get('error') ?? '';
@@ -131,17 +190,22 @@ export function describeRecoveryError(url: string): string | null {
     return null;
   }
 
-  // Un `type` présent et différent désigne un autre flux (confirmation
-  // d'inscription, changement d'adresse) : son erreur ne concerne pas la
-  // réinitialisation, et lui donner ce message serait trompeur.
+  // Un `type` absent est traité comme une réinitialisation : c'est le flux
+  // d'origine, et un lien de réinitialisation amputé de son `type` en reste un.
   const type = parameters.get('type');
-  if (type !== null && type !== RECOVERY_TYPE) {
-    return null;
+  const expire = code === 'otp_expired';
+
+  if (type === null || type === RECOVERY_TYPE) {
+    return expire
+      ? "Ce lien de réinitialisation a expiré. Demandez-en un nouveau depuis l'écran de connexion."
+      : "Ce lien de réinitialisation n'a pas pu être utilisé. Demandez-en un nouveau depuis l'écran de connexion.";
   }
 
-  if (code === 'otp_expired') {
-    return "Ce lien de réinitialisation a expiré. Demandez-en un nouveau depuis l'écran de connexion.";
+  if (type === CONFIRMATION_TYPE) {
+    return expire
+      ? "Ce lien de confirmation a expiré. Votre adresse n'est pas encore confirmée : demandez un nouveau lien à l'association, puis reconnectez-vous."
+      : "Ce lien de confirmation n'a pas pu être utilisé. Votre adresse n'est pas encore confirmée : demandez un nouveau lien à l'association, puis reconnectez-vous.";
   }
 
-  return "Ce lien de réinitialisation n'a pas pu être utilisé. Demandez-en un nouveau depuis l'écran de connexion.";
+  return null;
 }
