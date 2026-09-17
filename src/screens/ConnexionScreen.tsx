@@ -7,14 +7,20 @@ import { userMessage } from '@/errors';
 import { spacing } from '@/theme';
 
 /**
- * Les quatre visages du même écran.
+ * Les cinq visages du même écran.
  *
  * Les cinq écrans demandés à la conception sont respectés : la récupération de
- * mot de passe n'ajoute pas d'écran, elle ajoute des **modes** à celui-ci. Ce
- * n'est pas un raccourci — c'est le même endroit dans l'application, « tout ce
- * qui se passe avant d'être entré », et les quatre modes s'excluent.
+ * mot de passe et le renvoi de l'e-mail de confirmation n'ajoutent pas d'écran,
+ * ils ajoutent des **modes** à celui-ci. Ce n'est pas un raccourci — c'est le
+ * même endroit dans l'application, « tout ce qui se passe avant d'être entré »,
+ * et les cinq modes s'excluent.
  */
-type Mode = 'connexion' | 'inscription' | 'mot-de-passe-oublie' | 'nouveau-mot-de-passe';
+type Mode =
+  | 'connexion'
+  | 'inscription'
+  | 'mot-de-passe-oublie'
+  | 'nouveau-mot-de-passe'
+  | 'renvoyer-confirmation';
 
 /**
  * Longueur minimale, recopiée d'un réglage qui ne vit **pas** dans ce dépôt :
@@ -140,6 +146,107 @@ function ForgotPasswordForm({ onBack }: { readonly onBack: () => void }) {
       {error === null ? null : <ErrorNotice error={error} />}
 
       <Button label="Envoyer le lien" onPress={handleSubmit} loading={submitting} />
+      <Button
+        label="Retour à la connexion"
+        variant="ghost"
+        onPress={onBack}
+        disabled={submitting}
+      />
+    </>
+  );
+}
+
+/**
+ * Renvoi de l'e-mail de confirmation d'inscription.
+ *
+ * **Pourquoi ce mode existe.** Un lien de confirmation expire — c'est le cas
+ * courant, on ouvre rarement son courrier dans la journée. L'adresse reste alors
+ * non confirmée : l'adhérent ne peut pas se connecter, et il n'y avait **aucun
+ * recours en ligne**. Le message qu'il lisait lui disait d'en demander un
+ * nouveau, sans que l'application sache le faire.
+ *
+ * **La phrase ne dit jamais si l'adresse existe**, ni si elle est déjà
+ * confirmée — même règle que la demande de réinitialisation, et pour la même
+ * raison : cet écran est public. Une phrase qui distinguerait les cas dirait à
+ * un inconnu quelles adresses sont inscrites. D'où la forme conditionnelle, qui
+ * est la garantie et non une politesse.
+ *
+ * Le champ est un état à part entière, comme pour la réinitialisation : une fois
+ * la demande faite, il n'y a plus rien à saisir, et laisser le formulaire
+ * affiché inviterait à appuyer une seconde fois — ce qui déclencherait la
+ * limitation de débit de Supabase.
+ */
+function ResendConfirmationForm({ onBack }: { readonly onBack: () => void }) {
+  const { resendConfirmation } = useAuth();
+
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState<unknown>(null);
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = useCallback(() => {
+    const trimmedEmail = email.trim();
+    if (trimmedEmail === '') {
+      setError(userMessage('Indiquez votre adresse e-mail.'));
+      return;
+    }
+
+    setError(null);
+    setSubmitting(true);
+
+    void (async () => {
+      try {
+        await resendConfirmation(trimmedEmail);
+        setSentTo(trimmedEmail);
+      } catch (caught) {
+        setError(caught);
+      } finally {
+        setSubmitting(false);
+      }
+    })();
+  }, [email, resendConfirmation]);
+
+  if (sentTo !== null) {
+    return (
+      <>
+        <AppText variant="heading">Vérifiez vos e-mails</AppText>
+        <ErrorNotice
+          tone="info"
+          error={userMessage(
+            `Si une confirmation est en attente pour ${sentTo}, un nouvel e-mail vient ` +
+              "d'être envoyé. Ouvrez-le, puis revenez vous connecter.",
+          )}
+        />
+        <Button label="Retour à la connexion" variant="ghost" onPress={onBack} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <AppText variant="heading">Renvoyer la confirmation</AppText>
+      <AppText variant="caption">
+        Indiquez l’adresse utilisée à l’inscription : un nouvel e-mail de confirmation vous sera
+        envoyé.
+      </AppText>
+
+      <TextField
+        label="Adresse e-mail"
+        value={email}
+        onChangeText={setEmail}
+        placeholder="prenom.nom@exemple.fr"
+        autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="email"
+        keyboardType="email-address"
+        editable={!submitting}
+        onSubmitEditing={handleSubmit}
+        returnKeyType="send"
+      />
+
+      {error === null ? null : <ErrorNotice error={error} />}
+
+      <Button label="Renvoyer l’e-mail" onPress={handleSubmit} loading={submitting} />
       <Button
         label="Retour à la connexion"
         variant="ghost"
@@ -287,10 +394,18 @@ export function ConnexionScreen() {
   const goToForgotPassword = useCallback(() => {
     // Le message d'un lien expiré recommande justement de demander un nouveau
     // lien : le laisser affiché pendant que l'adhérent le fait serait redondant.
-    dismissLinkMessage();
+    // `clearMessages` s'en charge — l'appeler ici en plus serait une seconde
+    // écriture de la même règle, et deux écritures peuvent diverger.
     clearMessages();
     setMode('mot-de-passe-oublie');
-  }, [clearMessages, dismissLinkMessage]);
+  }, [clearMessages]);
+
+  const goToResendConfirmation = useCallback(() => {
+    // Même raison, autre flux : le message d'un lien de confirmation échoué
+    // recommande d'en demander un nouveau, et le formulaire est juste après.
+    clearMessages();
+    setMode('renvoyer-confirmation');
+  }, [clearMessages]);
 
   const backToSignIn = useCallback(() => {
     clearMessages();
@@ -435,6 +550,8 @@ export function ConnexionScreen() {
             <NewPasswordForm onCancel={cancelRecovery} />
           ) : effectiveMode === 'mot-de-passe-oublie' ? (
             <ForgotPasswordForm onBack={backToSignIn} />
+          ) : effectiveMode === 'renvoyer-confirmation' ? (
+            <ResendConfirmationForm onBack={backToSignIn} />
           ) : (
             <>
               <AppText variant="heading">{isSignUp ? 'Créer un compte' : 'Connexion'}</AppText>
@@ -500,6 +617,19 @@ export function ConnexionScreen() {
             label="Mot de passe oublié ?"
             variant="ghost"
             onPress={goToForgotPassword}
+            disabled={submitting}
+          />
+        ) : null}
+
+        {/* Le renvoi de confirmation ne s'affiche **qu'en mode connexion** : à
+            l'inscription, c'est le formulaire lui-même qui envoie l'e-mail, et
+            proposer d'en renvoyer un pour un compte qui n'existe pas encore
+            n'aurait pas de sens. */}
+        {effectiveMode === 'connexion' ? (
+          <Button
+            label="Renvoyer l’e-mail de confirmation"
+            variant="ghost"
+            onPress={goToResendConfirmation}
             disabled={submitting}
           />
         ) : null}

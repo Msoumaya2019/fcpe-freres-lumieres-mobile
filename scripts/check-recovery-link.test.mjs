@@ -294,7 +294,11 @@ test("traduit aussi l'erreur d'un lien de confirmation", () => {
 
   assert.notEqual(expire, null, "l'échec d'une confirmation doit produire un message");
   assert.match(expire, /confirmé/, 'le message doit nommer ce qui manque : la confirmation');
-  assert.match(expire, /demandez un nouveau lien/);
+  assert.match(
+    expire,
+    /demandez un nouvel e-mail de confirmation/,
+    'le message doit indiquer le remède, qui est désormais dans l’application',
+  );
   assert.doesNotMatch(
     expire,
     /réinitialisation|mot de passe/,
@@ -627,27 +631,41 @@ test('la liste des adresses à enregistrer est close', () => {
   );
 });
 
-test("l'inscription passe l'adresse de confirmation à `signUp`", () => {
-  const source = lireSource(AUTH_PROVIDER);
-  const debut = source.indexOf('auth.signUp({');
-
+/**
+ * Le bloc d'un appel, de son en-tête à sa fermeture.
+ *
+ * La borne est `});`, et non un appel voisin : une ancre sur un appel prendrait
+ * pour fin de bloc celui qu'on cherche justement à examiner.
+ */
+function blocAppel(source, enTete) {
+  const debut = source.indexOf(enTete);
   assert.notEqual(
     debut,
     -1,
-    'aucun appel à `signUp` dans `AuthProvider` : ce contrôle serait vide, et un ' +
-      '`signUp` déplacé passerait inaperçu',
+    `aucun appel à « ${enTete} » dans \`AuthProvider\` : ce contrôle serait vide`,
   );
 
   const fin = source.indexOf('});', debut);
-  assert.notEqual(fin, -1, 'appel à `signUp` non refermé : ses options sont indélimitables');
+  assert.notEqual(fin, -1, `appel à « ${enTete} » non refermé : ses options sont indélimitables`);
 
-  assert.match(
-    source.slice(debut, fin),
-    /emailRedirectTo:\s*Linking\.createURL\(SIGNUP_REDIRECT_PATH\)/,
-    'sans `emailRedirectTo`, `signUp` n’envoie aucun `redirect_to` et GoTrue retombe ' +
-      'sur le « Site URL » du tableau de bord : l’adhérent confirme son adresse dans un ' +
-      'navigateur, et ne revient pas dans l’application',
-  );
+  return source.slice(debut, fin);
+}
+
+test("les deux envois d'e-mail de confirmation passent l'adresse de retour", () => {
+  const source = lireSource(AUTH_PROVIDER);
+
+  // L'inscription et le renvoi mènent au **même** endroit, et c'est l'invariant :
+  // deux adresses différentes produiraient deux comportements selon le chemin
+  // emprunté, dont un seul serait éprouvé.
+  for (const enTete of ['auth.signUp({', 'auth.resend({']) {
+    assert.match(
+      blocAppel(source, enTete),
+      /emailRedirectTo:\s*Linking\.createURL\(SIGNUP_REDIRECT_PATH\)/,
+      `${enTete} : sans \`emailRedirectTo\`, GoTrue retombe sur le « Site URL » du ` +
+        'tableau de bord — l’adhérent confirme son adresse dans un navigateur, et ne ' +
+        'revient pas dans l’application',
+    );
+  }
 
   // La valeur doit venir du module qui la nomme. Un littéral recopié ici
   // échapperait à la lecture de `redirectPaths.ts`, donc à tout ce fichier.
@@ -657,13 +675,25 @@ test("l'inscription passe l'adresse de confirmation à `signUp`", () => {
     '`SIGNUP_REDIRECT_PATH` doit être importé de `@/auth/redirectPaths`',
   );
 
-  // L'ensemble est fermé : une troisième adresse de retour doit être examinée,
-  // et non ajoutée en silence.
+  // L'ensemble est fermé : une adresse de retour supplémentaire doit être
+  // examinée, et non ajoutée en silence. C'est ce compteur qui a signalé l'appel
+  // ajouté par le renvoi de confirmation.
   const appels = source.match(/Linking\.createURL\(/g) ?? [];
   assert.strictEqual(
     appels.length,
-    2,
+    3,
     `une adresse de retour supplémentaire doit être examinée (${appels.length} trouvées)`,
+  );
+});
+
+test('le renvoi de confirmation demande bien le type `signup`', () => {
+  // `ResendParams` n'admet que `signup` ou `email_change` pour une adresse
+  // e-mail. Un autre type ferait échouer l'appel côté serveur, et l'adhérent
+  // lirait un message générique sans savoir pourquoi.
+  assert.match(
+    blocAppel(lireSource(AUTH_PROVIDER), 'auth.resend({'),
+    /type:\s*'signup'/,
+    "le renvoi doit demander le type `signup` : c'est le seul qui renvoie le lien de confirmation",
   );
 });
 

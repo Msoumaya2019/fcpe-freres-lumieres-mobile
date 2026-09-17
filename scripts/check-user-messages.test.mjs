@@ -233,6 +233,39 @@ test('le test de forme lit bien des fichiers', () => {
   assert.ok(fichiers.some((chemin) => chemin.endsWith('ConnexionScreen.tsx')));
 });
 
+test("les messages d'envoi d'e-mail ne disent pas si l'adresse existe", () => {
+  // Deux écrans **publics** envoient un e-mail à une adresse saisie : la demande
+  // de réinitialisation et le renvoi de la confirmation d'inscription. Leurs
+  // messages doivent donc être **conditionnels** — « Si un compte existe… »,
+  // « Si une confirmation est en attente… ».
+  //
+  // Une phrase qui affirmerait l'existence — « Un e-mail a été envoyé à … » —
+  // dirait à un inconnu quelles adresses sont inscrites dans l'association. La
+  // garantie est dans la **forme** de la phrase, et c'est la seule chose qui
+  // puisse être tenue ici : aucun rendu n'est disponible.
+  const source = sansCommentaires(
+    readFileSync(join(RACINE, 'src/screens/ConnexionScreen.tsx'), 'utf8'),
+  );
+  const conditionnelles = [...source.matchAll(/`(Si [^`]+)`/g)].map(([, phrase]) => phrase);
+
+  assert.ok(
+    conditionnelles.length >= 2,
+    `moins de deux messages conditionnels relevés (${conditionnelles.length}) : ce contrôle ` +
+      'serait partiel, ou la forme aurait changé sans que ce test le voie',
+  );
+
+  for (const phrase of conditionnelles) {
+    // Le marquage est éprouvé en même temps : sans lui, `ErrorNotice` remplacerait
+    // la phrase par le message générique, qui ne révèle rien non plus mais
+    // n'apprend rien à l'adhérent.
+    assert.match(
+      appErrorMessage(userMessage(phrase)),
+      /^Si /,
+      `« ${phrase} » n'est plus conditionnelle : elle affirme l'existence de l'adresse`,
+    );
+  }
+});
+
 /* -------------------------------------------------------------------------- *
  * LA TABLE DE TRADUCTION ELLE-MÊME
  *

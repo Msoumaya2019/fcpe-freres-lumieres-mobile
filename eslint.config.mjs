@@ -53,6 +53,14 @@ export default tseslint.config(
       'no-console': ['warn', { allow: ['warn', 'error', 'info'] }],
       eqeqeq: ['error', 'always'],
       'prefer-const': 'error',
+      // `exhaustive-deps` est **élevé en erreur**, alors qu'il est un
+      // avertissement dans la configuration recommandée. Mesuré : avec
+      // l'avertissement, retirer `resendConfirmation` des dépendances du
+      // `useMemo` d'`AuthProvider` laissait `npm run lint` sortir en succès —
+      // un `useMemo` qui sert une fonction capturée ne se plaint jamais, il
+      // sert l'ancienne. Aucun banc de ce dépôt ne lit les dépendances d'un
+      // `useMemo`, donc la règle est le seul endroit où cet accord se tient.
+      'react-hooks/exhaustive-deps': 'error',
       // Les props sont décrites par TypeScript, pas par PropTypes.
       'react/prop-types': 'off',
     },

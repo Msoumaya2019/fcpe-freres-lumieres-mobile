@@ -385,11 +385,11 @@ reconnaît maintenant les deux issues, et elles occupent le **même** bandeau �
 `linkMessage` — parce que deux champs distincts se seraient recouverts, et que
 l'ordre d'affichage serait devenu une règle implicite que rien ne tiendrait :
 
-| Ce que porte le lien     | Ce que l'adhérent lit                                                                      |
-| ------------------------ | ------------------------------------------------------------------------------------------ |
-| confirmation aboutie     | « Votre adresse est confirmée. Vous pouvez maintenant vous connecter. »                    |
-| confirmation expirée     | « … Votre adresse n'est pas encore confirmée : demandez un nouveau lien à l'association… » |
-| réinitialisation expirée | « Demandez-en un nouveau depuis l'écran de connexion. »                                    |
+| Ce que porte le lien     | Ce que l'adhérent lit                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------- |
+| confirmation aboutie     | « Votre adresse est confirmée. Vous pouvez maintenant vous connecter. »                     |
+| confirmation expirée     | « … Votre adresse n'est pas encore confirmée : demandez un nouvel e-mail de confirmation… » |
+| réinitialisation expirée | « Demandez-en un nouveau depuis l'écran de connexion. »                                     |
 
 `isEmailConfirmationLink` exige **trois** conditions, et chacune écarte un cas
 réel : le `type`, un jeton d'accès — que GoTrue ne joint qu'après validation du
@@ -404,13 +404,36 @@ Le message est effacé **inconditionnellement** par une connexion réussie, comm
 « Votre adresse est confirmée » à la connexion suivante, sur un écran qui n'a plus
 rien à confirmer.
 
-> **Ce qu'un lien de confirmation échoué laisse sans recours.** Le message dit
-> d'en demander un nouveau, mais l'application ne sait pas encore le faire.
-> `@supabase/auth-js` 2.116.0 expose pourtant `auth.resend({ type: 'signup',
+**Un lien de confirmation échoué a maintenant un remède dans l'application.** La
+phrase dit d'en demander un nouveau, et l'écran de connexion porte le bouton qui
+le fait : `AuthProvider.resendConfirmation` appelle `auth.resend({ type: 'signup',
 email })` — vérifié dans la copie installée, `GoTrueClient.resend` et
-> `ResendParams`. Un bouton « Renvoyer l'e-mail de confirmation » serait le remède
-> durable, à ajouter avant diffusion : il demande de traiter le cas d'une adresse
-> **déjà** confirmée, que le serveur refuse, donc un état de plus.
+`ResendParams`, qui n'admettent que `signup` ou `email_change` pour une adresse —
+avec **la même** adresse de retour que l'inscription. Sans elle, le second e-mail
+ramènerait l'adhérent dans un navigateur au lieu de l'application, et la
+réparation du premier lien reproduirait son défaut.
+
+> **Le serveur ne dit rien, et c'est ce qui rend la phrase de l'écran possible.**
+> Dans la source de GoTrue (`supabase/auth`, `internal/api/resend.go`), les trois
+> cas que l'écran ne peut pas distinguer répondent tous `200` avec un corps vide :
+> adresse **inconnue**, adresse **déjà confirmée** — le renvoi est alors
+> simplement sauté, « we don't need to send a confirmation email again » — et
+> envoi effectif. Aucun ne porte d'erreur, aucun ne porte de session. L'écran peut
+> donc écrire « **Si** une confirmation est en attente pour … », vrai dans les
+> trois cas, au lieu d'affirmer un envoi qu'il n'a pas constaté. Un échec réel
+> d'acheminement, lui, revient en erreur et s'affiche comme tel — ce n'est pas une
+> fuite, c'est une panne.
+
+Le bouton n'apparaît qu'en mode « connexion » : à l'inscription, le formulaire
+vient d'envoyer l'e-mail, et un second bouton inviterait à le renvoyer aussitôt.
+Le formulaire de renvoi vit dans `ConnexionScreen`, comme les quatre autres
+visages de cet écran : c'est un mode de plus, pas un sixième écran.
+
+**Un renvoi consomme le même quota que l'inscription.** Avec le service d'envoi
+par défaut, c'est deux e-mails par heure pour tout le projet — la limite mesurée
+du réglage, et non une conséquence du bouton. Une raison de plus de renseigner un
+SMTP avant de communiquer l'application : un renvoi refusé pour cette raison
+s'affiche comme une erreur, parce que c'en est une.
 
 **Un des deux états ne se lit pas dans l'écran, et c'est ce qui le rend fragile.**
 Dans l'état sans confirmation, `ConnexionScreen` n'appelle rien après une
@@ -482,7 +505,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-contrast.test.mjs    les contrastes de la palette, et les jetons morts
 │   ├── check-pending-action.test.mjs  l'indicateur d'action, jusqu'à la relecture
 │   ├── check-password-policy.test.mjs  où s'applique la borne, et le chemin normal de l'inscription
-│   └── check-weak-password.test.mjs  le signalement d'un mot de passe faible, et sa place
+│   ├── check-weak-password.test.mjs  le signalement d'un mot de passe faible, et sa place
+│   └── check-screen-modes.test.mjs  les cinq visages de l'écran de connexion, et leurs branches
 └── .github/workflows/             CI et build EAS
 ```
 
@@ -496,6 +520,15 @@ configuration.
 Appeler `setLoading(true)` depuis un effet provoquerait un rendu intermédiaire
 faux, et ESLint le refuse (`react-hooks/set-state-in-effect`) — la règle attrape
 ici une vraie boucle de rendu.
+
+**`exhaustive-deps` est élevé en erreur, alors qu'il est un avertissement.**
+Mesuré : avec l'avertissement, retirer `resendConfirmation` des dépendances du
+`useMemo` d'`AuthProvider` laissait `npm run lint` **sortir en succès**. Un
+`useMemo` qui sert une fonction capturée ne se plaint jamais — il sert l'ancienne
+—, et aucun banc de ce dépôt ne lit les dépendances d'un `useMemo` : la règle est
+donc le seul endroit où cet accord se tient. Le reste de la configuration
+recommandée est conservé tel quel, y compris `set-state-in-effect` et `purity`,
+qui attrapent des défauts qu'aucun test ne verrait.
 
 **`reload()` repasse par « chargement » — mais seulement s'il n'y a rien à
 l'écran.** Les quatre écrans de liste passent `reload` au bouton « Réessayer »
@@ -1026,11 +1059,12 @@ présent deux fois compare la mauvaise paire — donc chaque comparaison vérifi
 d'abord que les deux motifs existent et sont uniques. Falsifiés un par un :
 chaque clause inversée fait tomber exactement son test, avec son propre message.
 
-**Cinq tests de plus couvrent ce qu'un lien apprend à l'écran**, et l'un d'eux
-est né d'un défaut réel : le lien de confirmation d'inscription était reconnu
-pour être **écarté**, jamais pour être annoncé. L'adhérent qui cliquait voyait
-l'écran de connexion s'ouvrir sans un mot. Les tests éprouvent la reconnaissance
-du lien — trois conditions, dont l'absence d'erreur, sans laquelle un lien expiré
+**Neuf tests de plus couvrent ce qu'un lien apprend à l'écran** — sept dans
+`check-recovery-link`, deux dans `check-user-messages` —, et l'un d'eux est né
+d'un défaut réel : le lien de confirmation d'inscription était reconnu pour être
+**écarté**, jamais pour être annoncé. L'adhérent qui cliquait voyait l'écran de
+connexion s'ouvrir sans un mot. Les tests éprouvent la reconnaissance du lien —
+trois conditions, dont l'absence d'erreur, sans laquelle un lien expiré
 annoncerait une confirmation —, la traduction des **deux** flux, et deux clauses
 de forme dans `AuthProvider` : le message est bien posé, et la connexion réussie
 l'efface. La seconde est celle qu'on oublie, parce qu'elle ne se voit pas : un
@@ -1038,7 +1072,13 @@ message qui survit à la connexion réapparaît au lancement suivant. Le test re
 aussi toute **autre** écriture de `linkMessage` dans `signIn`, sans quoi un
 message posé là passerait inaperçu et rouvrirait le défaut.
 
-**Quatre tests tiennent les adresses de retour elles-mêmes**, et ils sont nés d'une
+Le dernier est né du **renvoi** de l'e-mail de confirmation : les phrases d'envoi
+— « si une confirmation est en attente pour … » — ne doivent pas dire si l'adresse
+existe, et le test lit ces phrases **dans l'écran** pour refuser une tournure
+affirmative. Il en faut au moins deux : la réinitialisation et le renvoi posent la
+même question, et une seule phrase vérifiée laisserait l'autre dériver.
+
+**Cinq tests tiennent les adresses de retour elles-mêmes**, et ils sont nés d'une
 mesure. Le schéma est déclaré **une seule fois**, dans `app.json`
 (`expo.scheme`), mais les adresses qu'il produit —
 `Linking.createURL('reinitialisation')` et `Linking.createURL('confirmation')`,
@@ -1053,8 +1093,12 @@ produit — et dans les deux sens : la présence de la bonne ne suffit pas, le
 scénario de falsification qui ajoute une adresse périmée **à côté** de la bonne
 fait bien tomber le test, et celui qui en **retire une** aussi, parce que Supabase
 la refuse en silence. Un troisième vérifie que la liste est **close** : toute
-constante `*_REDIRECT_PATH` du module doit y figurer. Le dernier vérifie qu'aucun
-fichier de test n'introduit un schéma que l'application ne déclare pas.
+constante `*_REDIRECT_PATH` du module doit y figurer. Un quatrième vérifie
+qu'aucun fichier de test n'introduit un schéma que l'application ne déclare pas.
+Le dernier va jusqu'à **l'appel** : `signUp` et le renvoi doivent tous les deux
+passer l'adresse de retour — sans quoi la réparation d'un lien échoué reproduirait
+son défaut —, et le renvoi doit demander le type `signup`, que `ResendParams`
+n'admet qu'avec `email_change`.
 
 **`check-build-config` remplace une phrase par une mesure**, et son cas est le
 plus simple des quatre. `ci.yml` portait ce commentaire, au-dessus de la version
@@ -1136,6 +1180,37 @@ La commande reste, pour le jour où le dépôt se couvrira de fichiers :
 git ls-files | awk '{print tolower($0)}' | sort | uniq -d   # collisions de casse
 ```
 
+**`check-screen-modes` est né d'un ajout fait à la main, deux fois.** L'écran de
+connexion porte cinq visages dans un type énuméré, et une chaîne de rendu qui les
+traite un par un. Rien ne reliait les deux : la cinquième valeur — le renvoi de
+l'e-mail de confirmation — a été écrite dans le type _et_ dans la chaîne, et un
+oubli n'aurait produit aucune alerte. C'est le pire cas de cette famille, parce
+que le dernier `else` de la chaîne est le formulaire de connexion : une valeur non
+traitée n'affiche ni erreur ni écran vide, elle affiche un formulaire qui a l'air
+juste, sous un titre qui ne répond pas à ce que l'adhérent croyait demander.
+
+Quatre tests tiennent l'ensemble, et les deux directions y sont : aucune valeur
+déclarée sans branche, aucune branche visant une valeur absente du type (le cas
+d'un renommage fait dans le type seul — le lint ne le voit pas, la comparaison
+restant valide). Le troisième mesure une affirmation que le banc doit faire
+lui-même : la chaîne ne nomme pas les valeurs que son `else` sert, donc « les deux
+visages de base » sont **mesurés ailleurs** — ce sont exactement les valeurs que
+les boutons de pied de carte comparent. Le quatrième refuse un visage que rien ne
+déclenche, sans quoi un sixième mode ajouté au type et à la carte serait vert
+partout alors qu'aucun geste ne l'atteint.
+
+Falsifié en quatorze scénarios. Dix font tomber une commande : huit le banc —
+valeur ajoutée au type, branche renommée, pied de carte élargi, transition
+retirée, renvoi au mauvais type, adresse de retour perdue, compte rendu devenu
+affirmatif, nettoyage des commentaires désactivé —, un le **typage** (membre
+retiré de la valeur du contexte) et un le **lint** (membre retiré des dépendances
+du `useMemo`). Quatre témoins laissent tout vert : ordre des valeurs changé,
+commentaire ajouté dans la carte, et `exhaustive-deps` redescendu en
+avertissement. Le nettoyage des commentaires y est éprouvé **dans les deux
+sens** : un commentaire glissé dans la carte et citant une comparaison ne fait
+rien tomber, et le même commentaire fait tomber le banc dès que ce nettoyage est
+désactivé.
+
 ### Diagnostic Expo
 
 ```bash
@@ -1197,13 +1272,15 @@ d'inscription (`fcpefl://confirmation`). Ces adresses sont **recopiées** dans l
 deux documents qui font enregistrer une URL de redirection, et dans les littéraux
 des tests du flux — dix-huit occurrences. Les changer à un seul endroit cassait le
 lien sans qu'aucun test ne bronche, puisque les tests auraient alors éprouvé un
-schéma que l'application ne produit plus. Quatre tests de `check-recovery-link`
+schéma que l'application ne produit plus. Cinq tests de `check-recovery-link`
 tiennent désormais cet accord : l'un porte sur les documents eux-mêmes, un autre
 vérifie que la liste des adresses est **close** — une constante ajoutée à
 `redirectPaths.ts` sans y figurer fait échouer la suite, car elle serait produite
-par l'application sans jamais être réclamée à l'opérateur. Changer le schéma
-demande donc de mettre à jour `app.json`, `README.md`, `supabase/README.md`, et
-les entrées « Redirect URLs » du tableau de bord Supabase.
+par l'application sans jamais être réclamée à l'opérateur —, et un troisième
+remonte jusqu'aux appels qui les portent : `signUp` et le renvoi de l'e-mail de
+confirmation. Changer le schéma demande donc de mettre à jour `app.json`,
+`README.md`, `supabase/README.md`, et les entrées « Redirect URLs » du tableau de
+bord Supabase.
 
 ### Propriétés à ne pas remettre dans `app.json`
 

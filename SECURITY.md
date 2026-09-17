@@ -111,7 +111,20 @@ alors l'inverse exact de la vérité.
 Le lien expire, et c'est le cas courant — on ouvre rarement son courrier dans la
 minute. Le code doit donc dire « ce lien a expiré, demandez-en un nouveau »
 plutôt que de ne rien afficher : un écran de connexion inchangé laisserait croire
-que le lien est cassé.
+que le lien est cassé. Le remède est désormais **dans l'application** :
+`AuthProvider.resendConfirmation` demande un nouvel e-mail, avec la même adresse
+de retour que l'inscription.
+
+**Le renvoi ne dit rien de l'adresse, et le serveur non plus.** `auth.resend` est
+un point d'entrée **non authentifié**, comme la réinitialisation : la seule
+protection contre l'énumération des adresses est que la réponse soit identique
+dans tous les cas, et elle l'est — vérifié dans GoTrue
+(`internal/api/resend.go`) : adresse inconnue, adresse **déjà** confirmée — dont
+le renvoi est simplement sauté — et envoi effectif répondent tous `200` avec un
+corps vide. C'est ce qui autorise l'écran à écrire « **si** une confirmation est
+en attente », et c'est aussi ce qui lui interdit d'en écrire davantage. Le seul
+garde-fou contre l'abus — faire envoyer des e-mails à une adresse connue — est la
+limite d'envoi du tableau de bord, pas le code.
 
 ## Ce que `authenticated` signifie, et ne signifie pas
 

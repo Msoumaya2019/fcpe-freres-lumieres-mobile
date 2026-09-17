@@ -202,9 +202,14 @@ export function describeLinkError(url: string): string | null {
   }
 
   if (type === CONFIRMATION_TYPE) {
+    // Le remède est **dans l'application** depuis qu'elle sait renvoyer
+    // l'e-mail : la phrase n'envoie donc plus l'adhérent vers l'association.
+    // Elle ne nomme pas le libellé du bouton pour autant — une phrase qui
+    // recopie une étiquette se met à mentir le jour où l'étiquette change, et
+    // rien ne relie les deux.
     return expire
-      ? "Ce lien de confirmation a expiré. Votre adresse n'est pas encore confirmée : demandez un nouveau lien à l'association, puis reconnectez-vous."
-      : "Ce lien de confirmation n'a pas pu être utilisé. Votre adresse n'est pas encore confirmée : demandez un nouveau lien à l'association, puis reconnectez-vous.";
+      ? "Ce lien de confirmation a expiré. Votre adresse n'est pas encore confirmée : demandez un nouvel e-mail de confirmation, puis reconnectez-vous."
+      : "Ce lien de confirmation n'a pas pu être utilisé. Votre adresse n'est pas encore confirmée : demandez un nouvel e-mail de confirmation, puis reconnectez-vous.";
   }
 
   return null;

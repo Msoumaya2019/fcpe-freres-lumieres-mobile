@@ -97,6 +97,22 @@ export interface AuthContextValue {
   readonly signOut: () => Promise<void>;
   /** Envoie un lien de réinitialisation. Ne révèle jamais si le compte existe. */
   readonly requestPasswordReset: (email: string) => Promise<void>;
+  /**
+   * Renvoie l'e-mail de confirmation d'une inscription.
+   *
+   * Ne dit **jamais** si l'adresse existe, ni si elle est déjà confirmée : le
+   * message affiché est le même dans tous les cas. Même règle que pour
+   * `requestPasswordReset`, et pour la même raison — l'écran de connexion est
+   * public, et une phrase qui distinguerait les cas dirait à un inconnu quelles
+   * adresses sont inscrites.
+   *
+   * Ce n'est pas une précaution de style : dans GoTrue (`internal/api/resend.go`),
+   * les trois cas répondent `200` avec un corps vide — adresse inconnue, adresse
+   * **déjà** confirmée, dont le renvoi est simplement sauté, et envoi effectif. Le
+   * client n'a donc rien à distinguer, et l'écran peut écrire « **si** une
+   * confirmation est en attente », vrai dans les trois.
+   */
+  readonly resendConfirmation: (email: string) => Promise<void>;
   /** Applique le nouveau mot de passe, puis referme le mode récupération. */
   readonly completePasswordReset: (password: string) => Promise<void>;
   /** Abandonne la récupération : la session ouverte par le lien est fermée. */
@@ -467,6 +483,35 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
     }
   }, []);
 
+  /**
+   * Renvoie l'e-mail de confirmation.
+   *
+   * Le remède au lien expiré, et il fallait le construire : le message d'un lien
+   * de confirmation échoué disait d'en demander un nouveau, alors que
+   * l'application ne savait pas le faire — l'adhérent dont l'adresse n'est pas
+   * confirmée ne peut pas se connecter, et n'avait aucun recours en ligne.
+   *
+   * Le type est `signup`, et non un type générique : `ResendParams` de
+   * `@supabase/auth-js` 2.116.0 n'admet que `signup` ou `email_change` pour une
+   * adresse e-mail. Le renvoi ne rend **aucune session** — la réponse ne porte
+   * qu'une erreur éventuelle — ce qui est exact : confirmer n'est pas entrer.
+   */
+  const resendConfirmation = useCallback(async (email: string) => {
+    const { error } = await requireSupabase().auth.resend({
+      type: 'signup',
+      email: normalizeEmail(email),
+      options: {
+        // La **même** adresse de retour que l'inscription : sans elle, GoTrue
+        // retombe sur le « Site URL » du tableau de bord, et l'adhérent
+        // confirmerait son adresse dans un navigateur sans revenir ici.
+        emailRedirectTo: Linking.createURL(SIGNUP_REDIRECT_PATH),
+      },
+    });
+    if (error !== null) {
+      throw toAppError(error);
+    }
+  }, []);
+
   const completePasswordReset = useCallback(async (password: string) => {
     const { error } = await requireSupabase().auth.updateUser({ password });
     if (error !== null) {
@@ -538,6 +583,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       signUp,
       signOut,
       requestPasswordReset,
+      resendConfirmation,
       completePasswordReset,
       cancelPasswordRecovery,
       dismissLinkMessage,
@@ -554,6 +600,7 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
       signUp,
       signOut,
       requestPasswordReset,
+      resendConfirmation,
       completePasswordReset,
       cancelPasswordRecovery,
       dismissLinkMessage,
