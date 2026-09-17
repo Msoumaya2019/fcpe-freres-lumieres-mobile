@@ -509,7 +509,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-weak-password.test.mjs  le signalement d'un mot de passe faible, et sa place
 │   ├── check-screen-modes.test.mjs  les cinq visages de l'écran de connexion, et leurs branches
 │   ├── check-inventory.test.mjs   ce que le lanceur exécute, et ce que le README en décrit
-│   └── check-schema-refs.test.mjs  les renvois du schéma : clés, types, colonnes des politiques
+│   └── check-schema-refs.test.mjs  les renvois du schéma : clés, types, portées, `seed.sql`
 └── .github/workflows/             CI et build EAS
 ```
 
@@ -1291,19 +1291,41 @@ Deux enseignements sont venus de l'épreuve, et non de la lecture. **Le schéma 
 cibles externes, le contrôle tombait sur du schéma juste. Et **dix politiques
 portent `(select auth.uid())`** — l'écriture recommandée par Supabase pour
 n'évaluer la fonction qu'une fois par requête au lieu d'une fois par ligne —, une
-sous-requête sans `from` qui ne change pas la portée ; le parcours la suit. Une
-sous-requête **avec** `from` demanderait de reproduire la résolution de portée de
-PostgreSQL, où une portée interne masque l'externe et où l'externe reste visible :
-le contrôle la refuse au lieu de deviner, et un test dédié le dit.
+sous-requête sans `from` qui ne change pas la portée.
 
-Falsifié en onze scénarios, chacun tombant sur le test attendu : faute de frappe
-dans une colonne de politique, clé étrangère vers une table ou une colonne
-inexistante, type énuméré non déclaré, sous-requête avec `from`, `alter table drop
-column`, politique posée sur `auth.users`, table renommée. Trois témoins restent
-verts : une politique remise en forme, une colonne ajoutée par `alter table`
-**puis** citée par une politique, et un commentaire qui nomme une colonne
-inexistante — ce dernier mesurant ce que le parcours d'arbre apporte, puisqu'un
-relevé par motif l'aurait pris pour une citation.
+Le contrôle **résout les portées**, de l'intérieur vers l'extérieur, comme
+PostgreSQL : une colonne non qualifiée appartient à la table de la requête qui
+l'écrit, sauf si une sous-requête interne la porte déjà. Attribuer toute colonne
+non qualifiée à la table de la politique aurait rendu le contrôle faux dès la
+première sous-requête portant un `from`. Il lit donc aussi `seed.sql` — dont les
+insertions nomment leurs colonnes par **alias** — et le corps de la seule fonction
+écrite en `language sql` ; les quatre autres sont en PL/pgSQL, dont le corps est du
+texte que l'analyseur ne lit pas, et le test les **nomme** plutôt que de laisser
+croire qu'elles sont couvertes. Une fonction `security definer` doit par ailleurs
+fixer son `search_path` : rien ne tenait cette propriété, et une sixième fonction
+ajoutée sans la clause serait passée sans bruit.
+
+Falsifié en dix-neuf scénarios, chacun tombant sur le test attendu : faute de
+frappe dans une colonne de politique, dans le corps de `is_admin`, ou dans une
+insertion de `seed.sql` ; clé étrangère vers une table ou une colonne inexistante ;
+type énuméré non déclaré ; `alter table drop column`, et une forme d'`alter table`
+non suivie ; politique posée sur `auth.users` ; table renommée ; `security definer`
+sans `set search_path`. Sept témoins restent verts : une politique remise en forme,
+une colonne ajoutée par `alter table` **puis** citée par une politique, un
+commentaire qui nomme une colonne inexistante — ce dernier mesurant ce que le
+parcours d'arbre apporte, puisqu'un relevé par motif l'aurait pris pour une
+citation —, une sous-requête **corrélée**, une jointure dans une sous-requête, une
+colonne ajoutée puis nommée par `seed.sql`, et une colonne `boolean`.
+
+Ce dernier témoin a trouvé un défaut réel **dans le banc lui-même**. L'analyseur
+**qualifie** les types du langage, et de façon non uniforme : mesuré, `boolean`
+arrive en `pg_catalog.bool`, `character varying` en `pg_catalog.varchar`, `numeric`
+en `pg_catalog.numeric`, `double precision` en `pg_catalog.float8` — mais `jsonb`,
+`uuid`, `text` et `date` restent d'un seul segment. Compter les segments pour
+distinguer un énuméré d'un type du langage faisait donc tomber le contrôle sur du
+schéma juste dès la première colonne `boolean` : le schéma n'en a aucune
+aujourd'hui, ce qui rendait le défaut invisible. Le test lit maintenant le
+**schéma** du type, et seul `public.<nom>` doit être déclaré.
 
 ### Diagnostic Expo
 
@@ -1610,9 +1632,12 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   ne reste sans exécutant, et que ce fichier décrive exactement ce qui existe, au
   mot près du décompte. `check-schema-refs` parcourt l'**arbre syntaxique** du
   schéma, et non son texte : chaque clé étrangère doit viser une table et une
-  colonne déclarées, chaque type énuméré cité doit exister, et chaque colonne
-  nommée par une politique ou un déclencheur doit appartenir à sa table — une
-  faute de frappe y est une syntaxe valide, que `sql:check` laisse donc passer.
+  colonne déclarées, chaque type énuméré cité doit exister, chaque fonction
+  `security definer` doit fixer son `search_path`, et chaque colonne nommée par
+  une politique, un déclencheur, une insertion de `seed.sql` ou le corps d'une
+  fonction écrite en SQL doit se résoudre dans sa portée — de l'intérieur vers
+  l'extérieur, comme PostgreSQL. Une faute de frappe y est une syntaxe valide, que
+  `sql:check` laisse donc passer.
   Les trois
   paquets natifs dont
   dépend le stockage sont remplacés par des doublures branchées par
@@ -1656,12 +1681,15 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   puisque le balayage part de ce dossier. Et il tient l'**existence** des lignes
   du README, pas leur justesse : une description fausse passe, seuls un nom
   absent ou un nom en trop le font tomber.
-- **`check-schema-refs` ne lit pas le corps des fonctions.** `CreateFunctionStmt`
-  porte son corps en **texte** : une fonction PL/pgSQL qui citerait une colonne
-  inexistante passe. Les cinq fonctions du schéma ne sont donc pas couvertes, et
-  `supabase/seed.sql` ne l'est pas davantage — ce n'est pas une migration. Le
-  contrôle ne voit pas non plus un `alter table` futur qui **renommerait** une
-  colonne : il refuse la forme, il ne la suit pas.
+- **`check-schema-refs` ne lit pas le corps des fonctions PL/pgSQL.**
+  `CreateFunctionStmt` porte son corps en **texte**, et quatre des cinq fonctions
+  du schéma sont en PL/pgSQL (`begin`, `if`, `raise exception`) : une fonction de
+  ce genre qui citerait une colonne inexistante passe. Seule `is_admin`, écrite en
+  `language sql`, est lue — et c'est la seule dont le corps est une requête. Le
+  contrôle ne voit pas non plus un `alter table` futur qui **renommerait** ou
+  **supprimerait** une colonne : il refuse ces formes, il ne les suit pas, ce qui
+  fait poser la question au lieu de la trancher à tort. Enfin, il ne lit que les
+  migrations et `supabase/seed.sql` : un fichier SQL ajouté ailleurs serait ignoré.
 - **La portabilité a été mesurée ici, pas sur une autre machine.** Le clone
   vérifié l'a été sous Windows, avec le même Node et le même `core.autocrlf=true`
   — c'est-à-dire dans les conditions les plus défavorables pour les fins de ligne,
