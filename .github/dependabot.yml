@@ -1,0 +1,64 @@
+# =============================================================================
+#  Dependabot
+# =============================================================================
+#
+#  Une pull request hebdomadaire, groupée par famille de paquets.
+#
+#  Regroupées, et non une par paquet : dix pull requests ouvertes le même lundi
+#  ne sont pas traitées, elles sont ignorées — et une mise à jour de sécurité
+#  noyée dans le lot l'est aussi.
+#
+#  `expo` et `react-native` sont volontairement séparés : leur montée de version
+#  s'accompagne de notes de migration, et exige une lecture, pas une fusion
+#  automatique.
+# =============================================================================
+
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Paris
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: 'chore(deps)'
+    groups:
+      # Correctifs et mineures de l'écosystème Expo : versions liées entre elles,
+      # à monter ensemble ou pas du tout.
+      expo:
+        patterns:
+          - 'expo'
+          - 'expo-*'
+          - '@expo/*'
+        update-types: ['minor', 'patch']
+      react-native:
+        patterns:
+          - 'react-native'
+          - 'react-native-*'
+        update-types: ['minor', 'patch']
+      # Outillage : aucun impact sur le bundle livré, donc sans risque.
+      tooling:
+        patterns:
+          - 'eslint'
+          - 'eslint-*'
+          - '@eslint/*'
+          - 'typescript-eslint'
+          - 'prettier'
+          - 'typescript'
+          - 'libpg-query'
+        update-types: ['minor', 'patch']
+      # Reste : Supabase, React Navigation, React.
+      other:
+        patterns:
+          - '*'
+        update-types: ['minor', 'patch']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'chore(ci)'

@@ -1,0 +1,91 @@
+# =============================================================================
+#  Build EAS
+# =============================================================================
+#
+#  Déclenchement MANUEL ou sur un tag `v*`, jamais à chaque push : un build EAS
+#  consomme du quota, et compiler vingt fois la même journée pour rien est le
+#  meilleur moyen d'épuiser le forfait du mois.
+#
+#  Prérequis : le secret `EXPO_TOKEN` (Settings > Secrets and variables >
+#  Actions). Il se crée sur expo.dev, dans Account > Access tokens.
+#
+#  Les variables EXPO_PUBLIC_* ne sont PAS définies ici : elles vivent dans les
+#  environnements EAS, associés aux profils par `eas.json`. Les déclarer aussi
+#  dans ce fichier créerait deux sources de vérité, dont l'une finirait par
+#  diverger silencieusement.
+# =============================================================================
+
+name: EAS Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Profil de build'
+        type: choice
+        options:
+          - preview
+          - production
+        default: preview
+        required: true
+      platform:
+        description: 'Plateforme'
+        type: choice
+        options:
+          - android
+          - ios
+          - all
+        default: android
+        required: true
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+# Pas d'annulation : un build interrompu peut laisser un artefact incohérent
+# côté EAS. Mieux vaut attendre la fin du précédent.
+concurrency:
+  group: eas-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build EAS
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Même version que `.nvmrc`, `ci.yml` et `eas.json` : l'accord des
+          # quatre est vérifié par `scripts/check-build-config.test.mjs`, et non
+          # laissé à la mémoire de qui modifie ce fichier.
+          node-version: '22.22.2'
+          cache: npm
+
+      - name: Installer EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Lancer le build
+        # Le workflow attend la fin du build (pas de `--no-wait`) : un statut
+        # vert signifie alors réellement « l'artefact est prêt ». Cela consomme
+        # des minutes de CI, mais un workflow vert qui ne dit rien de l'état réel
+        # du build ne sert à rien.
+        env:
+          # Un tag `v*` déclenche un build de production ; un déclenchement
+          # manuel utilise les valeurs choisies.
+          PROFILE: ${{ github.event.inputs.profile || 'production' }}
+          PLATFORM: ${{ github.event.inputs.platform || 'android' }}
+        run: eas build --profile "$PROFILE" --platform "$PLATFORM" --non-interactive

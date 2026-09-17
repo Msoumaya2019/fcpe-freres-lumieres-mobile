@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.expo/
+coverage/
+package-lock.json
+assets/
+supabase/
+*.png
+
+# Dossier géré par l'outil et ignoré par Git : hors du périmètre de formatage.
+# Prettier n'explore pas les dossiers cachés aujourd'hui, mais s'en remettre à ce
+# détail reviendrait à laisser une future version reformater des notes de travail.
+.workbuddy-ai/

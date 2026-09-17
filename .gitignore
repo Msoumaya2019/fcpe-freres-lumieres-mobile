@@ -1,0 +1,59 @@
+# =============================================================================
+#  .gitignore — dépôt PUBLIC : aucune valeur réelle ne doit y entrer.
+# =============================================================================
+
+# Dépendances
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+
+# CLI Supabase : cache local (version, branches), pas le schéma
+supabase/.temp/
+supabase/.branches/
+
+# Dossiers natifs générés (EAS Build les régénère depuis app.json + les plugins)
+/ios
+/android
+
+# -----------------------------------------------------------------------------
+#  SECRETS — la raison d'être de ce fichier
+# -----------------------------------------------------------------------------
+# On ignore TOUS les fichiers d'environnement, puis on ré-autorise le modèle.
+# Un `.env` oublié dans un dépôt public est la fuite la plus banale et la plus
+# coûteuse ; l'exception explicite ci-dessous évite d'avoir à y penser.
+.env
+.env.*
+!.env.example
+
+# Clés et certificats de signature — jamais dans Git, jamais dans un build local
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+*.orig.*
+
+# Jetons et identifiants d'outillage
+.npmrc.local
+google-services.json
+GoogleService-Info.plist
+
+# Journaux
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+
+# Outils
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
+coverage/
+.workbuddy-ai/

@@ -1,0 +1,28 @@
+Copyright (c) 2026 FCPE des écoles Frères Lumières (Montmagny)
+
+Tous droits réservés.
+
+Ce logiciel et son code source sont la propriété de la FCPE des écoles Frères
+Lumières. Aucune licence, expresse ou implicite, n'est accordée sur ce logiciel :
+toute reproduction, distribution, modification ou utilisation, en tout ou
+partie, est interdite sans autorisation écrite préalable du titulaire des droits.
+
+Le dépôt peut être public pour des raisons pratiques — intégration continue,
+distribution des versions de test, transparence sur les traitements de données —
+sans que cela vaille autorisation d'usage.
+
+LE LOGICIEL EST FOURNI « EN L'ÉTAT », SANS GARANTIE D'AUCUNE SORTE, EXPRESSE OU
+IMPLICITE. LES AUTEURS OU TITULAIRES DES DROITS NE SAURAIENT ÊTRE TENUS
+RESPONSABLES DE TOUTE RÉCLAMATION, DE TOUT DOMMAGE OU DE TOUTE AUTRE
+RESPONSABILITÉ, QUE CE SOIT DANS LE CADRE D'UN CONTRAT, D'UN DÉLIT OU AUTRE,
+DÉCOULANT DU LOGICIEL OU DE SON UTILISATION.
+
+---
+
+Note d'installation : ce projet a été initialisé à partir du modèle
+`blank-typescript` d'Expo, distribué sous licence MIT. Le fichier de licence
+d'origine (Copyright (c) 2015-present 650 Industries, Inc.) a été remplacé par
+la présente mention, qui correspond au fichier `package.json`
+(`"license": "UNLICENSED"`). Si vous souhaitez au contraire publier ce projet
+sous licence libre, remplacez ce fichier et alignez `package.json` en
+conséquence — le choix vous appartient, mais les deux doivent rester cohérents.

@@ -1,0 +1,29 @@
+# =============================================================================
+#  .gitattributes — fins de ligne et nature des fichiers
+# =============================================================================
+#  Pourquoi ce fichier existe
+#  --------------------------
+#  `core.autocrlf` vaut `true` par défaut sous Git pour Windows, et ce réglage
+#  vit dans la configuration de la machine, jamais dans le dépôt. Un clone sous
+#  Windows reçoit donc tous les fichiers en CRLF — alors que `.prettierrc.json`
+#  impose `endOfLine: "lf"`.
+#
+#  Conséquence mesurée, sans ce fichier : `git checkout-index` d'un dépôt intact
+#  avec `core.autocrlf=true` produit 22 503 CRLF dans le dossier de travail.
+#  `npm run format:check` échoue alors sur chaque fichier dès le premier clone,
+#  sur la machine du seul mainteneur — et le même dépôt reste vert sur un
+#  exécuteur Linux, où `autocrlf` est faux. Un écart qui ne se voit que d'un
+#  côté est le plus coûteux : il fait douter du code.
+#
+#  La règle ci-dessous est une décision du dépôt, pas une préférence locale :
+#  elle rend le résultat identique quel que soit le réglage de la machine.
+# -----------------------------------------------------------------------------
+
+# Par défaut, tout est du texte : normalisé en LF dans le dépôt ET dans le
+# dossier de travail. C'est ce qui rend `format:check` vrai partout.
+* text=auto eol=lf
+
+# Images : aucun traitement, aucune conversion. Un PNG dont les octets sont
+# réécrits est un PNG silencieusement corrompu — l'icône ne s'affiche plus et
+# rien ne le signale à la lecture du diff.
+*.png binary

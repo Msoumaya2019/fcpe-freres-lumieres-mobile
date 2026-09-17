@@ -1,0 +1,144 @@
+# =============================================================================
+#  Intégration continue
+# =============================================================================
+#
+#  Déclenché à chaque push et à chaque pull request.
+#
+#  Principe : si une étape échoue, la CI échoue. Une pull request ne peut pas
+#  être fusionnée dans `main` tant que ce workflow n'est pas vert — ce qui
+#  suppose d'avoir activé la protection de branche (voir README, section 8).
+#
+#  AUCUN SECRET N'EST NÉCESSAIRE, et c'est une contrainte de conception, pas un
+#  heureux hasard : l'application démarre sans configuration et affiche un écran
+#  explicatif si les clés manquent (`src/config/env.ts`). C'est ce qui permet à
+#  la CI de compiler le bundle sans jamais manipuler de clé Supabase.
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+# Annule les exécutions précédentes sur la même branche : inutile de faire
+# tourner trois fois la même CI après trois commits rapprochés.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Version fixée : une montée de version de Node ne doit jamais casser la CI
+  # sans qu'on l'ait décidée.
+  #
+  # Elle est écrite à quatre endroits — ici, dans `.nvmrc`, dans
+  # `eas-build.yml` et dans `eas.json` (`build.base.node`) — parce qu'aucun
+  # des quatre ne peut lire les autres : `.nvmrc` sert au poste de travail,
+  # `eas.json` est consommé par le service EAS, et un workflow ne peut pas lire
+  # `eas.json` sans outil supplémentaire. Leur accord n'est donc plus confié à
+  # la mémoire de qui modifie un fichier :
+  # `scripts/check-build-config.test.mjs` le vérifie, et un écart fait échouer
+  # `npm run test`.
+  NODE_VERSION: '22.22.2'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  #  Qualité du code
+  # ---------------------------------------------------------------------------
+  quality:
+    name: Qualité
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Installer les dépendances
+        # `npm ci` exige un lockfile à jour et ne le modifie jamais : la CI teste
+        # donc exactement les versions installées, pas une résolution du jour.
+        run: npm ci
+
+      - name: Vérifier le formatage
+        run: npm run format:check
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Vérification des types
+        run: npm run typecheck
+
+      - name: Tests
+        # Ces tests ne couvrent pas « du code » : ils couvrent les endroits où
+        # une erreur ne produit ni exception ni message — la garde de
+        # `src/config/env.ts` qui refuse une clé `service_role`, les contrats
+        # d'ordre du lien de réinitialisation, la couverture des requêtes par les
+        # politiques RLS, ce qui survit à la fermeture d'un compte, l'accord entre
+        # les versions de Node déclarées. Aucune dépendance : `node:test` est
+        # intégré à Node.
+        run: npm run test
+
+      - name: Intégrité de l'installation
+        # Détecte un paquet extrait à moitié : `package.json` annonce une version
+        # conforme au lockfile, mais le point d'entrée n'a jamais été écrit.
+        # `npm ls` ne le voit pas — il valide l'arbre des versions, pas la
+        # présence des fichiers — et l'erreur ne surgit qu'au moment du bundle,
+        # en désignant le mauvais coupable.
+        run: npm run check:install
+
+      - name: Analyse syntaxique du SQL
+        # Les politiques RLS de supabase/ sont la seule barrière de sécurité du
+        # projet : une faute de frappe dans ce fichier ne se voit ni à la
+        # compilation, ni dans l'application. Elle se découvrirait au `db push`.
+        run: npm run sql:check
+
+  # ---------------------------------------------------------------------------
+  #  Compilation du bundle
+  # ---------------------------------------------------------------------------
+  export:
+    name: Export Expo
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: quality
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Compiler le bundle Android
+        # C'est LE contrôle qui compte, et le seul qui prouve que tous les
+        # modules se résolvent réellement dans le bundle : ni `tsc` ni ESLint ne
+        # détectent un import vers un fichier absent, ni un module natif présent
+        # dans package.json mais absent du bundle.
+        #
+        # Il s'exécute sans aucune variable d'environnement : si l'application
+        # cessait de démarrer sans configuration, cette étape le signalerait.
+        run: npm run export:android
+
+      - name: Archiver le bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: expo-export-android
+          path: dist
+          # Un bundle de plusieurs mégaoctets n'a pas vocation à être conservé
+          # longtemps : il sert à diagnostiquer un échec, pas à être distribué.
+          retention-days: 7
