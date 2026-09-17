@@ -21,11 +21,8 @@ import {
   type ReactNode,
 } from 'react';
 
-import {
-  describeRecoveryError,
-  parseRecoveryTokens,
-  RECOVERY_REDIRECT_PATH,
-} from '@/auth/recoveryLink';
+import { RECOVERY_REDIRECT_PATH, SIGNUP_REDIRECT_PATH } from '@/auth/redirectPaths';
+import { describeRecoveryError, parseRecoveryTokens } from '@/auth/recoveryLink';
 import { requireSupabase, supabase } from '@/config/supabase';
 import { toAppError } from '@/errors';
 import { fetchProfile } from '@/services/profiles';
@@ -364,6 +361,13 @@ export function AuthProvider({ children }: { readonly children: ReactNode }) {
         email: normalizeEmail(email),
         password,
         options: {
+          // Adresse de retour du lien de confirmation. Sans elle, `signUp`
+          // n'envoie aucun `redirect_to` et GoTrue retombe sur le « Site URL »
+          // du tableau de bord : l'adhérent confirmerait son adresse dans un
+          // navigateur, sans revenir ici. Calculée à l'appel pour la même
+          // raison que dans `requestPasswordReset` — `Linking.createURL` lit la
+          // configuration d'Expo, indisponible à l'import du module.
+          emailRedirectTo: Linking.createURL(SIGNUP_REDIRECT_PATH),
           // Repris par le déclencheur `handle_new_user` côté base, qui crée la
           // ligne `profiles` correspondante. Passer par les métadonnées plutôt
           // que par une insertion depuis l'application évite un état

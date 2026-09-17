@@ -345,6 +345,7 @@ export function ConnexionScreen() {
       try {
         if (isSignUp) {
           const result = await signUp(trimmedEmail, password, displayName);
+
           if (result.needsEmailConfirmation) {
             setNotice(
               userMessage(
@@ -355,6 +356,29 @@ export function ConnexionScreen() {
             setMode('connexion');
             setPassword('');
           }
+
+          // Sinon, **rien à faire ici**, et c'est volontaire : le compte est créé
+          // et une session est rendue. `signUp` a alors déjà prévenu ses
+          // abonnés — vérifié dans `@supabase/auth-js` 2.116.0
+          // (`GoTrueClient.signUp`) :
+          //
+          //     if (data.session) {
+          //       await this._saveSession(data.session);
+          //       await this._notifyAllSubscribers('SIGNED_IN', session);
+          //     }
+          //
+          // `AuthProvider` écoute cet événement, `status` passe à `signedIn`, et
+          // `RootNavigator` bascule sur les onglets : l'adhérent entre sans
+          // qu'aucun appel ne soit nécessaire. Rappeler `signIn` ici serait une
+          // **seconde** authentification pour rien, et un message de confirmation
+          // ne serait jamais lu — cet écran est démonté à l'instant où la session
+          // arrive.
+          //
+          // C'est le chemin **normal** : la confirmation par e-mail est désactivée
+          // dans le tableau de bord (voir `README.md` §4). La branche ci-dessus
+          // n'existe que pour le cas où elle serait activée.
+          // `check-password-policy` tient les deux : la propriété du paquet est
+          // relue dans `node_modules`, et l'absence d'appel à `signIn` ici.
         } else {
           await signIn(trimmedEmail, password);
         }

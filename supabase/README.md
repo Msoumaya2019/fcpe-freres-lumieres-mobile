@@ -69,13 +69,19 @@ s'octroyer des droits. Il l'interdit aussi à cette commande, tant qu'elle n'est
 pas prise entre les deux `alter table` — et la transaction garantit qu'un échec
 de la mise à jour ne laisse pas le verrou désactivé.
 
-### Réglage du tableau de bord pour la réinitialisation de mot de passe
+### Réglages du tableau de bord pour les liens envoyés par e-mail
 
-Le schéma et les politiques ne suffisent pas : la réinitialisation demande aussi
-que Supabase accepte de renvoyer l'adhérent vers l'application.
+Le schéma et les politiques ne suffisent pas : la réinitialisation de mot de passe
+et la confirmation d'inscription demandent aussi que Supabase accepte de renvoyer
+l'adhérent vers l'application.
 
 - **Authentication > URL Configuration > Redirect URLs** : ajouter
-  `fcpefl://reinitialisation`.
+  `fcpefl://reinitialisation` **et** `fcpefl://confirmation`. Une entrée
+  manquante ne produit aucune erreur visible : l'adhérent reçoit l'e-mail, le
+  lien s'ouvre, mais hors de l'application.
+- **Authentication > SMTP Settings** : un serveur d'envoi. Le service fourni par
+  défaut est limité à deux e-mails par heure, et rien ne le signale.
+- **Authentication > Providers > Email > Confirm email** : activé.
 - **Authentication > Email Templates > Reset password** : le lien doit rester
   `{{ .ConfirmationURL }}`.
 

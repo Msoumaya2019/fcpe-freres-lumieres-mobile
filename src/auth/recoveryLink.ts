@@ -34,21 +34,6 @@ export interface RecoveryTokens {
 
 const RECOVERY_TYPE = 'recovery';
 
-/**
- * Chemin vers lequel Supabase renvoie l'adhérent après le clic.
- *
- * Avec le schéma déclaré dans `app.json`, `Linking.createURL()` produit
- * `fcpefl://reinitialisation` — vérifié en lisant `expo-linking` 57.0.10 :
- * `createURL` assemble `<schéma>://<chemin>` sans hôte, et le schéma est
- * personnalisé, donc aucun préfixe `--/` d'Expo Go ne s'intercale.
- *
- * Cette valeur doit figurer **telle quelle** dans les « Redirect URLs » du
- * tableau de bord Supabase, sinon Supabase refuse la redirection et l'adhérent
- * ne reçoit aucun lien utilisable. Un chemin explicite plutôt que le schéma
- * nu rend l'entrée de la liste lisible et sans ambiguïté.
- */
-export const RECOVERY_REDIRECT_PATH = 'reinitialisation';
-
 function decodeSafely(value: string): string {
   try {
     return decodeURIComponent(value);

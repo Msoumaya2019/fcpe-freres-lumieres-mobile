@@ -27,13 +27,26 @@
  * casse ni la compilation, ni le lint, ni un test. Trois tests, qui lisent la
  * source au lieu de l'exécuter, comblent ce trou.
  *
- * Deux tests de plus tiennent **l'adresse de retour elle-même**. Le schéma est
- * déclaré une seule fois, dans `app.json` (`expo.scheme`), mais l'adresse qu'il
- * produit est recopiée à la main dans les deux documents qui font enregistrer
- * une URL de redirection à l'opérateur — et dans les littéraux de ce fichier.
- * Changer `expo.scheme` laisserait donc la suite entièrement verte, tout en
- * cassant le lien : Supabase refuserait une redirection devenue absente de sa
- * liste, et l'adhérent ne recevrait aucun lien utilisable.
+ * Quatre tests de plus tiennent **les adresses de retour elles-mêmes**. Le schéma
+ * est déclaré une seule fois, dans `app.json` (`expo.scheme`), mais les adresses
+ * qu'il produit sont recopiées à la main dans les deux documents qui font
+ * enregistrer une URL de redirection à l'opérateur — et dans les littéraux de ce
+ * fichier. Changer `expo.scheme` laisserait donc la suite entièrement verte, tout
+ * en cassant les liens : Supabase refuserait une redirection devenue absente de
+ * sa liste, et l'adhérent ne recevrait aucun lien utilisable.
+ *
+ * Elles vivent dans `src/auth/redirectPaths.ts` et forment un ensemble **fermé** :
+ * une constante ajoutée au module sans figurer dans `REDIRECT_PATHS` fait tomber
+ * le banc, parce qu'elle serait produite par l'application sans jamais être
+ * réclamée à l'opérateur — un lien refusé en silence.
+ *
+ * CE QUE LE CONTRÔLE DES DOCUMENTS NE PEUT PAS VOIR
+ * -------------------------------------------------
+ * Il compare l'ensemble des adresses **nommées** dans un document à celles que
+ * l'application produit. Il ne dit rien de la **phrase** qui les entoure : le
+ * paragraphe qui demande d'ajouter les entrées peut être remplacé par de la
+ * prose, les adresses restant nommées ailleurs, et le banc reste vert. Mesuré
+ * comme tel — c'est une limite, pas un oubli.
  *
  * Sans dépendance : `node:test` est intégré, et le *type stripping* de Node 22
  * permet d'importer directement le fichier TypeScript.
@@ -64,7 +77,14 @@ function lireSource(cheminRelatif) {
     .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
 }
 
-const { parseRecoveryTokens, describeRecoveryError, RECOVERY_REDIRECT_PATH } = await import(MODULE);
+const { parseRecoveryTokens, describeRecoveryError } = await import(MODULE);
+
+// Les adresses de retour vivent dans leur propre module, et non dans celui-ci :
+// ce sont des valeurs **sortantes**, que l'opérateur doit recopier dans le
+// tableau de bord. Les mêler à la lecture des liens entrants laissait croire
+// que ce fichier-là en était la source.
+const cheminModule = await import(new URL('../src/auth/redirectPaths.ts', import.meta.url).href);
+const { REDIRECT_PATHS } = cheminModule;
 
 /** Fragment tel que GoTrue le produit avec le flux implicite. */
 const IMPLICIT_FRAGMENT =
@@ -333,7 +353,7 @@ test('« Annuler » attend la session du lien avant de déconnecter', () => {
   );
 });
 
-// --- L'adresse de retour, et les fichiers qui la nomment --------------------
+// --- Les adresses de retour, et les fichiers qui les nomment -----------------
 //
 // Le schéma est déclaré **une fois**, dans `app.json` (`expo.scheme`), et tout le
 // reste en découle : `Linking.createURL('reinitialisation')` produit
@@ -342,8 +362,8 @@ test('« Annuler » attend la session du lien avant de déconnecter', () => {
 // (`collectManifestSchemes`) et retient **le premier**, et `createURL` recolle
 // `<schéma>:` + `/` + `/` + `<chemin>`.
 //
-// Or cette adresse est **recopiée à la main** ailleurs : dans les deux documents
-// qui demandent à l'opérateur de l'enregistrer dans les « Redirect URLs » de
+// Or ces adresses sont **recopiées à la main** ailleurs : dans les deux documents
+// qui demandent à l'opérateur de les enregistrer dans les « Redirect URLs » de
 // Supabase, et dans les littéraux de ce fichier, qui écrit le schéma en dur
 // dix-huit fois.
 //
@@ -353,12 +373,18 @@ test('« Annuler » attend la session du lien avant de déconnecter', () => {
 // verte**, ce fichier compris, qui éprouverait alors un schéma que l'application
 // n'utilise plus. C'est la pire des configurations : la couverture paraît
 // intacte.
+//
+// Depuis que la confirmation d'inscription est activée, il y a **deux** adresses,
+// et la liste blanche les rend symétriquement coûteuses : une entrée manquante
+// est refusée par Supabase **sans erreur visible pour l'adhérent**, qui attend un
+// e-mail dont le lien ne le ramènera pas dans l'application. Le contrôle va donc
+// dans les deux sens — aucune adresse périmée, et aucune adresse oubliée.
 
 const APP_CONFIG = 'app.json';
 const DOCUMENTS_QUI_ENREGISTRENT = ['README.md', 'supabase/README.md'];
 
-/** Schéma déclaré dans `app.json`, et l'adresse de retour qui en découle. */
-function adresseDeRetour() {
+/** Schéma déclaré dans `app.json`. */
+function schemaDeclare() {
   const { expo } = JSON.parse(lireFichier(APP_CONFIG));
   const schema = expo?.scheme;
 
@@ -375,23 +401,33 @@ function adresseDeRetour() {
       '« + », « - » et « . » seulement, et une lettre pour commencer',
   );
 
-  return { schema, adresse: `${schema}://${RECOVERY_REDIRECT_PATH}` };
+  return schema;
+}
+
+/**
+ * Les adresses que l'opérateur doit enregistrer, par chemin.
+ *
+ * La liste vient du **module**, pas de ce fichier : recopier ici les deux
+ * chemins rendrait ce banc d'accord avec lui-même, et une adresse ajoutée au
+ * module passerait inaperçue.
+ */
+function adressesAttendues() {
+  const schema = schemaDeclare();
+  return new Map(REDIRECT_PATHS.map((chemin) => [chemin, `${schema}://${chemin}`]));
 }
 
 /** Toutes les adresses de retour nommées dans un texte, quel qu'en soit le schéma. */
 function adressesNommees(texte) {
-  const motif = new RegExp(`([a-z][a-z0-9+.-]*):\\/\\/${RECOVERY_REDIRECT_PATH}\\b`, 'g');
-  return [...texte.matchAll(motif)].map(([, schema]) => `${schema}://${RECOVERY_REDIRECT_PATH}`);
+  const chemins = REDIRECT_PATHS.join('|');
+  const motif = new RegExp(`([a-z][a-z0-9+.-]*):\\/\\/(${chemins})\\b`, 'g');
+  return [...texte.matchAll(motif)].map(([, schema, chemin]) => `${schema}://${chemin}`);
 }
 
-test("les documents qui font enregistrer l'adresse de retour nomment celle de l'application", () => {
-  const { adresse } = adresseDeRetour();
+test("les documents qui font enregistrer les adresses de retour nomment celles de l'application", () => {
+  const attendues = adressesAttendues();
+  assert.ok(attendues.size >= 2, 'moins de deux adresses attendues : ce contrôle serait partiel');
 
   for (const document of DOCUMENTS_QUI_ENREGISTRENT) {
-    // Vérifier la présence du bon ne suffit pas : c'est l'absence du **mauvais**
-    // qu'il faut établir. Un document qui porterait encore l'ancien schéma à côté
-    // du nouveau ferait enregistrer une adresse que l'application ne produit
-    // plus — et l'entrée correcte, présente elle aussi, ne servirait à rien.
     const nommees = adressesNommees(lireFichier(document));
     assert.notEqual(
       nommees.length,
@@ -399,20 +435,102 @@ test("les documents qui font enregistrer l'adresse de retour nomment celle de l'
       `${document} ne nomme aucune adresse de retour : le contrôle serait vide`,
     );
 
+    // Premier sens : aucune adresse **périmée**. Vérifier la présence du bon ne
+    // suffit pas — un document qui porterait encore l'ancien schéma à côté du
+    // nouveau ferait enregistrer une adresse que l'application ne produit plus,
+    // et l'entrée correcte, présente elle aussi, ne servirait à rien.
+    const valides = [...attendues.values()];
     for (const nommee of nommees) {
-      assert.equal(
-        nommee,
-        adresse,
+      assert.ok(
+        valides.includes(nommee),
         `${document} fait enregistrer « ${nommee} » dans Supabase, alors que ` +
-          `l'application produit « ${adresse} » : Supabase refuserait la redirection, ` +
-          "et le lien ne reviendrait pas dans l'application",
+          `l'application produit « ${valides.join(' », « ')} » : Supabase refuserait ` +
+          "la redirection, et le lien ne reviendrait pas dans l'application",
+      );
+    }
+
+    // Second sens : aucune adresse **oubliée**. C'est le sens qu'une liste
+    // blanche rend coûteux, et le seul des deux qui soit muet : l'adhérent
+    // reçoit bien un e-mail, le lien s'ouvre bien, mais hors de l'application.
+    for (const [chemin, adresse] of attendues) {
+      assert.ok(
+        nommees.includes(adresse),
+        `${document} ne fait pas enregistrer « ${adresse} » : l'entrée manque dans ` +
+          `« Redirect URLs », et Supabase refusera la redirection vers « ${chemin} » ` +
+          'sans que rien ne le signale à l’adhérent',
       );
     }
   }
 });
 
+test('la liste des adresses à enregistrer est close', () => {
+  // Le suffixe est une convention dont ce contrôle dépend : c'est lui qui
+  // distingue une adresse de retour d'une constante quelconque du module.
+  const exportees = Object.entries(cheminModule)
+    .filter(([nom]) => nom.endsWith('_REDIRECT_PATH'))
+    .map(([, valeur]) => valeur);
+
+  assert.ok(
+    exportees.length >= 2,
+    'aucune constante de chemin relevée : le contrôle serait vide, et une adresse ' +
+      'ajoutée au module passerait inaperçue',
+  );
+  assert.deepEqual(
+    [...exportees].sort(),
+    [...REDIRECT_PATHS].sort(),
+    'une adresse de retour est produite par l’application sans figurer dans ' +
+      '`REDIRECT_PATHS` : elle ne serait jamais réclamée à l’opérateur, et le lien ' +
+      'serait refusé en silence',
+  );
+  assert.equal(
+    new Set(REDIRECT_PATHS).size,
+    REDIRECT_PATHS.length,
+    '`REDIRECT_PATHS` contient un doublon',
+  );
+});
+
+test("l'inscription passe l'adresse de confirmation à `signUp`", () => {
+  const source = lireSource(AUTH_PROVIDER);
+  const debut = source.indexOf('auth.signUp({');
+
+  assert.notEqual(
+    debut,
+    -1,
+    'aucun appel à `signUp` dans `AuthProvider` : ce contrôle serait vide, et un ' +
+      '`signUp` déplacé passerait inaperçu',
+  );
+
+  const fin = source.indexOf('});', debut);
+  assert.notEqual(fin, -1, 'appel à `signUp` non refermé : ses options sont indélimitables');
+
+  assert.match(
+    source.slice(debut, fin),
+    /emailRedirectTo:\s*Linking\.createURL\(SIGNUP_REDIRECT_PATH\)/,
+    'sans `emailRedirectTo`, `signUp` n’envoie aucun `redirect_to` et GoTrue retombe ' +
+      'sur le « Site URL » du tableau de bord : l’adhérent confirme son adresse dans un ' +
+      'navigateur, et ne revient pas dans l’application',
+  );
+
+  // La valeur doit venir du module qui la nomme. Un littéral recopié ici
+  // échapperait à la lecture de `redirectPaths.ts`, donc à tout ce fichier.
+  assert.match(
+    source,
+    /import\s*\{[^}]*\bSIGNUP_REDIRECT_PATH\b[^}]*\}\s*from\s*'@\/auth\/redirectPaths'/,
+    '`SIGNUP_REDIRECT_PATH` doit être importé de `@/auth/redirectPaths`',
+  );
+
+  // L'ensemble est fermé : une troisième adresse de retour doit être examinée,
+  // et non ajoutée en silence.
+  const appels = source.match(/Linking\.createURL\(/g) ?? [];
+  assert.strictEqual(
+    appels.length,
+    2,
+    `une adresse de retour supplémentaire doit être examinée (${appels.length} trouvées)`,
+  );
+});
+
 test("les tests du flux éprouvent le schéma que l'application déclare", () => {
-  const { schema } = adresseDeRetour();
+  const schema = schemaDeclare();
   const dossier = fileURLToPath(new URL('.', import.meta.url));
 
   // Commentaires retirés : ce sont les **littéraux** qui sont éprouvés, pas la

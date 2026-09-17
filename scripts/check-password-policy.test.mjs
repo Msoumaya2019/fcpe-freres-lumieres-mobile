@@ -44,17 +44,37 @@
  *   4. l'ensemble des emplois de la borne est **fermé** : un troisième emploi doit
  *      faire échouer ce banc et être examiné, pas ajouté en silence.
  *
+ * Un cinquième contrôle est venu du **chemin normal** de l'inscription, et il ne
+ * concerne pas la borne. La confirmation par e-mail étant désactivée dans le
+ * tableau de bord (voir `README.md` §4), `signUp` rend une **session**, et
+ * l'écran n'appelle alors **rien** : c'est le paquet qui notifie `SIGNED_IN`,
+ * `AuthProvider` qui bascule `status`, et `RootNavigator` qui monte les onglets.
+ * La chaîne fonctionne, mais elle est invisible depuis l'écran — et le
+ * « correctif » qu'un lecteur appliquerait, ajouter `await signIn(…)` dans la
+ * branche d'inscription, serait une seconde authentification pour rien. Le banc
+ * relit donc la propriété du paquet dans la copie installée, et exige qu'aucun
+ * appel de connexion ne se trouve dans la branche d'inscription.
+ *
  * Les commentaires sont retirés avant toute extraction par motif : le nom de la
- * constante figure dans le commentaire qui explique sa portée.
+ * constante figure dans le commentaire qui explique sa portée, et le nom de
+ * `signIn` dans celui qui explique pourquoi il n'y est pas.
  */
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const RACINE = fileURLToPath(new URL('../', import.meta.url));
 const ECRAN = `${RACINE}src/screens/ConnexionScreen.tsx`;
+
+/**
+ * Le paquet qui décide si une inscription réussie connecte l'adhérent.
+ *
+ * Le chemin est celui de la copie **installée**, pas d'une dépendance déclarée :
+ * c'est le seul fichier qui dise ce que l'application exécute réellement.
+ */
+const PAQUET_AUTH = `${RACINE}node_modules/@supabase/auth-js/dist/main/GoTrueClient.js`;
 
 function sansCommentaires(source) {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
@@ -141,5 +161,46 @@ test("l'ensemble des emplois de la borne est fermé", () => {
     emplois.length,
     2,
     `un troisième emploi de la borne doit être examiné (${emplois.length} trouvés)`,
+  );
+});
+
+test("l'inscription réussie ne rappelle pas `signIn` : le paquet a déjà posé la session", () => {
+  // Le chemin **normal** de l'inscription rend une session — la confirmation par
+  // e-mail est désactivée dans le tableau de bord (voir `README.md` §4). Rien dans
+  // cet écran ne connecte alors l'adhérent : c'est `signUp` qui prévient ses
+  // abonnés, `AuthProvider` qui fait passer `status` à `signedIn`, et
+  // `RootNavigator` qui monte les onglets. La chaîne est invisible d'ici, donc
+  // elle se vérifie dans le paquet — et l'absence d'appel se vérifie ici.
+  assert.ok(
+    existsSync(PAQUET_AUTH),
+    `paquet introuvable : ${PAQUET_AUTH} — un banc qui lit un chemin absent tombe ` +
+      'vert en ne mesurant rien',
+  );
+
+  assert.match(
+    readFileSync(PAQUET_AUTH, 'utf8'),
+    /if \(data\.session\) \{\s*await this\._saveSession\(data\.session\);\s*await this\._notifyAllSubscribers\('SIGNED_IN', session\);/,
+    '`signUp` ne notifie plus `SIGNED_IN` : l’adhérent resterait sur l’écran de ' +
+      'connexion, sans message et sans compte utilisable',
+  );
+
+  // L'ancre de fin est `} else {`, et non l'appel à `signIn` : si celui-ci était
+  // ajouté **dans** la branche d'inscription, une ancre sur l'appel le
+  // prendrait pour la fin du bloc et le contrôle ne verrait rien. C'est
+  // précisément le cas qu'on cherche à attraper.
+  const brancheInscription = bloc(CONNEXION, 'if (isSignUp) {', '} else {');
+  assert.ok(
+    !brancheInscription.includes('signIn('),
+    "l'inscription ne doit pas rappeler `signIn` : la session est déjà posée par " +
+      'le paquet, un second appel serait une authentification pour rien',
+  );
+
+  // Ensemble **fermé** : un seul appel de connexion dans tout l'écran, celui de
+  // la branche `else`. Un second doit être examiné, pas ajouté en silence.
+  const appels = CONNEXION.match(/await signIn\(/g) ?? [];
+  assert.strictEqual(
+    appels.length,
+    1,
+    `un appel de connexion supplémentaire doit être examiné (${appels.length} trouvés)`,
   );
 });

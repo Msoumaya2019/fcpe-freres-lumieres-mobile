@@ -223,7 +223,7 @@ le flux ne peut pas fonctionner :**
 1. **Authentication > URL Configuration > Redirect URLs** — ajouter exactement
    `fcpefl://reinitialisation`. Supabase refuse toute redirection absente de
    cette liste, et l'adhérent ne reçoit alors aucun lien utilisable. Le chemin
-   vient de `RECOVERY_REDIRECT_PATH` dans `src/auth/recoveryLink.ts` ; les deux
+   vient de `RECOVERY_REDIRECT_PATH` dans `src/auth/redirectPaths.ts` ; les deux
    valeurs doivent rester identiques.
 
 2. **Authentication > Email Templates > Reset password** — le lien doit être
@@ -324,6 +324,92 @@ affichée sous le champ — les deux se contredisaient.
 > connexion, après déconnexion — il n'existe pas d'écran « mon compte ».
 > `check-weak-password` tient cet accord entre deux fichiers que rien ne relie.
 
+### Confirmation d'inscription
+
+**Réglages attendus : « Confirm email » activé** (`Authentication > Providers >
+Email`), **et un SMTP personnalisé** renseigné dans `Authentication > SMTP
+Settings`.
+
+Les deux vont ensemble, et c'est le SMTP qui décide. La confirmation n'est utile
+que si l'e-mail arrive : le service d'envoi fourni par défaut avec Supabase est
+**limité à deux e-mails par heure** et destiné aux essais. Activée sans SMTP, elle
+produit exactement le défaut qu'on cherchait à éviter — l'adhérent lit « un e-mail
+de confirmation a été envoyé », attend un message qui ne viendra pas, et son
+compte reste inutilisable. Personne n'est prévenu, ni lui ni le bureau. Le prix
+est donc un compte SMTP, gratuit chez la plupart des fournisseurs.
+
+L'application gère **les deux états**, ce qui rend le réglage réversible sans
+toucher au code :
+
+| État du réglage  | Ce que `signUp` rend | Ce que fait l'écran                            |
+| ---------------- | -------------------- | ---------------------------------------------- |
+| désactivé        | une **session**      | rien : le paquet a déjà notifié `SIGNED_IN`    |
+| activé (attendu) | aucune session       | un message d'attente, et retour à la connexion |
+
+**Trois réglages du tableau de bord, et sans eux le flux ne peut pas
+fonctionner :**
+
+1. **Authentication > SMTP Settings** — un serveur d'envoi. Sans lui, deux
+   e-mails par heure, et rien d'autre ne le signale.
+2. **Authentication > Providers > Email > Confirm email** — activé.
+3. **Authentication > URL Configuration > Redirect URLs** — ajouter exactement
+   `fcpefl://confirmation`, **en plus** de `fcpefl://reinitialisation`. Le chemin
+   vient de `SIGNUP_REDIRECT_PATH` dans `src/auth/redirectPaths.ts`.
+
+> **Ce que la vérification automatique ne couvre pas.** Ces trois réglages ne
+> vivent que dans le tableau de bord — comme les exigences de mot de passe
+> ci-dessus, aucun test ne peut tenir leur accord avec le code. Il n'existe pas
+> de `supabase/config.toml` dans ce dépôt. À vérifier avant de communiquer
+> l'application aux adhérents.
+
+**L'adresse de retour est ce qui ramène l'adhérent dans l'application.** Sans
+`emailRedirectTo`, `signUp` n'envoie aucun `redirect_to` et GoTrue retombe sur le
+« Site URL » du tableau de bord : l'adhérent confirmerait son adresse dans un
+navigateur, puis resterait devant une page web sans lien de retour.
+`AuthProvider` passe donc `Linking.createURL(SIGNUP_REDIRECT_PATH)` à l'appel —
+`check-recovery-link` tient les trois : la valeur de l'adresse, son accord avec
+les deux documents qui la font enregistrer, et le fait que `signUp` la reçoive.
+
+**Le clic confirme l'adresse, il ne connecte pas.** `detectSessionInUrl` vaut
+`false` dans `src/config/supabase.ts` : la session arrive par le stockage, jamais
+par un fragment d'URL. Le lien `fcpefl://confirmation#…&type=signup` n'ouvre donc
+aucune session, et la confirmation a lieu côté serveur, au moment du clic. Le
+message d'attente le dit déjà — « Ouvrez-le pour activer votre compte, puis
+connectez-vous » — et un adhérent qui essaie avant de confirmer reçoit « Cette
+adresse e-mail n'a pas encore été confirmée… ». `parseRecoveryTokens` écarte les
+liens `type=signup`, sans quoi ils seraient pris pour des réinitialisations et
+connecteraient l'adhérent au lieu de lui demander un mot de passe.
+
+> **Limite connue, à combler avant diffusion.** `handleUrl` ignore le lien de
+> confirmation **en silence** : rien ne reconnaît `type=signup`, donc l'adhérent
+> qui clique voit l'application s'ouvrir sur l'écran de connexion, sans aucune
+> indication que son adresse est confirmée. Le silence est ici une lacune, pas un
+> choix. Le combler demande un état de plus dans `AuthProvider` (un avis
+> « adresse confirmée »), son affichage sur `ConnexionScreen`, et son effacement
+> à la connexion réussie — comme `weakPasswordReasons`, dont l'écriture est
+> inconditionnelle pour cette raison précise.
+
+**Un des deux états ne se lit pas dans l'écran, et c'est ce qui le rend fragile.**
+Dans l'état sans confirmation, `ConnexionScreen` n'appelle rien après une
+inscription réussie : la connexion vient de `signUp`, qui prévient ses abonnés —
+vérifié dans `@supabase/auth-js` 2.116.0 (`GoTrueClient.signUp`) :
+
+```js
+if (data.session) {
+  await this._saveSession(data.session);
+  await this._notifyAllSubscribers('SIGNED_IN', session);
+}
+```
+
+`AuthProvider` écoute cet événement, `status` passe à `signedIn`, et
+`RootNavigator` monte les onglets. La chaîne fonctionne, mais elle traverse trois
+fichiers que rien ne relie — et le « correctif » qu'un lecteur appliquerait,
+ajouter `await signIn(…)` dans la branche d'inscription, serait une **seconde**
+authentification pour rien, qui enverrait en plus un `email not confirmed` à
+l'adhérent venant de s'inscrire. `check-password-policy` tient donc les deux
+bouts : la propriété du paquet est relue dans la copie **installée**, et aucun
+appel de connexion ne doit se trouver dans la branche d'inscription.
+
 ## 5. Structure du projet
 
 ```
@@ -339,6 +425,7 @@ affichée sous le champ — les deux se contredisaient.
 │   ├── auth/
 │   │   ├── AuthProvider.tsx       état de session, connexion, inscription,
 │   │   │                          réinitialisation, écoute des liens entrants
+│   │   ├── redirectPaths.ts       ★ les adresses de retour vers l'application
 │   │   └── recoveryLink.ts        ★ lecture du lien de réinitialisation
 │   ├── navigation/
 │   │   ├── types.ts               paramètres de routes typés
@@ -360,7 +447,7 @@ affichée sous le champ — les deux se contredisaient.
 │   ├── alias-loader.mjs           résolution de « @/ » pour node:test
 │   ├── stubs/                     doublures des paquets natifs, pour les tests
 │   ├── check-env-guard.test.mjs   la garde sur les clés d'API
-│   ├── check-recovery-link.test.mjs  le lien, les ordres du flux, l'adresse de retour
+│   ├── check-recovery-link.test.mjs  le lien, les ordres du flux, les adresses de retour
 │   ├── check-user-messages.test.mjs  les messages de l'adhérent, et l'ordre des règles
 │   ├── check-dates.test.mjs       les dates civiles et les jours impossibles
 │   ├── check-rls-guards.test.mjs  les colonnes sous verrou, insertion comprise
@@ -371,7 +458,7 @@ affichée sous le champ — les deux se contredisaient.
 │   ├── check-async-wiring.test.mjs  le câblage des écrans, la porte de l'état vide, les écrans orphelins
 │   ├── check-contrast.test.mjs    les contrastes de la palette, et les jetons morts
 │   ├── check-pending-action.test.mjs  l'indicateur d'action, jusqu'à la relecture
-│   ├── check-password-policy.test.mjs  où s'applique la borne de mot de passe
+│   ├── check-password-policy.test.mjs  où s'applique la borne, et le chemin normal de l'inscription
 │   └── check-weak-password.test.mjs  le signalement d'un mot de passe faible, et sa place
 └── .github/workflows/             CI et build EAS
 ```
@@ -723,6 +810,25 @@ réglage — créé avant son durcissement, ou sous un réglage plus permissif �
 mot de passe. C'est la famille déjà rencontrée deux fois : une phrase fausse, qui
 invite à réparer ce qui fonctionne.
 
+**Un cinquième contrôle est venu du chemin normal de l'inscription, et il ne
+concerne pas la borne.** La confirmation par e-mail étant désactivée (voir §4),
+`signUp` rend une session, et l'écran n'appelle alors **rien** : le paquet notifie
+`SIGNED_IN`, `AuthProvider` bascule `status`, `RootNavigator` monte les onglets.
+Trois fichiers que rien ne relie — et le « correctif » qu'un lecteur appliquerait,
+ajouter `await signIn(…)` dans la branche d'inscription, serait une **seconde**
+authentification pour rien. Le banc relit donc la propriété du paquet dans la copie
+**installée** (`GoTrueClient.signUp` :
+`if (data.session) { … _notifyAllSubscribers('SIGNED_IN', session) }`) et exige
+qu'aucun appel de connexion ne se trouve dans la branche d'inscription.
+
+Détail d'écriture qui a son importance : l'ancre de fin du bloc est `} else {`, et
+**non** l'appel à `signIn`. Une ancre posée sur l'appel prendrait pour fin de bloc
+celui-là même qu'on veut attraper, et le contrôle serait aveugle exactement là où
+il compte. Falsifié en quatre scénarios, dont deux qui mutent le paquet installé —
+sans `SIGNED_IN`, ou sans sa condition de session, le banc tombe. Le quatrième
+vérifie qu'un commentaire **mentionnant** `signIn(` ne le fait pas tomber : le banc
+ne lit pas la prose.
+
 Le banc tient quatre choses : la borne reste inconditionnelle là où le mot de passe
 est **choisi** ; elle n'est pas appliquée là où il est **présenté** ; l'indication
 et la garde portent la **même portée** — c'est leur divergence qui a produit le
@@ -897,20 +1003,23 @@ présent deux fois compare la mauvaise paire — donc chaque comparaison vérifi
 d'abord que les deux motifs existent et sont uniques. Falsifiés un par un :
 chaque clause inversée fait tomber exactement son test, avec son propre message.
 
-**Deux tests tiennent l'adresse de retour elle-même**, et ils sont nés d'une
+**Quatre tests tiennent les adresses de retour elles-mêmes**, et ils sont nés d'une
 mesure. Le schéma est déclaré **une seule fois**, dans `app.json`
-(`expo.scheme`), mais l'adresse qu'il produit —
-`Linking.createURL('reinitialisation')`, dont le mécanisme a été vérifié en lisant
-`expo-linking` 57.0.10 — est recopiée à la main dans les deux documents qui font
-enregistrer une URL de redirection à l'opérateur, et dans dix-huit littéraux du
-fichier de test. Changer `expo.scheme` laissait donc **toute la suite verte** :
-Supabase refuse une redirection absente de sa liste, le lien ne revient pas dans
-l'application, et le test censé couvrir le flux éprouve une adresse que
-l'application ne produit plus. Un test compare donc les adresses **nommées** dans
-les documents à celle que l'application produit — et pas seulement la présence de
-la bonne : le scénario de falsification qui ajoute une adresse périmée **à côté**
-de la bonne fait bien tomber le test. L'autre vérifie qu'aucun fichier de test
-n'introduit un schéma que l'application ne déclare pas.
+(`expo.scheme`), mais les adresses qu'il produit —
+`Linking.createURL('reinitialisation')` et `Linking.createURL('confirmation')`,
+dont le mécanisme a été vérifié en lisant `expo-linking` 57.0.10 — sont recopiées
+à la main dans les deux documents qui font enregistrer une URL de redirection à
+l'opérateur, et dans dix-huit littéraux du fichier de test. Changer `expo.scheme`
+laissait donc **toute la suite verte** : Supabase refuse une redirection absente
+de sa liste, le lien ne revient pas dans l'application, et le test censé couvrir
+le flux éprouve une adresse que l'application ne produit plus. Un test compare
+donc les adresses **nommées** dans les documents à celles que l'application
+produit — et dans les deux sens : la présence de la bonne ne suffit pas, le
+scénario de falsification qui ajoute une adresse périmée **à côté** de la bonne
+fait bien tomber le test, et celui qui en **retire une** aussi, parce que Supabase
+la refuse en silence. Un troisième vérifie que la liste est **close** : toute
+constante `*_REDIRECT_PATH` du module doit y figurer. Le dernier vérifie qu'aucun
+fichier de test n'introduit un schéma que l'application ne déclare pas.
 
 **`check-build-config` remplace une phrase par une mesure**, et son cas est le
 plus simple des quatre. `ci.yml` portait ce commentaire, au-dessus de la version
@@ -1046,17 +1155,20 @@ cette application doit cohabiter avec une autre version du même projet, changez
 `ios.bundleIdentifier` et `android.package` dans `app.json` **avant** le premier
 build — après publication, l'identifiant ne peut plus être modifié.
 
-**Le schéma d'URL suit la même logique.** `expo.scheme` (`fcpefl`) décide de
-l'adresse vers laquelle Supabase renvoie l'adhérent après un clic sur le lien de
-réinitialisation : `fcpefl://reinitialisation`. Cette adresse est **recopiée** dans
-les deux documents qui font enregistrer une URL de redirection, et dans les
-littéraux des tests du flux — dix-huit occurrences. La changer à un seul endroit
-cassait le lien sans qu'aucun test ne bronche, puisque les tests auraient alors
-éprouvé un schéma que l'application ne produit plus. Deux tests de
-`check-recovery-link` tiennent désormais cet accord, dont un qui porte sur les
-documents eux-mêmes : changer le schéma demande donc de mettre à jour `app.json`,
-`README.md`, `supabase/README.md`, et l'entrée « Redirect URLs » du tableau de bord
-Supabase.
+**Le schéma d'URL suit la même logique.** `expo.scheme` (`fcpefl`) décide des
+adresses vers lesquelles Supabase renvoie l'adhérent après un clic : le lien de
+réinitialisation (`fcpefl://reinitialisation`) et celui de confirmation
+d'inscription (`fcpefl://confirmation`). Ces adresses sont **recopiées** dans les
+deux documents qui font enregistrer une URL de redirection, et dans les littéraux
+des tests du flux — dix-huit occurrences. Les changer à un seul endroit cassait le
+lien sans qu'aucun test ne bronche, puisque les tests auraient alors éprouvé un
+schéma que l'application ne produit plus. Quatre tests de `check-recovery-link`
+tiennent désormais cet accord : l'un porte sur les documents eux-mêmes, un autre
+vérifie que la liste des adresses est **close** — une constante ajoutée à
+`redirectPaths.ts` sans y figurer fait échouer la suite, car elle serait produite
+par l'application sans jamais être réclamée à l'opérateur. Changer le schéma
+demande donc de mettre à jour `app.json`, `README.md`, `supabase/README.md`, et
+les entrées « Redirect URLs » du tableau de bord Supabase.
 
 ### Propriétés à ne pas remettre dans `app.json`
 
