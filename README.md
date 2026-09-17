@@ -1341,6 +1341,40 @@ suit le mode sombre du système — alors que la palette n'est définie que pour
 clair. C'est exactement le « thème sombre à moitié fait » que ce projet refuse.
 Le paquet est donc installé, et le réglage est désormais réellement appliqué.
 
+### Ce que le générateur a écrit, mesuré
+
+`npx expo prebuild` a été lancé **dans le clone**, jamais dans le dossier de
+travail : il écrit un dossier `android/` et **modifie `package.json`**. Ce que le
+générateur produit est la seule preuve que ces propriétés sont réellement
+**lues** — `expo-doctor` valide le déclaré, il ne dit rien de l'effet.
+
+| Déclaré dans `app.json`       | Écrit dans le projet natif                                                          |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| `android.package`             | `namespace` et `applicationId` = `fr.fcpe.frereslumieres`                           |
+| `version`                     | `versionName "0.1.0"`, `versionCode 1`                                              |
+| `scheme: "fcpefl"`            | un `intent-filter` `VIEW` + `BROWSABLE` portant `<data android:scheme="fcpefl"/>`   |
+| `blockedPermissions` (trois)  | les trois, marquées `tools:node="remove"` — donc absentes du manifeste **fusionné** |
+| `userInterfaceStyle: "light"` | `<string name="expo_system_ui_user_interface_style">light</string>`                 |
+| greffon `expo-splash-screen`  | `splashscreen_background` = **`#2554D6`**                                           |
+
+Deux points méritent d'être soulignés :
+
+- **Le filtre `fcpefl` est ce qui rend les liens d'e-mail utilisables.** Sans lui,
+  `Linking.createURL('confirmation')` produirait une adresse que le système ne
+  saurait pas router vers l'application : le lien s'ouvrirait dans un navigateur,
+  et tout le flux de confirmation tomberait **sans erreur visible**. C'est la
+  moitié native d'un accord que ce dépôt ne peut pas tenir par un test.
+- **`expo-system-ui` n'est pas dans `plugins`, et son greffon s'exécute quand
+  même** — mesuré : la chaîne ci-dessus vient de là, pas d'une déclaration
+  explicite. Le paquet doit donc rester **installé** : le retirer ne produirait
+  aucune erreur, seulement une application qui suit le mode sombre du système.
+
+**Un mot sur la sauvegarde Android.** Le manifeste porte
+`android:allowBackup="true"`, et ce n'est pas une fuite : les règles livrées par
+`expo-secure-store` **excluent** `SecureStore` des sauvegardes
+(`<exclude domain="sharedpref" path="SecureStore"/>`), là où vivent les jetons de
+session. Vérifié dans le fichier de règles, pas supposé d'après le nom du paquet.
+
 ## 8. Dépôt GitHub
 
 Le dépôt local est **déjà initialisé** : branche `main`, l'historique de la phase 1,
@@ -1515,3 +1549,16 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   apparaîtrait (casse d'un nom, longueur d'un chemin, script shell, séparateur).
   Le clone prouve que le dépôt se reproduit à l'identique ; il ne prouve pas
   encore qu'il se reproduit **ailleurs**.
+- **Le projet natif n'est couvert par aucun test.** `npx expo prebuild` demande
+  le réseau, écrit un dossier `android/` et **modifie `package.json`** : il ne
+  peut pas entrer dans `npm run verify`. Ce que le générateur écrit a donc été
+  **mesuré une fois** et consigné au §7 ; rien ne le tiendra si une montée de
+  version d'Expo change un greffon. Le remède est de relancer la commande dans un
+  clone et de comparer au tableau du §7 — c'est une mesure, pas un oubli.
+- **Le projet iOS n'a jamais été généré.** Mesuré : `npx expo prebuild
+--platform ios` **refuse** de s'exécuter sous Windows (« Run npx expo prebuild
+  again from macOS or Linux »). L'`Info.plist` n'existe donc pas ici, et le
+  schéma `fcpefl` n'est vérifié que dans le manifeste Android. C'est le premier
+  build EAS qui produira la version iOS — et c'est là qu'un `CFBundleURLSchemes`
+  manquant apparaîtrait, c'est-à-dire au moment où les liens d'e-mail devraient
+  ramener l'adhérent dans l'application.
