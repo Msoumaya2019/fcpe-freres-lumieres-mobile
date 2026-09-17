@@ -508,7 +508,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-password-policy.test.mjs  où s'applique la borne, et le chemin normal de l'inscription
 │   ├── check-weak-password.test.mjs  le signalement d'un mot de passe faible, et sa place
 │   ├── check-screen-modes.test.mjs  les cinq visages de l'écran de connexion, et leurs branches
-│   └── check-inventory.test.mjs   ce que le lanceur exécute, et ce que le README en décrit
+│   ├── check-inventory.test.mjs   ce que le lanceur exécute, et ce que le README en décrit
+│   └── check-schema-refs.test.mjs  les renvois du schéma : clés, types, colonnes des politiques
 └── .github/workflows/             CI et build EAS
 ```
 
@@ -1267,6 +1268,43 @@ neuf font tomber le banc, chacun sur le test attendu, et quatre témoins le
 laissent vert : description d'une ligne réécrite, deux lignes permutées, et un
 script de plus correctement branché et décrit.
 
+**`check-schema-refs` lit l'arbre, pas le texte.** C'était le dernier angle mort
+du schéma. `npm run sql:check` le fait analyser par le véritable analyseur
+PostgreSQL, mais il valide la **syntaxe** — et `author_di = auth.uid()` est une
+syntaxe parfaitement valide. `check-rls-guards` lit la structure des politiques
+sans se demander si les colonnes qu'elles nomment existent, et
+`check-schema-types` part des colonnes **déclarées**, jamais de celles **citées**.
+Une faute de frappe dans une politique était donc muette jusqu'au `db push`,
+c'est-à-dire au pire moment — celui que `sql:check` a précisément été écrit pour
+éviter.
+
+Le contrôle aurait pu être écrit avec des expressions régulières, et il aurait
+alors fallu lui fournir la liste des mots à ignorer : `select`, `using`, `auth`,
+`uid`, `now`, `char_length`… Cette liste est une source de faux positifs — et un
+banc qui tombe sur du schéma juste est un défaut du banc — qui s'allonge à chaque
+fonction ajoutée. L'analyseur rend un **arbre** : un `ColumnRef` y est un
+`ColumnRef`, jamais un mot qui ressemble à une colonne. La liste disparaît, et
+avec elle sa maintenance.
+
+Deux enseignements sont venus de l'épreuve, et non de la lecture. **Le schéma cite
+`auth.users`**, qui n'est pas dans nos migrations : sans une liste fermée de
+cibles externes, le contrôle tombait sur du schéma juste. Et **dix politiques
+portent `(select auth.uid())`** — l'écriture recommandée par Supabase pour
+n'évaluer la fonction qu'une fois par requête au lieu d'une fois par ligne —, une
+sous-requête sans `from` qui ne change pas la portée ; le parcours la suit. Une
+sous-requête **avec** `from` demanderait de reproduire la résolution de portée de
+PostgreSQL, où une portée interne masque l'externe et où l'externe reste visible :
+le contrôle la refuse au lieu de deviner, et un test dédié le dit.
+
+Falsifié en onze scénarios, chacun tombant sur le test attendu : faute de frappe
+dans une colonne de politique, clé étrangère vers une table ou une colonne
+inexistante, type énuméré non déclaré, sous-requête avec `from`, `alter table drop
+column`, politique posée sur `auth.users`, table renommée. Trois témoins restent
+verts : une politique remise en forme, une colonne ajoutée par `alter table`
+**puis** citée par une politique, et un commentaire qui nomme une colonne
+inexistante — ce dernier mesurant ce que le parcours d'arbre apporte, puisqu'un
+relevé par motif l'aurait pris pour une citation.
+
 ### Diagnostic Expo
 
 ```bash
@@ -1545,12 +1583,12 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Seize fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Dix-sept fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
   `check-pending-action`, `check-password-policy`, `check-weak-password`,
-  `check-screen-modes` et `check-inventory`
+  `check-screen-modes`, `check-inventory` et `check-schema-refs`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui
@@ -1570,7 +1608,12 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   l'application, mais **ce dépôt-ci** : que chaque banc soit nommé pour être
   exécuté — un `.spec.mjs` ne l'est pas, mesuré —, qu'aucun script de `scripts/`
   ne reste sans exécutant, et que ce fichier décrive exactement ce qui existe, au
-  mot près du décompte. Les trois
+  mot près du décompte. `check-schema-refs` parcourt l'**arbre syntaxique** du
+  schéma, et non son texte : chaque clé étrangère doit viser une table et une
+  colonne déclarées, chaque type énuméré cité doit exister, et chaque colonne
+  nommée par une politique ou un déclencheur doit appartenir à sa table — une
+  faute de frappe y est une syntaxe valide, que `sql:check` laisse donc passer.
+  Les trois
   paquets natifs dont
   dépend le stockage sont remplacés par des doublures branchées par
   `scripts/alias-loader.mjs`, ce qui n'ajoute aucune dépendance. **Aucun écran
@@ -1613,6 +1656,12 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   puisque le balayage part de ce dossier. Et il tient l'**existence** des lignes
   du README, pas leur justesse : une description fausse passe, seuls un nom
   absent ou un nom en trop le font tomber.
+- **`check-schema-refs` ne lit pas le corps des fonctions.** `CreateFunctionStmt`
+  porte son corps en **texte** : une fonction PL/pgSQL qui citerait une colonne
+  inexistante passe. Les cinq fonctions du schéma ne sont donc pas couvertes, et
+  `supabase/seed.sql` ne l'est pas davantage — ce n'est pas une migration. Le
+  contrôle ne voit pas non plus un `alter table` futur qui **renommerait** une
+  colonne : il refuse la forme, il ne la suit pas.
 - **La portabilité a été mesurée ici, pas sur une autre machine.** Le clone
   vérifié l'a été sous Windows, avec le même Node et le même `core.autocrlf=true`
   — c'est-à-dire dans les conditions les plus défavorables pour les fins de ligne,
