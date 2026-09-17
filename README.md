@@ -931,6 +931,32 @@ ajoutée sans sa déclaration fait tomber le banc. Huit scénarios de falsificat
 comportent comme prévu. Ce que le banc ne peut pas voir est écrit dans son
 en-tête : il lit la règle, il ne clone pas.
 
+**Les trois autres réglages de la machine, mesurés, n'ont rien trouvé.** La
+famille ouverte par `autocrlf` en comptait d'autres, et les mesurer valait mieux
+que les supposer :
+
+| réglage           | valeur ici | ce qu'il casserait                         | constat                       |
+| ----------------- | ---------- | ------------------------------------------ | ----------------------------- |
+| `core.autocrlf`   | `true`     | CRLF partout, `format:check` rouge         | **mordait** — corrigé         |
+| `core.ignorecase` | `true`     | deux chemins ne différant que par la casse | 0 collision sur 88 chemins    |
+| `core.filemode`   | `false`    | un script perdant son bit exécutable       | aucun mode autre que `100644` |
+| `core.symlinks`   | `false`    | un lien devenant un fichier ordinaire      | aucun lien suivi              |
+
+Aucun caractère interdit par Windows (`: * ? " < > |`), aucun nom réservé
+(`CON`, `NUL`, `COM1`…), et le plus long chemin suivi fait 43 caractères contre
+260 pour la limite historique. Rien à corriger.
+
+**Pourquoi aucun banc ne tient ces trois-là.** Le relevé fiable des fichiers
+suivis est `git ls-files`, et ce projet **n'exige pas Git** : `cli.requireCommit`
+vaut `false` dans `eas.json`, aucune banque n'appelle Git aujourd'hui, et une
+archive ZIP téléchargée depuis GitHub n'a pas de `.git`. Faire dépendre la suite
+de Git pour garder des propriétés aujourd'hui vraies serait un mauvais échange.
+La commande reste, pour le jour où le dépôt se couvrira de fichiers :
+
+```bash
+git ls-files | awk '{print tolower($0)}' | sort | uniq -d   # collisions de casse
+```
+
 ### Diagnostic Expo
 
 ```bash
