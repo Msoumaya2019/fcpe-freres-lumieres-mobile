@@ -1,7 +1,7 @@
 /**
  * Vérifie que les renvois internes du schéma SQL aboutissent.
  *
- * Une seule idée, trois familles : **un nom cité doit exister**.
+ * Une seule idée, quatre familles : **un nom cité doit exister**.
  *
  *   1. les **renvois structurels** — une clé étrangère vise une table et une
  *      colonne déclarées, un type énuméré cité est déclaré ;
@@ -10,7 +10,9 @@
  *      écrite en SQL. Chaque référence se résout dans la portée où elle est
  *      écrite, ou dans une portée qui l'englobe ;
  *   3. les **options des fonctions** — toute fonction `security definer` fixe son
- *      `search_path`.
+ *      `search_path` ;
+ *   4. les **colonnes lues sur la ligne d'un déclencheur** — `new` et `old` dans
+ *      un corps PL/pgSQL, confrontées aux colonnes de la table du déclencheur.
  *
  * POURQUOI CE FICHIER
  * -------------------
@@ -55,10 +57,14 @@
  *
  * CE QUE CE CONTRÔLE NE PEUT PAS VOIR
  * -----------------------------------
- * - **Le corps des fonctions PL/pgSQL.** Quatre des cinq fonctions du schéma sont
- *   en PL/pgSQL : leur corps est du **texte**, non analysable comme du SQL
+ * - **Le reste des corps PL/pgSQL.** Quatre des cinq fonctions du schéma sont en
+ *   PL/pgSQL : leur corps est du **texte**, non analysable comme du SQL
  *   (`begin`, `if`, `raise exception`). Seule `is_admin`, écrite en `language
- *   sql`, est lue — et c'est la seule dont le corps est une requête.
+ *   sql`, est lue comme une requête. Des quatre autres, le contrôle ne tire
+ *   qu'une chose, et par motif : les colonnes lues sur `new` et `old`, qui sont
+ *   leur seul accès à une table. Une faute de frappe dans un **nom de fonction**,
+ *   un `raise exception` mal formé, un `errcode` inconnu ou une variable
+ *   mal orthographiée passent donc.
  * - **Un `alter table` qui renomme ou supprime une colonne.** Le contrôle suit
  *   `enable row level security` et `add column` ; les autres formes sont
  *   **refusées** par le dernier test, pour que la question se pose au lieu d'être
@@ -260,6 +266,7 @@ async function lireLeSchema() {
           genre: 'déclencheur',
           table: declencheur.relation.relname,
           schema: declencheur.relation.schemaname,
+          fonction: dernierSegment(declencheur.funcname),
           expressions: [declencheur.whenClause].filter((e) => e !== undefined),
         });
         continue;
@@ -270,6 +277,7 @@ async function lireLeSchema() {
         const options = optionsDe(fonction);
         fonctions.push({
           nom: fonction.funcname.map((partie) => partie.String.sval).join('.'),
+          court: dernierSegment(fonction.funcname),
           definer: options.get('security')?.Boolean?.boolval === true,
           langue: options.get('language')?.String?.sval ?? null,
           fixeSearchPath: options.get('set')?.VariableSetStmt?.name === 'search_path',
@@ -492,6 +500,101 @@ function lireLesExpressions() {
     }
   }
   return rapport;
+}
+
+/**
+ * Un corps de fonction, dépouillé de ses commentaires et de ses chaînes.
+ *
+ * C'est la **seule** lecture de ce fichier qui parte du texte et non de l'arbre,
+ * et elle est assumée : `libpg-query` analyse du SQL, et un corps PL/pgSQL
+ * (`begin`, `if`, `raise exception`) n'en est pas. Les quatre corps concernés
+ * sont courts, et ce qu'on leur demande est étroit — quelles colonnes ils lisent
+ * sur `new` et `old`.
+ *
+ * Le retrait n'est pas cosmétique : il est **porteur**. Un commentaire qui
+ * expliquerait une ancienne écriture, ou un message d'erreur qui nommerait une
+ * colonne, ferait tomber le contrôle sur du schéma juste. C'est la faute que ce
+ * fichier existe pour éviter, alors elle se mesure — dans les deux sens, par le
+ * test qui suit, et non par la lecture de ce commentaire.
+ *
+ * Trois formes à retirer : le commentaire de fin de ligne, le bloc de
+ * commentaire, et la chaîne entre apostrophes — où deux apostrophes collées sont
+ * un guillemet échappé, pas une fin de chaîne. Les identifiants entre
+ * guillemets doubles partent aussi.
+ */
+function sansCommentairesNiChaines(texte) {
+  let sortie = '';
+  let i = 0;
+
+  while (i < texte.length) {
+    if (texte.startsWith('--', i)) {
+      const fin = texte.indexOf('\n', i);
+      i = fin === -1 ? texte.length : fin;
+      continue;
+    }
+
+    if (texte.startsWith('/*', i)) {
+      const fin = texte.indexOf('*/', i + 2);
+      i = fin === -1 ? texte.length : fin + 2;
+      continue;
+    }
+
+    if (texte[i] === "'") {
+      i += 1;
+      while (i < texte.length) {
+        if (texte[i] !== "'") {
+          i += 1;
+        } else if (texte[i + 1] === "'") {
+          i += 2;
+        } else {
+          i += 1;
+          break;
+        }
+      }
+      sortie += ' ';
+      continue;
+    }
+
+    if (texte[i] === '"') {
+      const fin = texte.indexOf('"', i + 1);
+      i = fin === -1 ? texte.length : fin + 1;
+      sortie += ' ';
+      continue;
+    }
+
+    sortie += texte[i];
+    i += 1;
+  }
+
+  return sortie;
+}
+
+/** Ce qu'un corps de déclencheur lit sur `new` ou `old`. */
+const LECTURE_DE_LIGNE = /\b(?:new|old)\s*\.\s*([a-z_][a-z0-9_]*)/gi;
+
+/**
+ * Les colonnes qu'un corps lit sur la ligne du déclencheur.
+ *
+ * `new` et `old` désignent la ligne de la table sur laquelle le déclencheur est
+ * posé : une colonne absente n'échoue pas à la création, mais au premier
+ * `update`, avec `record "new" has no field …`. C'est exactement la faute muette
+ * que ce fichier traque — et elle est ici plus retorse, parce qu'un même corps
+ * peut être rattaché à **plusieurs** tables.
+ */
+function colonnesDeLigne(corps) {
+  const lues = [];
+  for (const [, colonne] of sansCommentairesNiChaines(corps).matchAll(LECTURE_DE_LIGNE)) {
+    lues.push(colonne.toLowerCase());
+  }
+  return [...new Set(lues)];
+}
+
+/** Chaque déclencheur, avec la fonction qu'il exécute. */
+function liensTriggerFonction() {
+  return SCHEMA.declencheurs.map((declencheur) => ({
+    declencheur,
+    fonction: SCHEMA.fonctions.find((candidate) => candidate.court === declencheur.fonction),
+  }));
 }
 
 test('le schéma se lit, et les six tables attendues y sont', () => {
@@ -776,5 +879,95 @@ test('les `alter table` des migrations n’emploient que des formes suivies', ()
   assert.ok(
     SCHEMA.formes.length > 0,
     'aucune instruction `alter table` lue — le contrôle ne mesure rien',
+  );
+});
+
+test('le retrait des commentaires et des chaînes est porteur', () => {
+  // Ce test n'éprouve pas le schéma, mais **l'instrument** — et il est là parce
+  // que la lecture d'un corps PL/pgSQL passe par du texte, seule entorse de ce
+  // fichier à la lecture par l'arbre. Une étape de nettoyage qui ne retirerait
+  // rien de réel passerait sans bruit : mesuré à la passe 48 sur un autre banc,
+  // où le retrait des commentaires ne faisait tomber **aucun** test.
+  //
+  // Le corps est écrit ici, hors du schéma, pour que la preuve ne dépende pas de
+  // ce que les quatre vraies fonctions contiennent aujourd'hui.
+  const corps = [
+    '-- une ancienne écriture : new.ignoree',
+    '/* et un bloc qui parle de old.ignoree_aussi */',
+    "raise exception 'message qui nomme new.dans_une_chaine';",
+    'new.vraie = old.vraie;',
+  ].join('\n');
+
+  assert.deepEqual(
+    colonnesDeLigne(corps),
+    ['vraie'],
+    'une référence citée dans un commentaire ou une chaîne est prise pour une lecture',
+  );
+
+  // Et la forme qui doit rester lisible, pour que le test ne puisse pas être
+  // satisfait par un nettoyage qui retirerait tout.
+  assert.deepEqual(colonnesDeLigne('new.a = old.b;'), ['a', 'b']);
+});
+
+test('chaque référence `new.`/`old.` appartient à la table du déclencheur', () => {
+  // `new` et `old` désignent la ligne de la table du déclencheur. Une colonne
+  // absente ne fait pas échouer la création de la fonction : elle échoue au
+  // premier `update`, avec `record "new" has no field …` — c'est-à-dire en
+  // production, sur un chemin qu'aucun test de ce dépôt n'exerce.
+  //
+  // Ce qui rend l'invariant intéressant, c'est qu'un **même** corps peut être
+  // rattaché à plusieurs tables : `set_updated_at` l'est à quatre, et il lit
+  // `new.updated_at`. Les quatre doivent donc porter la colonne.
+  const liens = liensTriggerFonction();
+  const fautives = [];
+  let rattaches = 0;
+  let lues = 0;
+
+  for (const { declencheur, fonction } of liens) {
+    if (fonction === undefined) {
+      fautives.push(`${declencheur.nom} → fonction « ${declencheur.fonction} » introuvable`);
+      continue;
+    }
+    if (fonction.langue !== 'plpgsql' || fonction.corps === null) {
+      // Une fonction écrite en SQL est déjà lue par l'arbre, au test précédent.
+      continue;
+    }
+    if (declencheur.schema !== SCHEMA_PUBLIC) {
+      // `auth.users` : ses colonnes ne sont pas dans nos migrations, et les
+      // exiger ferait tomber le contrôle sur du schéma juste. La liste est
+      // fermée, et c'est le test des cibles externes qui la tient.
+      continue;
+    }
+
+    rattaches += 1;
+    const colonnes = colonnesDeLigne(fonction.corps);
+    lues += colonnes.length;
+
+    const table = SCHEMA.tables.get(declencheur.table);
+    assert.ok(
+      table !== undefined,
+      `${declencheur.nom} porte sur une table non déclarée : ${declencheur.table}`,
+    );
+    const connues = table.map((colonne) => colonne.nom);
+
+    for (const colonne of colonnes) {
+      if (!connues.includes(colonne)) {
+        fautives.push(
+          `${declencheur.nom} → ${fonction.nom} lit « ${colonne} » sur ` +
+            `${declencheur.table}, qui ne la porte pas`,
+        );
+      }
+    }
+  }
+
+  // Planchers de prémisse : sans eux, un lien déclencheur→fonction qui cesserait
+  // de se faire — un `execute function` renommé, par exemple — rendrait ce test
+  // vert en ne lisant plus rien.
+  assert.ok(rattaches >= 5, `corps PL/pgSQL rattachés à un déclencheur : ${rattaches}`);
+  assert.ok(lues >= 4, `références \`new.\`/\`old.\` lues : ${lues}`);
+  assert.deepEqual(
+    fautives,
+    [],
+    `références de déclencheur qui ne se résolvent pas :\n${fautives.join('\n')}`,
   );
 });

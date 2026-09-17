@@ -509,7 +509,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-weak-password.test.mjs  le signalement d'un mot de passe faible, et sa place
 │   ├── check-screen-modes.test.mjs  les cinq visages de l'écran de connexion, et leurs branches
 │   ├── check-inventory.test.mjs   ce que le lanceur exécute, et ce que le README en décrit
-│   └── check-schema-refs.test.mjs  les renvois du schéma : clés, types, portées, `seed.sql`
+│   └── check-schema-refs.test.mjs  les renvois du schéma : clés, types, portées, seed.sql, new/old
 └── .github/workflows/             CI et build EAS
 ```
 
@@ -1268,7 +1268,7 @@ neuf font tomber le banc, chacun sur le test attendu, et quatre témoins le
 laissent vert : description d'une ligne réécrite, deux lignes permutées, et un
 script de plus correctement branché et décrit.
 
-**`check-schema-refs` lit l'arbre, pas le texte.** C'était le dernier angle mort
+**`check-schema-refs` lit le schéma dans son arbre.** C'était le dernier angle mort
 du schéma. `npm run sql:check` le fait analyser par le véritable analyseur
 PostgreSQL, mais il valide la **syntaxe** — et `author_di = auth.uid()` est une
 syntaxe parfaitement valide. `check-rls-guards` lit la structure des politiques
@@ -1317,7 +1317,36 @@ parcours d'arbre apporte, puisqu'un relevé par motif l'aurait pris pour une
 citation —, une sous-requête **corrélée**, une jointure dans une sous-requête, une
 colonne ajoutée puis nommée par `seed.sql`, et une colonne `boolean`.
 
-Ce dernier témoin a trouvé un défaut réel **dans le banc lui-même**. L'analyseur
+**La quatrième famille : ce qu'un corps lit sur la ligne du déclencheur.** Restait
+le corps des fonctions PL/pgSQL — quatre des cinq —, que l'analyseur ne lit pas :
+`begin`, `if`, `raise exception` ne sont pas du SQL. Mais ces corps ont un point
+d'entrée étroit et vérifiable : `new` et `old` y désignent la ligne de la table du
+déclencheur, et une colonne absente n'échoue pas à la création de la fonction —
+elle échoue au premier `update`, avec `record "new" has no field …`, c'est-à-dire
+en production, sur un chemin qu'aucun test de ce dépôt n'exerce. Le contrôle relie
+donc chaque déclencheur à la fonction qu'il exécute, extrait du corps les colonnes
+lues sur `new` et `old`, et les confronte à la table.
+
+Ce qui rend l'invariant intéressant, c'est qu'un **même** corps peut être rattaché
+à plusieurs tables : `set_updated_at` l'est à quatre, et il lit `new.updated_at`.
+Un cinquième déclencheur posé sur `cantine_reservations`, qui n'a pas de
+`updated_at`, est exactement la faute que ce test attrape — et qu'un simple coup
+d'œil sur la fonction ne montrerait pas.
+
+C'est la **seule** lecture du fichier qui parte du texte plutôt que de l'arbre, et
+elle est assumée : `libpg-query` analyse du SQL. Le nettoyage des commentaires et
+des chaînes littérales n'est donc pas cosmétique — un commentaire qui expliquerait
+une ancienne écriture, ou un message d'erreur qui nommerait une colonne, ferait
+tomber le contrôle sur du schéma juste. Cette propriété se **mesure**, dans les
+deux sens : un test écrit un corps témoin où `new.inexistant` figure dans un
+commentaire, dans un bloc et dans une chaîne, et exige qu'il n'en reste qu'une
+lecture ; et l'épreuve vérifie qu'en retirant ce nettoyage le test tombe, et qu'en
+le remplaçant par un nettoyage qui retirerait **tout** ce sont les planchers qui
+tombent. Le tout porte le total à **vingt-neuf scénarios** — dix-huit font tomber
+le banc, onze témoins le laissent vert.
+
+Le témoin de la colonne `boolean` a trouvé un défaut réel **dans le banc
+lui-même**. L'analyseur
 **qualifie** les types du langage, et de façon non uniforme : mesuré, `boolean`
 arrive en `pg_catalog.bool`, `character varying` en `pg_catalog.varchar`, `numeric`
 en `pg_catalog.numeric`, `double precision` en `pg_catalog.float8` — mais `jsonb`,
@@ -1633,10 +1662,12 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   mot près du décompte. `check-schema-refs` parcourt l'**arbre syntaxique** du
   schéma, et non son texte : chaque clé étrangère doit viser une table et une
   colonne déclarées, chaque type énuméré cité doit exister, chaque fonction
-  `security definer` doit fixer son `search_path`, et chaque colonne nommée par
+  `security definer` doit fixer son `search_path`, chaque colonne nommée par
   une politique, un déclencheur, une insertion de `seed.sql` ou le corps d'une
   fonction écrite en SQL doit se résoudre dans sa portée — de l'intérieur vers
-  l'extérieur, comme PostgreSQL. Une faute de frappe y est une syntaxe valide, que
+  l'extérieur, comme PostgreSQL — et chaque colonne lue sur `new` ou `old` dans un
+  corps PL/pgSQL doit appartenir à la table du déclencheur qui l'exécute. Une
+  faute de frappe y est une syntaxe valide, que
   `sql:check` laisse donc passer.
   Les trois
   paquets natifs dont
@@ -1681,11 +1712,15 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   puisque le balayage part de ce dossier. Et il tient l'**existence** des lignes
   du README, pas leur justesse : une description fausse passe, seuls un nom
   absent ou un nom en trop le font tomber.
-- **`check-schema-refs` ne lit pas le corps des fonctions PL/pgSQL.**
-  `CreateFunctionStmt` porte son corps en **texte**, et quatre des cinq fonctions
+- **`check-schema-refs` ne lit d'un corps PL/pgSQL que les colonnes lues sur
+  `new` et `old`.** `CreateFunctionStmt` porte son corps en **texte**, et quatre
+  des cinq fonctions
   du schéma sont en PL/pgSQL (`begin`, `if`, `raise exception`) : une fonction de
-  ce genre qui citerait une colonne inexistante passe. Seule `is_admin`, écrite en
-  `language sql`, est lue — et c'est la seule dont le corps est une requête. Le
+  ce genre qui citerait une colonne inexistante passe — **sauf** par les colonnes
+  qu'elle lit sur `new` et `old`, qui sont extraites par motif et confrontées à la
+  table du déclencheur. Une faute de frappe dans un **nom de fonction**, un
+  `raise exception` mal formé, un `errcode` inconnu ou une variable mal
+  orthographiée passent donc. Le
   contrôle ne voit pas non plus un `alter table` futur qui **renommerait** ou
   **supprimerait** une colonne : il refuse ces formes, il ne les suit pas, ce qui
   fait poser la question au lieu de la trancher à tort. Enfin, il ne lit que les
