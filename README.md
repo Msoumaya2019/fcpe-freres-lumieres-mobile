@@ -1343,8 +1343,8 @@ Le paquet est donc installé, et le réglage est désormais réellement appliqu�
 
 ## 8. Dépôt GitHub
 
-Le dépôt local est **déjà initialisé** : branche `main`, premier commit créé, et
-88 fichiers suivis (le `.gitignore` en écarte `node_modules/`, `dist/`, `.expo/`,
+Le dépôt local est **déjà initialisé** : branche `main`, l'historique de la phase 1,
+et 90 fichiers suivis (le `.gitignore` en écarte `node_modules/`, `dist/`, `.expo/`,
 les dossiers natifs, les `.env` et les clés de signature). Il ne reste que la
 destination distante :
 
@@ -1365,6 +1365,31 @@ donc du CRLF partout — alors que `.prettierrc.json` impose `endOfLine: "lf"`, 
 juge le dossier de travail tel qu'il est sur le disque. `format:check` échoue
 alors sur chaque fichier, et le même dépôt reste vert sur un exécuteur Linux.
 Mesuré avant et après la règle : **22 503 CRLF → 0** (voir §6).
+
+### Ce que le clone a donné, mesuré
+
+Le dépôt n'a pas seulement été relu : il a été **cloné dans un dossier vide**, et
+c'est le clone qui a été vérifié. C'est la seule mesure qui réponde à la question
+« ce dépôt donnera-t-il le même verdict ailleurs ? » — un dossier de travail vert
+ne dit rien de ce que reçoit celui qui clone.
+
+| Mesure                         | Résultat                                                          |
+| ------------------------------ | ----------------------------------------------------------------- |
+| fichiers suivis                | 90, tous `i/lf w/lf` — 6 binaires en `i/-text w/-text`            |
+| CRLF réellement sur le disque  | **10** — les dix octets `0d 0a` de la signature PNG, rien d'autre |
+| `format:check` dans le clone   | vert, **avec** `core.autocrlf=true` sur cette machine             |
+| `npm ci` depuis le lockfile    | 11 vulnérabilités modérées : celles que `SECURITY.md` documente   |
+| `npm run verify` dans le clone | **168/168**, 0 échec, export Android réussi                       |
+| empreinte du bundle            | `index-dde9478a…hbc`, **identique** à celle du dossier de travail |
+
+Le dernier point est celui qui vaut le plus : le clone ne produit pas seulement
+« un » bundle, il produit **le même**. Le reste du relevé de portabilité n'a rien
+trouvé : aucune collision de casse sur 90 chemins, aucun caractère interdit par
+Windows (`: * ? " < > |`), aucun nom de périphérique réservé, chemin le plus long
+à 43 caractères, et aucun mode autre que `100644`. Les trois réglages de la
+machine restés actifs — `core.ignorecase`, `core.filemode`, `core.symlinks` —
+n'ont donc rien eu à mordre, et c'est ce qui a décidé de **ne pas** les bancariser
+(voir §6) : une famille ouverte se ferme par la mesure, pas par symétrie.
 
 ### Secrets à déclarer (Settings > Secrets and variables > Actions)
 
@@ -1430,11 +1455,12 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Quatorze fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Quinze fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
-  `check-pending-action`, `check-password-policy` et `check-weak-password`
+  `check-pending-action`, `check-password-policy`, `check-weak-password` et
+  `check-screen-modes`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui
@@ -1460,7 +1486,8 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   palette qui n'apparaît que sur un fond coloré, `check-pending-action` l'absence
   d'un `finally` qui relâcherait trop tôt, `check-password-policy` la condition qui
   entoure une garde, `check-weak-password` la table des raisons et la place du
-  bandeau, ainsi qu'une propriété du paquet de navigation — ou
+  bandeau, `check-screen-modes` les littéraux d'un type énuméré et les branches
+  qui les traitent, ainsi qu'une propriété du paquet de navigation — ou
   couverts par `tsc`, ESLint et l'export Expo. Le fournisseur d'authentification
   n'est couvert qu'en **forme** — trois tests lisent la source et comparent l'ordre
   de deux opérations, et `check-weak-password` y vérifie que la réponse du serveur
@@ -1480,3 +1507,11 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lit pas les `paths` de `tsconfig.json` ; `scripts/alias-loader.mjs` comble
   l'écart sans dépendance. Le monter a ouvert au test tout `src/`, ce qui était
   la condition pour vérifier la traduction des erreurs.
+- **La portabilité a été mesurée ici, pas sur une autre machine.** Le clone
+  vérifié l'a été sous Windows, avec le même Node et le même `core.autocrlf=true`
+  — c'est-à-dire dans les conditions les plus défavorables pour les fins de ligne,
+  et c'est bien ce qui était en jeu. Mais **rien n'a été exécuté sous Linux** : la
+  CI le fera au premier push, et c'est là qu'un écart propre à la plateforme
+  apparaîtrait (casse d'un nom, longueur d'un chemin, script shell, séparateur).
+  Le clone prouve que le dépôt se reproduit à l'identique ; il ne prouve pas
+  encore qu'il se reproduit **ailleurs**.
