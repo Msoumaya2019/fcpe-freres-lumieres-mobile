@@ -16,25 +16,79 @@
  * comportement que la fonction réservait déjà aux chaînes qui ne ressemblent pas
  * à une date.
  *
- * CE QUI N'EST PAS TESTÉ ICI, ET POURQUOI
- * ---------------------------------------
- * Le décalage de fuseau — le motif pour lequel ce module n'utilise pas
- * `new Date('AAAA-MM-JJ')` — n'est pas éprouvable sur cette machine : Node y
- * ignore `TZ`, y compris passée à un processus fils (mesuré : `TZ=America/New_York`
- * laisse le fuseau à `GMT+0200`). Un test qui croirait changer de fuseau
- * passerait donc partout, y compris sur un code fautif. Il n'a pas été écrit.
- * Voir §9 du README.
+ * LE FUSEAU, QUI SEMBLAIT INÉPROUVABLE
+ * ------------------------------------
+ * Ce fichier a longtemps porté cette phrase : « Node ignore `TZ` sur cette
+ * machine, donc un test de fuseau passerait partout, y compris sur un code
+ * fautif ». Elle était **fausse**, et d'une façon instructive : elle généralisait
+ * à partir d'**une seule forme** de la variable. Mesuré, processus fils compris :
+ *
+ *     TZ=America/New_York  → fuseau inchangé (GMT+0200)   ← la forme essayée
+ *     TZ=Asia/Tokyo        → fuseau inchangé
+ *     TZ=Europe/London     → fuseau inchangé
+ *     TZ=UTC               → +00:00
+ *     TZ=GMT-5             → -05:00
+ *     TZ=GMT+14            → +14:00
+ *
+ * Les noms **IANA** ne sont pas lus, les décalages **fixes** le sont. Il y avait
+ * donc bien un fuseau à essayer, et c'est celui qui compte : un fuseau **en
+ * retard** sur UTC, le seul où `new Date('2020-09-16')` — minuit UTC — change de
+ * jour. Les deux tests de fuseau mesurent leur propre prémisse — le décalage
+ * appliqué, et le fait que le piège change bien de jour — pour qu'ils **échouent**
+ * sur une machine qui ignorerait `TZ`, au lieu de passer à vide.
  *
  * Sans dépendance : `node:test` est intégré, et le *type stripping* de Node 22
  * permet d'importer directement le fichier TypeScript.
  */
 
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
+const RACINE = fileURLToPath(new URL('../', import.meta.url));
+const CHARGEUR = new URL('./register-alias.mjs', import.meta.url).href;
 const MODULE = new URL('../src/utils/date.ts', import.meta.url).href;
 
 const { formatMenuDate, formatDateTime } = await import(MODULE);
+
+/**
+ * Exécute un fragment dans un processus **fils**, sous un fuseau donné.
+ *
+ * Le processus fils est nécessaire : `TZ` se lit au démarrage de Node, et
+ * modifier `process.env.TZ` après coup ne change plus rien. Le chargeur d'alias
+ * est passé comme dans la suite, pour que le jour où `date.ts` importera un
+ * module interne, ce test ne tombe pas pour une raison qui n'a rien à voir.
+ */
+function dansLeFuseau(fuseau) {
+  const programme = [
+    "const { formatMenuDate } = await import('./src/utils/date.ts');",
+    "const correcte = formatMenuDate('2020-09-16');",
+    "const piege = new Date('2020-09-16');",
+    'console.log(',
+    '  JSON.stringify({',
+    '    offset: -new Date().getTimezoneOffset() / 60,',
+    '    correcte,',
+    '    jourDuPiege: piege.getDate(),',
+    '  }),',
+    ');',
+  ].join('\n');
+
+  const sortie = execFileSync(
+    process.execPath,
+    [
+      '--disable-warning=MODULE_TYPELESS_PACKAGE_JSON',
+      '--import',
+      CHARGEUR,
+      '--input-type=module',
+      '-e',
+      programme,
+    ],
+    { cwd: RACINE, env: { ...process.env, TZ: fuseau }, encoding: 'utf8' },
+  );
+
+  return JSON.parse(sortie);
+}
 
 /** Date civile `AAAA-MM-JJ` d'un jour décalé, lue sur l'horloge courante. */
 function civilDate(reference, dayOffset) {
@@ -133,4 +187,33 @@ test('un horodatage illisible est rendu tel quel', () => {
   for (const valeur of ['', 'pas une date']) {
     assert.equal(formatDateTime(valeur), valeur);
   }
+});
+
+test('une date civile ne glisse pas dans un fuseau en retard sur UTC', () => {
+  const mesure = dansLeFuseau('GMT-5');
+
+  // Les deux prémisses, et elles ne sont pas décoratives : sans elles, ce test
+  // serait vert sur une machine qui ignore `TZ` — c'est-à-dire qu'il ne
+  // mesurerait rien tout en ayant l'air de passer.
+  assert.equal(mesure.offset, -5, 'le fuseau demandé n’a pas été appliqué au processus fils');
+  assert.equal(
+    mesure.jourDuPiege,
+    15,
+    'dans ce fuseau, minuit UTC doit tomber la veille — sinon l’entrée ne prouve rien',
+  );
+
+  assert.equal(mesure.correcte, 'Mercredi 16 septembre');
+});
+
+test('une date civile tient aussi dans un fuseau en avance sur UTC', () => {
+  const mesure = dansLeFuseau('GMT+14');
+
+  assert.equal(mesure.offset, 14, 'le fuseau demandé n’a pas été appliqué au processus fils');
+
+  // Ce fuseau-là ne discrimine pas : minuit UTC y tombe le même jour. Il est là
+  // pour l'autre moitié de la promesse — le rendu ne doit pas dépendre du **sens**
+  // de l'écart, et une correction qui ne tiendrait que les fuseaux en retard
+  // serait une correction à moitié faite.
+  assert.equal(mesure.jourDuPiege, 16);
+  assert.equal(mesure.correcte, 'Mercredi 16 septembre');
 });

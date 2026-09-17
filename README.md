@@ -495,7 +495,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-env-guard.test.mjs   la garde sur les clés d'API
 │   ├── check-recovery-link.test.mjs  les liens reçus, les ordres du flux, les adresses
 │   ├── check-user-messages.test.mjs  les messages de l'adhérent, et l'ordre des règles
-│   ├── check-dates.test.mjs       les dates civiles et les jours impossibles
+│   ├── check-dates.test.mjs       les dates civiles, les jours impossibles, les fuseaux
 │   ├── check-rls-guards.test.mjs  les colonnes sous verrou, insertion comprise
 │   ├── check-storage.test.mjs     le découpage des jetons, coupure par coupure
 │   ├── check-build-config.test.mjs  l'accord des versions, des permissions et des fins de ligne
@@ -1025,14 +1025,30 @@ plausible, donc invisible à l'œil comme au lint. Le contrôle ajouté compare 
 composants obtenus à ceux demandés et rend la valeur brute en cas d'écart — le
 comportement que la fonction réservait déjà aux chaînes qui ne ressemblent pas à
 une date. La valeur du test a été établie par falsification : en remettant
-l'ancienne analyse, ces trois tests échouent, les sept autres restent verts.
+l'ancienne analyse, ces trois tests échouent, **les neuf autres restent verts**
+(mesuré, le fichier en comptant douze).
 
-Ce que ce fichier ne teste pas, en revanche, est instructif : **Node ignore `TZ`
-sur cette machine**, y compris passée à un processus fils (mesuré :
-`TZ=America/New_York` laisse le fuseau à `GMT+0200`). Un test qui croirait changer
-de fuseau passerait donc partout, y compris sur un code fautif — il n'a pas été
-écrit. Le décalage de fuseau, qui est la raison d'être de `parseCivilDate`, reste
-donc vérifié par lecture et non par exécution.
+Le décalage de fuseau, lui, a longtemps été décrit ici comme **inéprouvable** :
+« Node ignore `TZ` sur cette machine, donc un test de fuseau passerait partout,
+y compris sur un code fautif ». Cette phrase était **fausse**, et sa faute est
+instructive — elle généralisait à partir d'**une seule forme** de la variable.
+Mesuré depuis, en passant `TZ` à un processus fils :
+
+| Forme passée à `TZ` | Décalage obtenu | Verdict    |
+| ------------------- | --------------- | ---------- |
+| `UTC`               | `0`             | appliqué   |
+| `GMT-5`             | `-5`            | appliqué   |
+| `GMT+14`            | `+14`           | appliqué   |
+| `America/New_York`  | `+2` (inchangé) | **ignoré** |
+| `Asia/Tokyo`        | `+2` (inchangé) | **ignoré** |
+| `Europe/London`     | `+2` (inchangé) | **ignoré** |
+
+**Node n'ignore pas `TZ` : il ignore les noms IANA, et honore les décalages
+fixes.** Deux tests du fichier lancent donc un processus fils sous `GMT-5` et
+sous `GMT+14`, et **mesurent leur propre prémisse** — le décalage réellement
+appliqué, et le fait que `new Date('2020-09-16')`, minuit UTC, change bien de
+jour dans le premier. Le décalage de fuseau, qui est la raison d'être de
+`parseCivilDate`, est désormais éprouvé par exécution et non par lecture.
 
 **`check-recovery-link` a reçu quatre tests pour la même raison**, et son cas est
 le plus instructif des trois. La requête était lue avec
@@ -1526,12 +1542,19 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   n'est couvert qu'en **forme** — trois tests lisent la source et comparent l'ordre
   de deux opérations, et `check-weak-password` y vérifie que la réponse du serveur
   est lue plutôt que seule son erreur —, sans jamais monter le composant.
-- **Le décalage de fuseau reste vérifié par lecture, pas par un test.**
-  `parseCivilDate` construit délibérément une date locale pour qu'une
-  `service_date` ne glisse pas d'un jour : c'est la raison d'être du module. Node
-  ignore `TZ` sur la machine de développement, donc un test de fuseau y passerait
-  sans rien prouver, y compris sur un code fautif. Une machine dont le fuseau est
-  réellement en retard sur UTC rendrait ce test possible.
+- **Le décalage de fuseau est éprouvé — mais pas avec des noms de fuseaux.** Ce
+  dépôt a longtemps affirmé l'inverse : « Node ignore `TZ`, donc un test de fuseau
+  passerait sans rien prouver, y compris sur un code fautif ». C'était **faux**, et
+  la mesure portait sur **une seule forme** de la variable. Mesuré depuis, dans un
+  processus fils : les noms **IANA** (`America/New_York`, `Asia/Tokyo`,
+  `Europe/London`) sont bien ignorés, mais les décalages **fixes** ne le sont pas —
+  `TZ=GMT-5` donne −05:00, `TZ=GMT+14` donne +14:00. Deux tests de `check-dates`
+  lancent donc un processus fils sous `GMT-5` et sous `GMT+14`, et **mesurent leur
+  propre prémisse** : le décalage appliqué, et le fait que `new Date('2020-09-16')`
+  — minuit UTC — change bien de jour dans le premier. Sur une machine qui
+  ignorerait `TZ`, ils échouent au lieu de passer à vide. Ce qui reste hors de
+  portée : les règles **historiques** d'un fuseau nommé — heure d'été, changements
+  de règle — qu'un décalage fixe ne représente pas.
 - **`formatDateTime` suppose un horodatage porteur d'un décalage.** Mesuré :
   `'2026-09-16T19:24:31.123456'` (sans décalage) est lu comme une heure locale et
   s'afficherait deux heures trop tôt à Paris. Le cas est inatteignable en
