@@ -1684,6 +1684,37 @@ compare, et c'est ce qui rend la comparaison concluante. Comparer deux bundles p
 SHA-256 montrerait une différence à **chaque** compilation : un tel écart n'est pas une
 régression, et il ne doit pas être lu comme telle.
 
+### Ce que le clone ne pouvait pas dire : la première exécution sur Linux
+
+Le clone a été fait sur **la même machine**, donc sous le même système. Il a répondu à « ce
+dépôt se rejoue-t-il à l'identique ? » — oui — mais pas à « ce dépôt se rejoue-t-il
+**ailleurs** ? ». La question a reçu sa réponse le 18 septembre 2026, au premier `push` :
+l'exécuteur Linux a rendu **193 tests sur 195**, avec deux échecs sur le banc des dates.
+
+```
+not ok 34 - une date civile ne glisse pas dans un fuseau en retard sur UTC
+  le fuseau demandé n'a pas été appliqué au processus fils
+  5 !== -5
+```
+
+Le banc demandait `TZ=GMT-5` et vérifiait que le décalage appliqué valait bien `-5` — ce
+qu'il faisait sous Windows. Sous Linux, la même chaîne vaut `+05:00` : l'une lit « moins
+cinq », l'autre applique la convention POSIX, où le décalage est celui qu'on **ajoute** à
+l'heure locale pour obtenir UTC. Le banc ne mesurait donc rien sous Linux, et il ne pouvait
+pas le dire, n'ayant jamais tourné ailleurs.
+
+La correction ne consiste pas à choisir une forme de `TZ` de plus, mais à **chercher** celle
+qui produit le décalage voulu, parmi des noms IANA dont le sens ne dépend pas de la
+plateforme. Deux étapes ne s'exécutent qu'ici et n'avaient donc jamais tourné avant ce
+premier `push` — `check:install` et `sql:check` ; elles sont vertes, mais c'est un résultat,
+pas une prévision.
+
+**Ce que ceci change pour la suite.** `npm run verify` en local est un filtre, pas une preuve
+de portabilité : il tourne là où il tourne. La seule mesure qui vaille pour « ailleurs » est
+l'exécution sur l'autre plateforme — c'est-à-dire l'intégration continue. Un dépôt sans
+destination distante n'a jamais été vérifié de ce point de vue, quel que soit le nombre de
+clones qu'on en fait.
+
 ### Secrets à déclarer (Settings > Secrets and variables > Actions)
 
 | Nom          | Type   | Usage                                               |
