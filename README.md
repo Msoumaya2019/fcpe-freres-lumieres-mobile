@@ -524,7 +524,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-migration-rejouable.test.mjs  la migration, rejouable sans historique
 │   ├── check-sdk-pins.test.mjs    les paquets installés, contre les épinglages du SDK
 │   ├── check-scripts-executables.test.mjs  les commandes que `package.json` lance, et leur existence
-│   └── check-audit-scope.test.mjs  ce qui est livré, et ce qui est seulement construit
+│   ├── check-audit-scope.test.mjs  ce qui est livré, et ce qui est seulement construit
+│   └── check-parser-surface.test.mjs  les types de nœud que l'analyseur produit, et ce que les bancs en lisent
 └── .github/workflows/             CI et build EAS
 ```
 
@@ -1800,15 +1801,15 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Vingt-quatre fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Vingt-cinq fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
   `check-pending-action`, `check-password-policy`, `check-weak-password`,
   `check-screen-modes`, `check-inventory`, `check-schema-refs`,
   `check-read-bounds`, `check-workflows`, `check-eas-vocabulary`,
-  `check-migration-rejouable`, `check-sdk-pins`, `check-scripts-executables` et
-  `check-audit-scope`
+  `check-migration-rejouable`, `check-sdk-pins`, `check-scripts-executables`,
+  `check-audit-scope` et `check-parser-surface`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui
@@ -1899,6 +1900,39 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   dossier `WorkBuddy AI` lui arrivait en `WorkBuddy%20AI` et les deux cas
   tombaient en `ENOENT`. Un rouge qui désigne le mauvais coupable se répare à la
   source — ici `fileURLToPath` —, jamais en assouplissant l'assertion.
+  `check-parser-surface` ferme une fragilité que ni `check-sql.mjs` ni
+  `check-schema-refs` ne peuvent voir, parce qu'ils en sont les victimes : tous
+  deux reposent sur `libpg-query`, et **si l'analyseur renomme une clé de nœud,
+  ils deviennent aveugles en restant verts**. Un `ColumnRef` qui s'appellerait
+  autrement ne serait plus trouvé, donc plus vérifié, et le rapport dirait `ok`.
+  La montée 17.7.4 → 18.1.4 a donc été **mesurée avant d'être acceptée** : mêmes
+  clés racines, mêmes décomptes d'instructions (91 et 3), **aucune clé perdue à
+  aucun niveau de l'arbre**, une seule clé nouvelle — `is_enforced`, un champ de
+  PostgreSQL 18, purement additif —, et six entrées d'essai, valides et
+  invalides, acceptées ou refusées à l'identique. C'est ce qui a autorisé la
+  montée, et le banc empêche la prochaine d'être acceptée sans la même mesure.
+  Il tient trois questions séparées : l'analyseur produit-il toujours les mêmes
+  types de nœud — l'inventaire est **fermé** dans le sens qui compte, une
+  disparition fait tomber et une apparition non, parce qu'une addition est sans
+  danger et qu'exiger l'égalité ferait échouer la construction à chaque migration
+  introduisant un type nouveau ; les bancs lisent-ils toujours la même chose —
+  cette liste-là est fermée dans les **deux** sens, une lecture nouvelle devant
+  faire relire le relevé ; et lesquels sont lus sans être produits. Le relevé
+  porte **trente-sept** types, et non trente-six : `CreateEnumStmt` n'existe que
+  dans l'arbre obtenu en **réanalysant** le corps des blocs `do`, que l'analyseur
+  rend comme une chaîne. Un seul type est lu sans être produit — `JoinExpr` : le
+  SQL du projet ne contient **aucune jointure**, et `portee()` sait pourtant
+  descendre dans un `JoinExpr`. La branche existe donc sans que rien ne l'exerce,
+  et la nommer la fait exister ; la liste rétrécira d'elle-même le jour où une
+  jointure entrera dans le schéma. Les constantes du dépôt se distinguent des
+  types de nœud par leur **forme** — `SCHEMA` et `CIBLES_EXTERNES` sont en
+  capitales d'un bout à l'autre, un type de nœud jamais —, ce qui évite la liste
+  de mots à tenir à jour. Éprouvé par cinq mutations : trois tombent, chacune sur
+  **son** cas et sur lui seul — le `grant` retiré du SQL fait disparaître
+  `AccessPriv`, un banc qui se met à lire `IndexStmt` change la liste des
+  lectures, une jointure ajoutée rend `JoinExpr` produit — et deux témoins verts
+  vérifient qu'un réordonnancement du relevé et un commentaire qui nomme des
+  types de nœud ne font rien tomber.
   `check-schema-refs` parcourt l'**arbre syntaxique** du
   schéma, et non son texte : chaque clé étrangère doit viser une table et une
   colonne déclarées, chaque type énuméré cité doit exister, chaque fonction
