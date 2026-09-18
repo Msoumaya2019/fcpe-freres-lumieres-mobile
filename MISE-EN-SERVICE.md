@@ -27,12 +27,14 @@ service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 | 1   | Un projet Supabase, les deux fichiers SQL collés, l'URL et la clé | ~10 min | `.env.local`, promotion admin, variables EAS                    |
 | 2   | Un compte Expo, et la connexion faite une fois                    | ~5 min  | `eas init`, variables EAS, compilation de l'APK                 |
 | 3   | Un jeton Expo pour GitHub _(facultatif)_                          | ~2 min  | le secret `EXPO_TOKEN`, qui réveille la compilation automatique |
-| 4   | Les identifiants SMTP                                             | ~10 min | le texte des e-mails, et la vérification qu'ils arrivent        |
-| 5   | Installer l'APK sur le téléphone                                  | ~2 min  | les vérifications sur appareil réel                             |
+| 4   | Recopier les quatre identifiants SMTP                             | ~5 min  | le texte des e-mails ; les valeurs sont **mesurées**            |
+| 5   | Installer l'APK, ou signer l'IPA puis l'installer                 | ~2 min  | les vérifications sur appareil réel                             |
 | 6   | Les quatre réglages du tableau de bord                            | ~5 min  | le contrôle des quatre valeurs                                  |
 
-**Les étapes 1, 2 et 3 sont faites ; aucune ne bloque plus l'APK.** L'étape 4 reste
-nécessaire avant d'ouvrir aux adhérents.
+**Les étapes 1, 2 et 3 sont faites, les deux binaires sont livrés, et le relais SMTP est
+vérifié.** Il reste à recopier les quatre valeurs SMTP dans Supabase — c'est l'étape 4,
+et c'est elle qui rend les e-mails de confirmation opérationnels —, puis à installer
+l'application sur un téléphone.
 
 ---
 
@@ -284,7 +286,7 @@ même APK.
 
 ---
 
-## Étape 4 — L'envoi des e-mails _(~10 min, peut attendre le premier essai)_
+## Étape 4 — L'envoi des e-mails _(~5 min, peut attendre le premier essai)_
 
 **Mesuré le 18 septembre 2026 sur votre projet** : la confirmation d'e-mail est  
 **exigée** (`mailer_autoconfirm` vaut `false`). Autrement dit, un compte neuf ne peut  
@@ -294,6 +296,10 @@ Vous pourrez donc créer votre propre compte et le confirmer ; un parent, non.
 
 C'est la raison pour laquelle cette étape peut attendre **votre** essai, mais pas  
 l'ouverture aux adhérents.
+
+**Le côté Brevo est déjà fait et prouvé** : les quatre valeurs sont mesurées, le relais
+accepte les identifiants, et un message d'essai a été **remis**. Il ne reste donc que la
+recopie dans le tableau de bord Supabase.
 
 Sans configuration, Supabase envoie les e-mails de confirmation depuis son propre  
 service : **deux messages par heure**, et souvent classés en indésirable.
