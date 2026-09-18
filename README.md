@@ -509,6 +509,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-workflows.mjs        les flux GitHub : forme du YAML, épinglage, `bash -n`
 │   ├── alias-loader.mjs           résolution de « @/ » pour node:test
 │   ├── register-alias.mjs         branchement du chargeur, avant les tests
+│   ├── essai-postgres.mjs         la doublure de Supabase, partagée par les bancs qui exécutent
 │   ├── stubs/                     doublures des paquets natifs, pour les tests
 │   ├── check-env-guard.test.mjs   la garde sur les clés d'API
 │   ├── check-recovery-link.test.mjs  les liens reçus, les ordres du flux, les adresses
@@ -525,13 +526,14 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-password-policy.test.mjs  où s'applique la borne, et le chemin normal de l'inscription
 │   ├── check-weak-password.test.mjs  le signalement d'un mot de passe faible, et sa place
 │   ├── check-screen-modes.test.mjs  les cinq visages de l'écran de connexion, et leurs branches
-│   ├── check-inventory.test.mjs   ce que le lanceur exécute, et ce que le README en décrit
+│   ├── check-inventory.test.mjs   ce que le lanceur exécute, et ce que les deux documents en disent
 │   ├── check-read-bounds.test.mjs  les lectures de liste, et la borne de chacune
 │   ├── check-schema-refs.test.mjs  les renvois du schéma : clés, types, portées, seed.sql, new/old
 │   ├── check-workflows.test.mjs   la fermeture de la liste des flux attendus
 │   ├── check-eas-vocabulary.test.mjs  les clefs de eas.json, contre le schéma d'EAS
 │   ├── check-migration-rejouable.test.mjs  la migration, rejouable sans historique
 │   ├── check-migration-applicable.test.mjs  la migration, exécutée contre un vrai PostgreSQL
+│   ├── check-rls-comportement.test.mjs  les politiques RLS, jouées sous chaque rôle
 │   ├── check-sdk-pins.test.mjs    les paquets installés, contre les épinglages du SDK
 │   ├── check-scripts-executables.test.mjs  les commandes que `package.json` lance, et leur existence
 │   ├── check-audit-scope.test.mjs  ce qui est livré, et ce qui est seulement construit
@@ -1350,15 +1352,21 @@ dépôt — pas la plus large que Node accepterait.
 
 Le second défaut est un document qui décrit un dépôt qui a changé. Le README
 nomme ses bancs à deux endroits — l'arborescence du §5 et la liste du §9 — et le
-§9 ouvre sur « Seize fichiers de test, et rien d'autre », une affirmation
-d'**exhaustivité** que rien ne reliait au disque. Un banc ajouté sans ligne dans
-le README, ou une ligne restée après un renommage, passait sans bruit. C'était
-déjà le cas : `register-alias.mjs`, le fichier sans lequel aucun test ne
-s'exécute, n'était décrit nulle part. Cinq tests tiennent désormais le disque,
-l'arborescence, la liste, et le mot qui les compte. Falsifié en treize scénarios —
-neuf font tomber le banc, chacun sur le test attendu, et quatre témoins le
-laissent vert : description d'une ligne réécrite, deux lignes permutées, et un
-script de plus correctement branché et décrit.
+§9 ouvre sur une phrase qui les **compte**, une affirmation d'**exhaustivité** que
+rien ne reliait au disque. Un banc ajouté sans ligne dans le README, ou une ligne
+restée après un renommage, passait sans bruit. C'était déjà le cas :
+`register-alias.mjs`, le fichier sans lequel aucun test ne s'exécute, n'était
+décrit nulle part. Ce banc tient désormais le disque, l'arborescence, la liste, et
+le mot qui les compte — et il tient aussi le **même décompte recopié dans
+`MISE-EN-SERVICE.md`**, où il avait dérivé deux fois sans que rien ne le lise : le
+guide annonçait « 25 fichiers de test, 224 tests » quand le disque en portait 27.
+Le nombre de tests, lui, a été **retiré** de la phrase du guide plutôt que gardé —
+rien, depuis l'intérieur de la suite, ne peut dire combien de tests elle contient,
+et un garde-fou qui ne peut pas mesurer ce qu'il annonce n'en est pas un.
+Falsifié en seize scénarios — onze font tomber le banc, chacun sur le test
+attendu, et cinq témoins le laissent vert : description d'une ligne réécrite, deux
+lignes permutées, un script de plus correctement branché et décrit, et le guide
+remis en forme à mots identiques.
 
 **`check-schema-refs` lit le schéma dans son arbre.** C'était le dernier angle mort
 du schéma. `npm run sql:check` le fait analyser par le véritable analyseur
@@ -1811,15 +1819,15 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Vingt-six fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Vingt-sept fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
   `check-pending-action`, `check-password-policy`, `check-weak-password`,
   `check-screen-modes`, `check-inventory`, `check-schema-refs`,
   `check-read-bounds`, `check-workflows`, `check-eas-vocabulary`,
-  `check-migration-rejouable`, `check-migration-applicable`, `check-sdk-pins`,
-  `check-scripts-executables`,
+  `check-migration-rejouable`, `check-migration-applicable`,
+  `check-rls-comportement`, `check-sdk-pins`, `check-scripts-executables`,
   `check-audit-scope` et `check-parser-surface`
   couvrent les
   gardes, les
@@ -1876,8 +1884,26 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   syntaxe sans résoudre un seul nom de table, et `check-migration-rejouable`
   comptait les gardes d'un fichier qui ne s'appliquait pas. Sa portée s'arrête où
   elle doit : il prouve que le SQL **s'applique**, pas que les politiques RLS
-  **filtrent** — PGlite n'a ni GoTrue ni jetons, et un `grant` à un rôle vide ne
-  démontre rien. `check-sdk-pins` regarde un accord qui
+  **filtrent**. `check-rls-comportement` va plus loin, et c'est le banc qui
+  manquait le plus : `SECURITY.md` **exige** que toute politique soit vérifiée
+  contre une base réelle, et reconnaissait que son relevé n'était qu'une
+  vérification **par lecture**. Celui-ci joue les rôles — `authenticated` avec la
+  revendication de session que `auth.uid()` lit, puis `anon` — dans une
+  transaction qui se termine toujours par `rollback`. Il mesure donc ce qu'aucun
+  banc de lecture ne peut mesurer : qu'un signalement est invisible à un autre
+  adhérent et visible au bureau, qu'aucun écran ne peut renommer un profil
+  **pas même un administrateur** (la table n'a aucune politique de modification),
+  que le passage à « traité » est refusé à un membre par un déclencheur et
+  accepté au bureau, qu'une ligne ne s'écrit pas au nom d'un autre, et que
+  supprimer un compte efface profil, signalements, messages et réservations tout
+  en **détachant** ses annonces. Il mesure aussi une distinction que le code doit
+  connaître : un refus **de politique** rend une liste vide, donc un écran muet,
+  tandis que le rôle `anon` reçoit `permission denied` — le refus précède la
+  politique, puisque la section « Privilèges » lui retire ses droits. Et il exerce
+  la procédure d'amorçage du premier administrateur dans ses deux moitiés : le
+  refus sans la parenthèse `disable trigger`, le succès avec. Sa portée s'arrête à
+  ce qu'un rôle posé à la main peut démontrer : ni GoTrue ni la signature d'un
+  jeton ne sont ici. `check-sdk-pins` regarde un accord qui
   n'avait aucun gardien : celui des paquets installés avec les versions que le SDK
   d'Expo contraint. `package.json` et l'API d'Expo ne peuvent pas se lire, et la
   divergence va **dans le sens qui ne fait aucun bruit** — `react-native@0.86.3`

@@ -1,8 +1,8 @@
 # Mise en service — le guide, étape par étape
 
-> **En résumé.** Deux étapes bloquent, et elles vous prendront **15 minutes**. Tout
-> le reste peut attendre le premier essai sur téléphone, et je m'occupe de tout ce
-> qui suit ce que vous me donnez.
+> **En résumé.** L'étape 1 est faite. Il ne reste que **l'étape 2 — le compte Expo,
+> 5 minutes** — et tout le reste peut attendre le premier essai sur téléphone. Je
+> m'occupe de tout ce qui suit ce que vous me donnez.
 
 ---
 
@@ -29,11 +29,17 @@ service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 | 5   | Installer l'APK sur le téléphone                                  | ~2 min  | les vérifications sur appareil réel                             |
 | 6   | Les quatre réglages du tableau de bord                            | ~5 min  | le contrôle des quatre valeurs                                  |
 
-**Seules les étapes 1 et 2 bloquent.** Les autres attendent le premier essai.
+**L'étape 1 est faite ; seule l'étape 2 bloque.** Les autres attendent le premier
+essai.
 
 ---
 
-## Étape 1 — Supabase (~10 min)
+## Étape 1 — Supabase (~10 min) ✅
+
+> **Faite, et vérifiée de l'extérieur le 18 septembre 2026.** Le projet que vous avez
+> créé répond, et les **six tables existent et refusent la clé publique**
+> (`permission denied`). C'est exactement ce que la migration doit produire : une
+> table qui existe et qui est fermée. Vous pouvez passer à l'étape 2.
 
 Supabase, c'est la base de données et le service d'authentification. Le forfait
 gratuit suffit.
@@ -112,6 +118,13 @@ donc le message est le même. C'est normal.
 
 C'est la vraie vérification : le message `Success` ne dit pas que les tables
 existent, il dit que le SQL n'a pas échoué.
+
+**Je l'ai déjà faite pour vous**, depuis l'extérieur, avec la clé que vous m'avez
+envoyée : les six tables répondent, et chacune refuse la lecture avec
+`permission denied for table …`. Les deux moitiés comptent — une table absente
+répondrait `404`, une table ouverte aurait laissé passer la lecture. Les étapes
+ci-dessous ne sont donc plus à faire ; elles restent pour que vous puissiez voir
+l'écran de vos propres yeux si vous le souhaitez.
 
 1. Dans le menu de gauche, cliquez **Table Editor**.
 2. Vous devez voir, dans la liste : `annonces`, `cantine_menus`,
@@ -265,11 +278,19 @@ même APK.
 
 ---
 
-## Étape 4 — L'envoi des e-mails _(~10 min, peut attendre)_
+## Étape 4 — L'envoi des e-mails _(~10 min, peut attendre le premier essai)_
+
+**Mesuré le 18 septembre 2026 sur votre projet** : la confirmation d'e-mail est
+**exigée** (`mailer_autoconfirm` vaut `false`). Autrement dit, un compte neuf ne peut
+pas se connecter avant d'avoir cliqué le lien reçu — et tant que le SMTP n'est pas
+configuré, Supabase n'envoie ses messages qu'aux **adresses des membres du projet**.
+Vous pourrez donc créer votre propre compte et le confirmer ; un parent, non.
+
+C'est la raison pour laquelle cette étape peut attendre **votre** essai, mais pas
+l'ouverture aux adhérents.
 
 Sans configuration, Supabase envoie les e-mails de confirmation depuis son propre
-service : **deux messages par heure**, et souvent classés en indésirable. Cela suffit
-pour essayer, pas pour ouvrir aux adhérents.
+service : **deux messages par heure**, et souvent classés en indésirable.
 
 Pour envoyer depuis votre domaine, il me faut quatre valeurs :
 
@@ -332,15 +353,22 @@ lien utilisable. Les deux adresses sont recopiées du fichier
 
 **Maintenant :**
 
-- [ ] Compte Supabase créé
-- [ ] Projet `fcpe-freres-lumieres` créé, région européenne
+- [x] Compte Supabase créé
+- [x] Projet créé — il répond à l'adresse que vous m'avez envoyée
+- [ ] La **région** est européenne — je ne peux pas la lire sans vos identifiants
 - [ ] Mot de passe de la base noté
-- [ ] `20260916120000_init.sql` collé et exécuté → `Success`
-- [ ] `seed.sql` collé et exécuté → `Success`
-- [ ] Table Editor : les 6 tables sont visibles, `annonces` a 2 lignes
-- [ ] Project URL et publishable key envoyées dans la conversation
+- [x] `20260916120000_init.sql` collé et exécuté → les six tables existent
+- [ ] `seed.sql` collé et exécuté → à confirmer : je ne peux pas compter les lignes
+      depuis l'extérieur, les tables étant fermées à la clé publique
+- [ ] Table Editor : `annonces` a 2 lignes
+- [x] Project URL et publishable key envoyées dans la conversation
 - [ ] Compte Expo créé, nom d'utilisateur noté
 - [ ] `npx --yes eas-cli@latest login` lancé (ou jeton d'accès envoyé)
+
+**Il ne reste qu'une étape bloquante : l'étape 2.** Les cases cochées le sont parce
+que je les ai **mesurées**, pas parce qu'elles devraient l'être ; celles qui restent
+ouvertes demandent soit votre mot de passe, soit une lecture que la clé publique
+n'autorise pas.
 
 **Plus tard, après le premier essai :**
 
@@ -355,10 +383,10 @@ lien utilisable. Les deux adresses sont recopiées du fichier
 Pour que vous sachiez ce que vous n'avez pas à faire : les cinq écrans et leur
 navigation, l'authentification et la réinitialisation de mot de passe, les six tables
 et leurs politiques de sécurité, les contrôles de schéma et de politiques, la chaîne
-de vérification complète (`npm run verify`, **25 fichiers de test**, 224 tests), les
+de vérification complète (`npm run verify`, **27 fichiers de test**), les
 deux flux GitHub Actions, le dépôt public sans aucun secret, et la documentation.
 
 ## Une seule chose à retenir
 
-**Rien ne bloque à part l'étape 1 et l'étape 2.** Les étapes 3 à 6 peuvent attendre,
-et je m'occupe de tout le reste dès que j'ai les deux premières.
+**Rien ne bloque plus que l'étape 2.** Les étapes 3 à 6 peuvent attendre, et je
+m'occupe de tout le reste dès que j'ai le compte Expo.

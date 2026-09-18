@@ -49,27 +49,21 @@
  *  Puis il l'exécute **deux fois**, et le seed deux fois : c'est la seule
  *  mesure qui porte sur ce que `check-migration-rejouable` déduit du texte.
  *
- *  LA DOUBLURE DU SCHÉMA `auth`
+ *  LA DOUBLURE DE LA PLATEFORME
  *  ----------------------------
- *  Supabase fournit un schéma `auth` que PGlite n'a pas. La doublure ci-dessous
- *  est la liste **close** de ce que la migration suppose présent, établie en
- *  énumérant les identifiants du fichier, commentaires retirés : `anon`,
- *  `authenticated`, `auth.uid()`, `auth.users`, `gen_random_uuid()` (natif
- *  depuis PostgreSQL 13). Rien d'autre — ni `service_role`, ni `realtime`, ni
- *  `storage`, ni le schéma `extensions`.
- *
- *  La liste a été complétée **une fois**, pas deux. Le premier essai s'arrêtait
- *  sur `role "authenticated" does not exist`, une fois le `42P01` corrigé : un
- *  point de coupure s'énumère, il ne se découvre pas un par un.
+ *  Supabase fournit un schéma `auth` et des rôles que PGlite n'a pas. Ils sont
+ *  dans `scripts/essai-postgres.mjs`, partagés avec le banc de comportement des
+ *  politiques — deux copies divergeraient. Voir son en-tête pour ce que la
+ *  doublure contient, et pourquoi les **privilèges par défaut** de la plateforme
+ *  en font partie.
  *
  *  CE QUE CE BANC NE PROUVE PAS
  *  ----------------------------
  *  Il prouve que le SQL **s'applique**. Il ne prouve pas que les politiques RLS
- *  **filtrent** : PGlite n'a ni GoTrue, ni jetons, ni `authenticated` réel, et
- *  un `grant` à un rôle vide ne démontre rien. La sécurité des politiques reste
- *  l'affaire de `SECURITY.md` et de `check-rls-guards`. Il ne prouve pas non
- *  plus que les réglages du tableau de bord sont posés — aucun fichier du dépôt
- *  ne les porte, et c'est consigné au §4 du README.
+ *  **filtrent** — c'est l'objet de `check-rls-comportement.test.mjs`, qui joue
+ *  les rôles. Il ne prouve pas non plus que les réglages du tableau de bord sont
+ *  posés : aucun fichier du dépôt ne les porte, et c'est consigné au §4 du
+ *  README.
  *
  *  LE COÛT, MESURÉ
  *  ---------------
@@ -79,43 +73,8 @@
  */
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { PGlite } from '@electric-sql/pglite';
-
-const racine = new URL('../', import.meta.url);
-const MIGRATION = readFileSync(
-  new URL('supabase/migrations/20260916120000_init.sql', racine),
-  'utf8',
-);
-const SEED = readFileSync(new URL('supabase/seed.sql', racine), 'utf8');
-
-/**
- * Ce que Supabase installe et que PGlite n'a pas.
- *
- * Liste **close** — voir l'en-tête. Un ajout ici est une décision : c'est dire
- * que la migration dépend d'un objet que Supabase fournit.
- */
-const DOUBLURE_AUTH = `
-create schema if not exists auth;
-
-create table if not exists auth.users (
-  id                 uuid primary key default gen_random_uuid(),
-  email              text,
-  raw_user_meta_data jsonb default '{}'::jsonb,
-  created_at         timestamptz not null default now()
-);
-
-create or replace function auth.uid()
-returns uuid
-language sql
-stable
-as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-
-do $$ begin create role anon          nologin noinherit;               exception when duplicate_object then null; end $$;
-do $$ begin create role authenticated nologin noinherit;               exception when duplicate_object then null; end $$;
-do $$ begin create role service_role  nologin noinherit bypassrls;     exception when duplicate_object then null; end $$;
-`;
+import { MIGRATION, SEED, appliquer, ouvrirBase } from './essai-postgres.mjs';
 
 /**
  * Les tables que la migration doit produire, et **aucune autre**.
@@ -143,76 +102,34 @@ const FONCTIONS_ATTENDUES = {
 };
 
 /**
- * Le numéro de ligne, dans le fichier, de la position signalée par PostgreSQL.
- *
- * `position` est un décalage en caractères dans le texte envoyé. Sans cette
- * conversion, un échec dit « 42P01 » sans dire **où** — et c'est précisément ce
- * que le message reçu par l'adhérent apportait, `LINE 111`, qui a permis de
- * trouver la cause en une lecture.
- *
- * ATTENTION AU TYPE : PGlite rend `position` sous forme de **chaîne** — `"4930"`,
- * pas `4930`. Un `typeof position === 'number'` la rejette en silence et le
- * message perd son repère. Mesuré sur le fichier fautif : 4930 → ligne 111, dont
- * le contenu est `    from public.profiles`, soit exactement le `LINE 111` de
- * l'adhérent.
- */
-function ligneDepuisPosition(texte, position) {
-  const decalage = Number(position);
-  if (!Number.isFinite(decalage) || decalage < 1) {
-    return null;
-  }
-  return texte.slice(0, decalage - 1).split('\n').length;
-}
-
-/** Un échec de PostgreSQL, réduit à ce qui aide : le message et la ligne. */
-function resumer(erreur, texte) {
-  const message = String(erreur.message ?? erreur).split('\n')[0];
-  const ligne = ligneDepuisPosition(texte, erreur.position);
-  const ou = ligne === null ? '' : ` (ligne ${ligne} du fichier)`;
-
-  // Le diagnostic du défaut d'origine, écrit une fois pour toutes : qui lit ce
-  // message n'a pas à refaire l'enquête.
-  const explication =
-    erreur.code === '42P01'
-      ? "\n  Une relation absente à la création d'une fonction : vérifiez l'ORDRE des " +
-        'sections. Un corps `language sql` est analysé à sa création, un corps ' +
-        'PL/pgSQL seulement à son exécution — la section « Fonctions utilitaires » ' +
-        'doit donc suivre la section « Tables ».'
-      : '';
-
-  return `${message}${ou}${explication}`;
-}
-
-/**
  * La base d'essai, construite une fois pour tout le fichier.
  *
  * Les échecs sont **retenus** au lieu d'être levés ici : un `throw` au chargement
  * du module donnerait un rapport illisible, alors que le premier test sait dire
  * ce qui s'est passé, avec la ligne.
  */
-const db = await PGlite.create();
-await db.exec(DOUBLURE_AUTH);
+const db = await ouvrirBase();
 
 const echecs = { migration: null, seed: null };
 let migrationAppliquee = 0;
 let seedApplique = 0;
 
 for (let tour = 1; tour <= 2 && echecs.migration === null; tour += 1) {
-  try {
-    await db.exec(MIGRATION);
+  const echec = await appliquer(db, MIGRATION);
+  if (echec === null) {
     migrationAppliquee = tour;
-  } catch (erreur) {
-    echecs.migration = `tour ${tour} : ${resumer(erreur, MIGRATION)}`;
+  } else {
+    echecs.migration = `tour ${tour} : ${echec}`;
   }
 }
 
 if (echecs.migration === null) {
   for (let tour = 1; tour <= 2 && echecs.seed === null; tour += 1) {
-    try {
-      await db.exec(SEED);
+    const echec = await appliquer(db, SEED);
+    if (echec === null) {
       seedApplique = tour;
-    } catch (erreur) {
-      echecs.seed = `tour ${tour} : ${resumer(erreur, SEED)}`;
+    } else {
+      echecs.seed = `tour ${tour} : ${echec}`;
     }
   }
 }

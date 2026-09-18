@@ -59,6 +59,16 @@ sont dans la migration initiale ; gardez ce réflexe pour les suivantes.
 `npm run sql:check` valide la syntaxe, pas le comportement : une politique peut
 être syntaxiquement correcte et laisser passer ce qu'elle devrait bloquer.
 
+Cette exigence n'est plus une intention : `scripts/check-rls-comportement.test.mjs`
+**joue les rôles** contre un vrai PostgreSQL, dans `npm run test`. Il se place
+dans le rôle `authenticated`, pose la revendication de session que `auth.uid()`
+lit, exécute la requête, et annule tout — le rôle, la revendication et
+l'écriture sont locaux à une transaction qui se termine toujours par `rollback`.
+**Ajouter une politique demande donc d'ajouter l'assertion correspondante dans ce
+fichier**, et d'éprouver qu'elle tombe quand la garde disparaît : six mutations
+ont été mesurées, une par affirmation ci-dessous, et chacune fait tomber le
+contrôle qui la porte.
+
 **Un lien de réinitialisation est une session, pas un formulaire.** Le clic ouvre
 une session Supabase complète : l'adhérent est authentifié **avant** d'avoir
 choisi son mot de passe. Quatre conséquences, toutes appliquées dans le code et à
@@ -278,9 +288,50 @@ manifesterait par un écran qui affiche « aucune donnée » — sans message, s
 exception, et sans que rien n'indique où chercher. C'est la même famille de
 défauts que le reste de ce document.
 
-Ce résultat reste une vérification **par lecture**. Il ne remplace pas
-l'exigence ci-dessus : toute modification de politique se vérifie contre une base
-réelle.
+Ce résultat a d'abord été une vérification **par lecture**. Ce qui suit, en
+revanche, est **mesuré** — `check-rls-comportement` exécute les politiques sous
+chaque rôle, et chaque affirmation a été éprouvée par la mutation qui la retire.
+
+**Ce que les politiques font, vérifié en les exécutant.**
+
+- un **signalement** n'est lisible que par son auteur et par le bureau : un
+  adhérent qui interroge la table ne reçoit que ses propres lignes ;
+- **aucun écran ne peut renommer un profil, pas même un administrateur** :
+  `profiles` n'a aucune politique de modification, donc l'API rend zéro ligne
+  pour tout le monde. Le bureau corrige un libellé depuis le tableau de bord, où
+  la clé `service_role` ne passe par aucune politique ;
+- le **statut d'un signalement** ne change que par un administrateur : le
+  déclencheur `prevent_status_change_by_member` refuse le membre avec son propre
+  message, et accepte le bureau ;
+- un signalement ne peut être créé **ni déjà traité, ni au nom d'un autre**, et
+  un message comme une réservation ne s'écrivent qu'en son nom ;
+- supprimer un compte **efface** profil, signalements, messages et réservations,
+  et **détache** ses annonces (`author_id` passe à `NULL`) : la promesse RGPD
+  ci-dessous est mesurée, plus seulement écrite.
+
+**Deux formes de refus, et le code doit les distinguer.** Un refus **de
+politique** rend une **liste vide**, jamais une erreur : l'écran affiche « aucune
+donnée », sans message. C'est le cas de tout ce qui précède. Le rôle `anon`, lui,
+reçoit `permission denied` — une erreur — parce que la section « Privilèges » lui
+**retire ses droits** : le refus précède la politique. L'application ne s'en sert
+jamais, faute de session, mais la distinction est écrite pour que personne ne
+l'efface en croyant à une incohérence.
+
+**Les droits d'`authenticated` viennent de la plateforme, pas du fichier.** La
+migration ne fait que **révoquer** ceux d'`anon` ; elle n'accorde rien à
+`authenticated`, qui tient ses privilèges des **privilèges par défaut** de
+Supabase sur les nouvelles tables. Un lecteur du seul fichier SQL en conclurait
+le contraire. C'est pourquoi la doublure des bancs les reproduit, et dans
+l'ordre : les poser après la migration rendrait à `anon` ce qu'elle lui retire.
+
+**La procédure d'amorçage est exercée dans ses deux moitiés.** Promouvoir le
+premier administrateur échoue sans la parenthèse `disable trigger` /
+`enable trigger`, et réussit avec. Le détail contre-intuitif, mesuré en écrivant
+le banc : par l'API, ce déclencheur est **inatteignable**, puisque `profiles` n'a
+aucune politique de modification — l'`update` ne touche zéro ligne sans même
+l'atteindre. Le piège ne se reproduit que là où RLS ne s'applique pas, c'est-à-dire
+dans l'éditeur SQL, qui agit en propriétaire des tables. C'est exactement la
+situation de la mise en service.
 
 ## Données personnelles et RGPD
 

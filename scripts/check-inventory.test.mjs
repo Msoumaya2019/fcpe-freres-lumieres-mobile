@@ -33,12 +33,28 @@
  *
  * **Un document qui décrit un dépôt qui a changé.** Le `README.md` nomme ses
  * bancs à deux endroits — l'arborescence du §5 et la liste du §9 — et le §9
- * ouvre sur « Quinze fichiers de test, et rien d'autre », une affirmation
- * d'**exhaustivité**. Rien ne la reliait au disque. Un banc ajouté sans ligne
- * dans le README, ou une ligne restée après un renommage, passait sans bruit —
- * et c'est arrivé : `register-alias.mjs`, le fichier sans lequel aucun test ne
- * s'exécute, n'était décrit nulle part. Le contrôle tient les trois ensemble :
- * le disque, l'arborescence, la liste, et le mot qui les compte.
+ * ouvre sur une phrase qui les **compte** (« … fichiers de test, et rien
+ * d'autre ») : une affirmation d'**exhaustivité** que rien ne reliait au disque.
+ * Un banc ajouté sans ligne dans le README, ou une ligne restée après un
+ * renommage, passait sans bruit — et c'est arrivé : `register-alias.mjs`, le
+ * fichier sans lequel aucun test ne s'exécute, n'était décrit nulle part. Le
+ * contrôle tient les trois ensemble : le disque, l'arborescence, la liste, et le
+ * mot qui les compte.
+ *
+ * Le nombre n'est **pas recopié ici**, pas même pour mémoire. Il l'a été, et il
+ * a menti deux fois : la phrase que citait ce commentaire portait un compte que
+ * le §9 avait déjà dépassé. Citer un décompte dans le commentaire d'un contrôle
+ * qui vérifie ce décompte, c'est ajouter une copie à la liste de celles qu'il
+ * faudra corriger.
+ *
+ * **Le même défaut dans le second document.** `MISE-EN-SERVICE.md` annonçait
+ * « **25 fichiers de test**, 224 tests » alors que le disque en portait 27 —
+ * deux dérives successives, invisibles pour la même raison : le contrôle ne
+ * lisait que le README, et le guide n'était lu par aucun banc. Le nombre de
+ * **fichiers** est désormais tenu ici. Le nombre de **tests** a été retiré de la
+ * phrase au lieu d'être gardé : depuis l'intérieur de la suite, rien ne peut
+ * dire combien de tests elle contient — un garde-fou qui ne peut pas mesurer ce
+ * qu'il annonce n'est pas un garde-fou.
  *
  * CE QUE CE CONTRÔLE NE PEUT PAS VOIR
  * -----------------------------------
@@ -48,6 +64,11 @@
  * d'une ligne du README : une description fausse — « les contrastes de la
  * palette » sous un banc qui vérifie autre chose — passe. Il tient
  * l'**existence** et le **compte**, pas la justesse du texte.
+ *
+ * Il ne compte que les fichiers, jamais les tests : c'est une limite de
+ * principe, pas un oubli. Et il ne voit pas un **troisième** document qui
+ * reprendrait le même décompte — le jour où il en apparaît un, c'est ici qu'il
+ * faut l'ajouter, et la phrase du guide n'est pas un filet.
  */
 
 import assert from 'node:assert/strict';
@@ -127,8 +148,8 @@ function arborescence(texte) {
  * Le texte de la puce du §9 qui annonce le nombre de fichiers de test.
  *
  * L'ancre est le **motif** de l'annonce, jamais le mot qu'elle porte : écrire ici
- * « Quinze » ferait du contrôle une copie de ce qu'il vérifie, et le jour où le
- * compte change, il tomberait sur son ancre au lieu de tomber sur le décompte.
+ * le mot attendu ferait du contrôle une copie de ce qu'il vérifie, et le jour où
+ * le compte change, il tomberait sur son ancre au lieu de tomber sur le décompte.
  * Mesuré — c'est arrivé au premier essai.
  */
 function listeDesBancs(texte) {
@@ -149,11 +170,11 @@ function listeDesBancs(texte) {
 /**
  * Le mot français du nombre, pour les valeurs plausibles.
  *
- * Une table plutôt qu'une conversion : le README écrit « Quinze », et un contrôle
- * qui saurait compter jusqu'à vingt pour une phrase qui n'en aura jamais besoin
- * serait du code sans lecteur. Si le dépôt dépasse un jour ce qu'elle couvre, le
- * contrôle tombe et demande de l'étendre — ce qui est la bonne façon de poser la
- * question.
+ * Une table plutôt qu'une conversion : le README écrit le nombre en toutes
+ * lettres, et un contrôle qui saurait compter jusqu'à vingt pour une phrase qui
+ * n'en aura jamais besoin serait du code sans lecteur. Si le dépôt dépasse un
+ * jour ce qu'elle couvre, le contrôle tombe et demande de l'étendre — ce qui est
+ * la bonne façon de poser la question.
  */
 const MOTS = new Map([
   [10, 'Dix'],
@@ -173,6 +194,7 @@ const MOTS = new Map([
   [24, 'Vingt-quatre'],
   [25, 'Vingt-cinq'],
   [26, 'Vingt-six'],
+  [27, 'Vingt-sept'],
 ]);
 
 test('tout fichier qui importe `node:test` est nommé pour être découvert', () => {
@@ -259,4 +281,22 @@ test('la liste du §9 nomme les mêmes bancs, et le mot annoncé les compte', ()
     `le nombre de bancs (${reels.length}) sort de la table des mots — l’étendre`,
   );
   assert.equal(mot, attendu, `le §9 annonce « ${mot} », il y en a ${reels.length}`);
+});
+
+test('le guide de mise en service annonce le nombre de bancs qui existe', () => {
+  // Le guide compte en chiffres, le README en lettres : deux formes pour la même
+  // vérité, donc deux ancres. L'ancre reste le **motif** de l'annonce, jamais la
+  // valeur — sinon le contrôle tomberait sur sa propre copie le jour du changement.
+  const annonce = /\*\*(\d+) fichiers de test\*\*/.exec(
+    readFileSync(join(RACINE, 'MISE-EN-SERVICE.md'), 'utf8'),
+  );
+  assert.ok(annonce !== null, 'le guide doit annoncer son nombre de fichiers de test');
+
+  const reels = [...fichiersDeScripts().keys()].filter((nom) => nom.endsWith('.test.mjs'));
+
+  assert.equal(
+    Number(annonce[1]),
+    reels.length,
+    `le guide annonce ${annonce[1]} fichiers de test, il y en a ${reels.length}`,
+  );
 });
