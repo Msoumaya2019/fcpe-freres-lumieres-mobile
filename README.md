@@ -1619,9 +1619,16 @@ les dossiers natifs, les `.env` et les clés de signature). Il ne reste que la
 destination distante :
 
 ```bash
-git remote add origin git@github.com:<compte>/<dépôt>.git
+git remote add origin https://github.com/<compte>/<dépôt>.git
 git push -u origin main
 ```
+
+La forme **HTTPS** est celle qui marche sans préparation : elle n'exige aucune clé SSH. La forme
+`git@github.com:…` échoue sur `Permission denied (publickey)` tant qu'aucune clé n'a été créée
+(`ssh-keygen -t ed25519`) **et** déclarée dans GitHub > Settings > SSH and GPG keys. Mesuré sur la
+machine de développement : `~/.ssh` n'existe pas, donc HTTPS est le chemin par défaut. Au premier
+`git push`, Git demande un identifiant : utilisez un **jeton d'accès personnel** comme mot de passe
+(GitHub n'accepte plus le mot de passe du compte), ou `gh auth login` si la CLI GitHub est installée.
 
 Le dépôt peut être public : `.gitignore` exclut `.env` et `.env.*` (puis
 ré-autorise `.env.example`), les clés de signature et les fichiers de compte de
