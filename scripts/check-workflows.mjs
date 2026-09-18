@@ -73,7 +73,7 @@ const DOSSIER_PAR_DEFAUT = join(RACINE, '.github', 'workflows');
  * la disparition fera échouer la vérification — et non un flux qu'on espère
  * présent.
  */
-const FLUX_ATTENDUS = ['ci.yml', 'eas-build.yml'];
+const FLUX_ATTENDUS = ['ci.yml', 'eas-build.yml', 'ios-unsigned.yml'];
 
 /** Extensions reconnues par GitHub. */
 const EXTENSIONS = ['.yml', '.yaml'];

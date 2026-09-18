@@ -1,0 +1,299 @@
+# =============================================================================
+#  IPA non signé — pour signature par ESign
+# =============================================================================
+#
+#  POURQUOI CE FLUX EXISTE
+#  -----------------------
+#  iOS refuse d'installer une application non signée : le système vérifie la
+#  signature avant d'exécuter quoi que ce soit. Un IPA « non signé » n'est donc
+#  pas un produit fini, c'est un **produit intermédiaire** — le résultat de la
+#  compilation, sans la signature — destiné à être re-signé par un outil comme
+#  ESign, avec un certificat obtenu sur l'appareil.
+#
+#  Ce flux ne remplace pas EAS Build : il compile sans compte Apple Developer,
+#  ce qu'EAS ne sait pas faire pour iOS (il exige un compte payant). Il produit
+#  un artefact que vous signez vous-même.
+#
+#  DÉCLENCHEMENT MANUEL UNIQUEMENT
+#  -------------------------------
+#  Pas de déclenchement sur tag ni sur push : un exécuteur macOS coûte dix fois
+#  le prix d'un exécuteur Linux, et cet artefact n'a de sens qu'au moment où l'on
+#  s'apprête à le signer. Un tag `v*` lance déjà `eas-build.yml`, qui suffit.
+#
+#  XCODE 26 EST UNE CONDITION, PAS UNE PRÉFÉRENCE
+#  ----------------------------------------------
+#  Le SDK 57 embarque `expo-modules-jsi`, dont le manifeste Swift déclare
+#  `swift-tools-version: 6.2` : Xcode 25 et antérieurs refusent ce manifeste et
+#  la compilation s'arrête sur un message qui ne dit rien de la vraie cause. La
+#  version est donc **vérifiée avant** d'installer quoi que ce soit — deux
+#  secondes, au lieu de quinze minutes.
+#
+#  `macos-26` est épinglé volontairement plutôt que `macos-latest` : une
+#  étiquette figée ne change pas sous nos pieds. Vérifié le 19 septembre 2026 sur
+#  `actions/runner-images` : `macos-26` = macOS 26 arm64, Xcode 26.6 par défaut.
+#
+#  LES VARIABLES EXPO_PUBLIC_* DOIVENT ÊTRE ICI, AU NIVEAU DU TRAVAIL
+#  ------------------------------------------------------------------
+#  `eas-build.yml` ne les déclare pas, et c'est justifié là-bas : elles vivent
+#  dans les environnements EAS, qui les injectent. Ce flux-ci ne passe pas par
+#  EAS, donc personne ne les injecte. Et elles sont lues **au moment du
+#  regroupement**, pas à la génération du projet natif : une variable absente ici
+#  produit une application qui démarre, se compile, et **n'affiche aucune
+#  donnée** — sans une seule erreur. C'est le défaut le plus coûteux de ce
+#  fichier, et c'est pourquoi l'IPA est inspecté après coup.
+#
+#  Prérequis : les secrets `SUPABASE_URL` et `SUPABASE_ANON_KEY`.
+# =============================================================================
+
+name: IPA non signé
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Pas d'annulation : interrompre une compilation macOS ne rend pas le temps
+# déjà consommé, et laisse un `ios/build` à moitié écrit.
+concurrency:
+  group: ipa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ipa:
+    name: Compiler l'IPA non signé
+    runs-on: macos-26
+    timeout-minutes: 90
+
+    env:
+      # Voir l'en-tête : sans ces deux valeurs au niveau du travail, l'IPA est
+      # syntaxiquement valide et fonctionnellement vide.
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+      # Le chemin est déclaré ici, et non calculé par une étape : `${{ env.… }}`
+      # ne lit pas une variable écrite dans `$GITHUB_ENV`, seulement celles
+      # déclarées dans le flux. L'archivage a donc besoin de celle-ci.
+      IPA: ios/build/unsigned/fcpe-freres-lumieres-non-signe.ipa
+
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@v7
+
+      # -----------------------------------------------------------------------
+      #  Le contrôle qui doit passer en premier
+      # -----------------------------------------------------------------------
+      - name: Vérifier la version de Xcode
+        run: |
+          set -euo pipefail
+
+          VERSION=$(xcodebuild -version | head -1 | sed 's/^Xcode //')
+          MAJEURE=${VERSION%%.*}
+
+          echo "Xcode $VERSION ($(xcode-select -p))"
+
+          if [ "$MAJEURE" -lt 26 ]; then
+            echo "::error::Xcode $VERSION est trop ancien. Le SDK 57 exige Xcode 26 ou plus."
+            echo "Le manifeste de `expo-modules-jsi` déclare swift-tools-version 6.2,"
+            echo "que Xcode $MAJEURE ne sait pas lire. Choisissez une autre étiquette"
+            echo "d'exécuteur plutôt que de retenter : réessayer ne changera rien."
+            exit 1
+          fi
+
+          echo "Xcode $VERSION convient (26 ou plus requis)."
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v7
+        with:
+          # Même version qu'ailleurs : l'accord des quatre déclarations est
+          # vérifié par `scripts/check-build-config.test.mjs`.
+          node-version: '22.22.2'
+          cache: npm
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      # -----------------------------------------------------------------------
+      #  Générer le projet natif
+      # -----------------------------------------------------------------------
+      - name: Générer le projet iOS
+        # `prebuild` écrit `ios/` depuis `app.json` et les greffons, puis lance
+        # `pod install`. Le dossier est ignoré par Git : il est régénéré ici, ce
+        # qui garantit qu'il correspond au commit testé et à rien d'autre.
+        run: npx expo prebuild --platform ios
+
+      # -----------------------------------------------------------------------
+      #  Trouver le projet et le schéma, sans jamais les deviner
+      # -----------------------------------------------------------------------
+      - name: Identifier le projet et son schéma
+        # Ni `schemes[0]`, ni un nom recopié : un espace de travail CocoaPods
+        # expose des schémas pour chaque dépendance (React, ExpoModulesCore…), et
+        # prendre le premier venu compilerait la mauvaise cible — ou échouerait
+        # sur un message qui ne nomme pas la vraie cause.
+        run: |
+          set -euo pipefail
+
+          NB_PROJETS=$(find ios -maxdepth 1 -name '*.xcodeproj' | wc -l | tr -d ' ')
+          if [ "$NB_PROJETS" -ne 1 ]; then
+            echo "::error::attendu un seul .xcodeproj dans ios/, il y en a $NB_PROJETS"
+            find ios -maxdepth 1 -name '*.xcodeproj'
+            exit 1
+          fi
+
+          NB_ESPACES=$(find ios -maxdepth 1 -name '*.xcworkspace' | wc -l | tr -d ' ')
+          if [ "$NB_ESPACES" -ne 1 ]; then
+            echo "::error::attendu un seul .xcworkspace dans ios/, il y en a $NB_ESPACES"
+            find ios -maxdepth 1 -name '*.xcworkspace'
+            exit 1
+          fi
+
+          NOM=$(find ios -maxdepth 1 -name '*.xcodeproj' -exec basename {} .xcodeproj \;)
+          ESPACE=$(find ios -maxdepth 1 -name '*.xcworkspace' -exec basename {} .xcworkspace \;)
+
+          SCHEMAS=$(xcodebuild -workspace "ios/$ESPACE.xcworkspace" -list -json \
+            | node -e 'let d="";process.stdin.on("data",c=>{d+=c});process.stdin.on("end",()=>{const j=JSON.parse(d);const s=((j.workspace||j.project)||{}).schemes||[];console.log(s.join("\n"))})')
+
+          if ! printf '%s\n' "$SCHEMAS" | grep -qx "$NOM"; then
+            echo "::error::aucun schéma nommé « $NOM » : le projet et le schéma ne se correspondent pas"
+            echo "Schémas réellement exposés par l'espace de travail :"
+            printf '%s\n' "$SCHEMAS" | sed 's/^/  - /'
+            exit 1
+          fi
+
+          echo "PROJET=$NOM" >> "$GITHUB_ENV"
+          echo "ESPACE=$ESPACE" >> "$GITHUB_ENV"
+          echo "projet : $NOM — schéma retenu : $NOM"
+
+      # -----------------------------------------------------------------------
+      #  Compiler sans signature
+      # -----------------------------------------------------------------------
+      - name: Compiler sans signature
+        # Pas de `working-directory:` sur cette étape, volontairement : combiné à
+        # un chemin qui contient déjà `ios/`, il produit `ios/ios/…` et l'échec
+        # ne dit pas pourquoi. Tous les chemins sont donc relatifs à la racine.
+        run: |
+          set -euo pipefail
+
+          xcodebuild \
+            -workspace "ios/$ESPACE.xcworkspace" \
+            -scheme "$PROJET" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath ios/build \
+            build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS=""
+
+      # -----------------------------------------------------------------------
+      #  Empaqueter
+      # -----------------------------------------------------------------------
+      - name: Empaqueter l'IPA
+        run: |
+          set -euo pipefail
+
+          NB_APPS=$(find ios/build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app' | wc -l | tr -d ' ')
+          if [ "$NB_APPS" -ne 1 ]; then
+            echo "::error::attendu un seul .app compilé, il y en a $NB_APPS"
+            find ios/build/Build/Products -maxdepth 3 -name '*.app'
+            exit 1
+          fi
+
+          APP=$(find ios/build/Build/Products/Release-iphoneos -maxdepth 1 -name '*.app')
+
+          DOSSIER=$(dirname "$IPA")
+          FICHIER=$(basename "$IPA")
+
+          mkdir -p "$DOSSIER/Payload"
+          cp -R "$APP" "$DOSSIER/Payload/"
+
+          # Un IPA est une archive ZIP dont la racine porte un dossier `Payload`
+          # contenant le `.app`. Le nom du fichier n'a pas d'importance ; la
+          # structure, si.
+          ( cd "$DOSSIER" && zip -qry "$FICHIER" Payload )
+
+          echo "APP=$APP" >> "$GITHUB_ENV"
+          echo "IPA_TAILLE=$(du -h "$IPA" | cut -f1)" >> "$GITHUB_ENV"
+
+          echo "IPA produit : $IPA ($(du -h "$IPA" | cut -f1))"
+
+      # -----------------------------------------------------------------------
+      #  Vérifier le contenu, et pas seulement que la compilation a réussi
+      # -----------------------------------------------------------------------
+      - name: Vérifier que la configuration est bien dans le paquet
+        # Une compilation qui réussit ne dit rien du contenu. `EXPO_PUBLIC_*` est
+        # remplacé au **regroupement** : si la variable manquait, l'application
+        # se compile, s'installe, s'ouvre, et n'affiche aucune donnée. Ce
+        # contrôle transforme ce défaut silencieux en échec bruyant.
+        run: |
+          set -euo pipefail
+
+          if grep -qa "supabase.co" "$APP/main.jsbundle"; then
+            echo "URL Supabase présente dans le paquet."
+          else
+            echo "::error::l'URL Supabase est absente de main.jsbundle"
+            echo "Les variables EXPO_PUBLIC_* ne sont pas arrivées jusqu'au regroupement."
+            echo "Vérifiez les secrets SUPABASE_URL et SUPABASE_ANON_KEY du dépôt."
+            exit 1
+          fi
+
+          if grep -qa "sb_publishable_" "$APP/main.jsbundle"; then
+            echo "Clef publique présente dans le paquet."
+          else
+            echo "::error::la clef publique est absente de main.jsbundle"
+            exit 1
+          fi
+
+          # Une clef de service dans un paquet distribué serait une fuite : elle
+          # contourne toutes les politiques RLS. Le contrôle est ici parce que
+          # c'est le dernier endroit où l'on regarde encore le contenu réel.
+          if grep -qa "service_role" "$APP/main.jsbundle"; then
+            echo "::error::le paquet contient « service_role » : ne le distribuez pas"
+            exit 1
+          fi
+          echo "Aucune clef de service dans le paquet."
+
+      - name: Résumer
+        run: |
+          set -euo pipefail
+
+          IDENTIFIANT=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP/Info.plist")
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Info.plist")
+          BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Info.plist")
+
+          {
+            echo "## IPA non signé prêt"
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| Identifiant | \`$IDENTIFIANT\` |"
+            echo "| Version | \`$VERSION\` (\`$BUILD\`) |"
+            echo "| Schéma compilé | \`$PROJET\` |"
+            echo "| Taille | $IPA_TAILLE |"
+            echo
+            echo "### Cet IPA ne s'installera pas tel quel"
+            echo
+            echo "iOS vérifie la signature avant d'exécuter une application : un IPA"
+            echo "non signé est refusé, sans message qui l'explique. Il faut le"
+            echo "**re-signer** — c'est le rôle d'ESign."
+            echo
+            echo "1. Téléchargez l'artefact \`ipa-non-signe\` ci-dessous."
+            echo "2. Ouvrez ESign sur l'iPhone et importez le fichier."
+            echo "3. Signez avec un certificat obtenu sur l'appareil."
+            echo "4. Installez depuis ESign, puis ouvrez l'application."
+            echo
+            echo "La signature par certificat gratuit dure **sept jours** :"
+            echo "l'application cesse de s'ouvrir au-delà, et il faut re-signer."
+            echo "Pour un usage réel par les adhérents, la voie normale reste le"
+            echo "magasin — cet artefact sert à **essayer** l'application."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Archiver l'IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: ipa-non-signe
+          path: ${{ env.IPA }}
+          # Un IPA de plusieurs dizaines de mégaoctets se télécharge à la main :
+          # il n'a pas vocation à rester. Trente jours couvrent l'essai.
+          retention-days: 30
+          if-no-files-found: error

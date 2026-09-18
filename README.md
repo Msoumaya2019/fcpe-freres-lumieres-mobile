@@ -527,6 +527,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-weak-password.test.mjs  le signalement d'un mot de passe faible, et sa place
 │   ├── check-screen-modes.test.mjs  les cinq visages de l'écran de connexion, et leurs branches
 │   ├── check-inventory.test.mjs   ce que le lanceur exécute, et ce que les deux documents en disent
+│   ├── check-markdown-listes.test.mjs  les listes numérotées, et le bloc qui les casse en silence
 │   ├── check-read-bounds.test.mjs  les lectures de liste, et la borne de chacune
 │   ├── check-schema-refs.test.mjs  les renvois du schéma : clés, types, portées, seed.sql, new/old
 │   ├── check-workflows.test.mjs   la fermeture de la liste des flux attendus
@@ -538,7 +539,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-scripts-executables.test.mjs  les commandes que `package.json` lance, et leur existence
 │   ├── check-audit-scope.test.mjs  ce qui est livré, et ce qui est seulement construit
 │   └── check-parser-surface.test.mjs  les types de nœud que l'analyseur produit, et ce que les bancs en lisent
-└── .github/workflows/             CI et build EAS
+└── .github/workflows/             CI, build EAS, IPA non signé
 ```
 
 Les fichiers marqués ★ sont ceux à ouvrir en premier pour comprendre la
@@ -1368,6 +1369,28 @@ attendu, et cinq témoins le laissent vert : description d'une ligne réécrite,
 lignes permutées, un script de plus correctement branché et décrit, et le guide
 remis en forme à mots identiques.
 
+**`check-markdown-listes` tient l'agencement des listes numérotées.** Le guide de
+mise en service est réécrit par un outil extérieur — deux fois dans la même
+soirée. Mesuré sur la dernière passe : **107 coupures dures** ajoutées là où il
+n'y en avait aucune, dix doubles lignes vides, 99 lignes ne différant que par les
+espaces finaux, et **les listes renumérotées**. Cette dernière transformation
+n'est pas cosmétique. En CommonMark, un tableau de premier niveau **interrompt**
+la liste qui le précède : la suite forme une liste **neuve**, dont CommonMark
+affiche le numéro écrit. Le guide portait `3. Remplissez le formulaire :`, le
+tableau, puis `4.` et `5.` — et s'affichait donc correctement. L'outil a réécrit
+la suite en `1.` et `2.` : le lecteur voyait « 1. Pour la région » là où il s'agit
+de l'**étape 4**. Mesuré, pas raisonné : le même document rendu par `markdown-it`
+donne `<ol start="4">` avant la réécriture et `<ol start="1">` après. Le remède
+est **structurel** — le tableau est indenté dans son point, la liste redevient
+d'un seul tenant, et plus aucun renuméroteur ne peut la faire mentir — et le banc
+tient ce remède : entre deux points numérotés, un bloc de premier niveau ne peut
+se trouver que si un titre ou un filet les sépare. Falsifié dans les deux sens,
+sur le vrai fichier : le tableau désindenté fait tomber le banc sur une seule
+anomalie, la restauration rend l'empreinte `d572e810…` à l'octet près, et le banc
+repasse au vert. Sa portée s'arrête au **texte**, faute de moteur Markdown
+embarqué : un numéro faux écrit à la main dans une liste d'un seul tenant lui
+échappe — CommonMark affiche alors 1, 2, 3.
+
 **`check-schema-refs` lit le schéma dans son arbre.** C'était le dernier angle mort
 du schéma. `npm run sql:check` le fait analyser par le véritable analyseur
 PostgreSQL, mais il valide la **syntaxe** — et `author_di = auth.uid()` est une
@@ -1757,13 +1780,21 @@ clones qu'on en fait.
 
 ### Secrets à déclarer (Settings > Secrets and variables > Actions)
 
-| Nom          | Type   | Usage                                               |
-| ------------ | ------ | --------------------------------------------------- |
-| `EXPO_TOKEN` | secret | `eas-build.yml` — jeton Expo, à révoquer s'il fuite |
+| Nom                 | Type   | Usage                                                         |
+| ------------------- | ------ | ------------------------------------------------------------- |
+| `EXPO_TOKEN`        | secret | `eas-build.yml` — jeton Expo, à révoquer s'il fuite           |
+| `SUPABASE_URL`      | secret | `ios-unsigned.yml` — l'adresse du projet, depuis `.env.local` |
+| `SUPABASE_ANON_KEY` | secret | `ios-unsigned.yml` — la clef publique, depuis `.env.local`    |
 
-`EXPO_TOKEN` se crée sur expo.dev (Account > Access tokens). Les variables
-Supabase, elles, restent sur EAS : la CI n'en a pas besoin, puisque l'export
-Expo fonctionne sans configuration.
+`EXPO_TOKEN` se crée sur expo.dev (Account > Access tokens).
+
+Les variables Supabase restent **aussi** dans les environnements EAS, où
+`eas-build.yml` les lit : le service EAS n'accède pas aux secrets GitHub.
+Elles sont donc déclarées deux fois, parce qu'aucun des deux endroits ne peut
+lire l'autre — et `scripts/check-workflows.test.mjs` refuse un flux qui
+tenterait de joindre un secret depuis une pull request. Seule la clef
+**publique** figure ici : la clef `service_role` contourne toutes les
+politiques RLS et ne doit jamais quitter le tableau de bord Supabase.
 
 ### Protection de branche
 
@@ -1777,6 +1808,10 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
 - `eas-build.yml` — sur un tag `v*` ou manuellement : build EAS `preview` ou
   `production`. Manuel car un build EAS consomme du quota ; le déclencher à
   chaque push serait coûteux et inutile.
+- `ios-unsigned.yml` — manuellement seulement : compile un IPA **non signé**
+  sur un exécuteur macOS, sans compte Apple Developer, pour signature par
+  ESign. Un exécuteur macOS coûte bien plus cher qu'un exécuteur Linux, d'où
+  l'absence de tout déclenchement automatique.
 
 ## 9. Limites connues
 
@@ -1819,7 +1854,7 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Vingt-sept fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Vingt-huit fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
@@ -1828,7 +1863,7 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   `check-read-bounds`, `check-workflows`, `check-eas-vocabulary`,
   `check-migration-rejouable`, `check-migration-applicable`,
   `check-rls-comportement`, `check-sdk-pins`, `check-scripts-executables`,
-  `check-audit-scope` et `check-parser-surface`
+  `check-markdown-listes`, `check-audit-scope` et `check-parser-surface`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui
@@ -1848,7 +1883,12 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   l'application, mais **ce dépôt-ci** : que chaque banc soit nommé pour être
   exécuté — un `.spec.mjs` ne l'est pas, mesuré —, qu'aucun script de `scripts/`
   ne reste sans exécutant, et que ce fichier décrive exactement ce qui existe, au
-  mot près du décompte. `check-workflows` ne regarde pas davantage
+  mot près du décompte. `check-markdown-listes` ne regarde pas davantage
+  l'application : il tient l'agencement des listes numérotées des documents de la
+  racine, parce qu'un tableau de premier niveau **casse une liste en silence** —
+  la suite repart alors de son propre numéro — et qu'un renuméroteur peut, à
+  partir de là, faire mentir un numéro d'étape sans qu'aucun autre banc ne le
+  voie. `check-workflows` ne regarde pas davantage
   l'application : il analyse les deux flux de GitHub Actions — la forme du YAML,
   l'épinglage de chaque action, la déclaration des permissions, et **chaque**
   script `run:` passé à `bash -n` — et il tient la liste des flux attendus

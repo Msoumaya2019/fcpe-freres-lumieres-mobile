@@ -1,17 +1,17 @@
 # Mise en service — le guide, étape par étape
 
-> **En résumé.** L'étape 1 est faite. Il ne reste que **l'étape 2 — le compte Expo,
-> 5 minutes** — et tout le reste peut attendre le premier essai sur téléphone. Je
+> **En résumé.** L'étape 1 est faite. Il ne reste que **l'étape 2 — le compte Expo,  
+> 5 minutes** — et tout le reste peut attendre le premier essai sur téléphone. Je  
 > m'occupe de tout ce qui suit ce que vous me donnez.
 
 ---
 
 ## La règle de partage
 
-Je n'entre **jamais** un identifiant, un mot de passe ou une clé à votre place, et
-je ne crée pas de compte en votre nom. Ce n'est pas une limite technique : c'est
-que ces gestes engagent votre responsabilité. Le compte Supabase et le compte Expo
-doivent être les vôtres — sinon, le jour où il faut récupérer un accès ou fermer un
+Je n'entre **jamais** un identifiant, un mot de passe ou une clé à votre place, et  
+je ne crée pas de compte en votre nom. Ce n'est pas une limite technique : c'est  
+que ces gestes engagent votre responsabilité. Le compte Supabase et le compte Expo  
+doivent être les vôtres — sinon, le jour où il faut récupérer un accès ou fermer un  
 service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 
 **Vous créez les comptes. Je fais tout le reste.**
@@ -29,23 +29,23 @@ service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 | 5   | Installer l'APK sur le téléphone                                  | ~2 min  | les vérifications sur appareil réel                             |
 | 6   | Les quatre réglages du tableau de bord                            | ~5 min  | le contrôle des quatre valeurs                                  |
 
-**L'étape 1 est faite ; seule l'étape 2 bloque.** Les autres attendent le premier
+**L'étape 1 est faite ; seule l'étape 2 bloque.** Les autres attendent le premier  
 essai.
 
 ---
 
 ## Étape 1 — Supabase (~10 min) ✅
 
-> **Faite, et vérifiée de l'extérieur le 18 septembre 2026.** Le projet que vous avez
-> créé répond, et les **six tables existent et refusent la clé publique**
-> (`permission denied`). C'est exactement ce que la migration doit produire : une
+> **Faite, et vérifiée de l'extérieur le 18 septembre 2026.** Le projet que vous avez  
+> créé répond, et les **six tables existent et refusent la clé publique**  
+> (`permission denied`). C'est exactement ce que la migration doit produire : une  
 > table qui existe et qui est fermée. Vous pouvez passer à l'étape 2.
 
-Supabase, c'est la base de données et le service d'authentification. Le forfait
+Supabase, c'est la base de données et le service d'authentification. Le forfait  
 gratuit suffit.
 
-> **Les libellés ci-dessous sont ceux du tableau de bord au 18 septembre 2026.** Ils
-> changent de temps en temps. Si vous ne trouvez pas un bouton, dites-le moi avec
+> **Les libellés ci-dessous sont ceux du tableau de bord au 18 septembre 2026.** Ils  
+> changent de temps en temps. Si vous ne trouvez pas un bouton, dites-le moi avec  
 > ce que vous voyez à l'écran : je vous réoriente.
 
 ### 1.1 Créer le compte
@@ -53,32 +53,31 @@ gratuit suffit.
 1. Allez sur <https://supabase.com>
 2. Cliquez **Start your project** (en haut à droite).
 3. Inscrivez-vous avec GitHub, ou avec une adresse e-mail et un mot de passe.
-   - Si vous choisissez l'e-mail : Supabase vous envoie un lien de confirmation.
+   - Si vous choisissez l'e-mail : Supabase vous envoie un lien de confirmation.  
      Cliquez-le avant de continuer.
 
 ### 1.2 Créer le projet
 
 1. Sur le tableau de bord, cliquez **New project**.
-2. Si l'on vous demande de créer une **organisation** d'abord : donnez-lui un nom
+2. Si l'on vous demande de créer une **organisation** d'abord : donnez-lui un nom  
    quelconque, par exemple `FCPE Frères Lumières`. Le forfait gratuit suffit.
 3. Remplissez le formulaire :
 
-| Champ                 | Valeur à mettre                                                  |
-| --------------------- | ---------------------------------------------------------------- |
-| **Name**              | `fcpe-freres-lumieres`                                           |
-| **Database Password** | cliquez **Generate a password**, puis **copiez-le quelque part** |
-| **Region**            | une région **européenne** (voir ci-dessous)                      |
-| **Plan**              | Free                                                             |
+   | Champ                 | Valeur à mettre                                                  |
+   | --------------------- | ---------------------------------------------------------------- |
+   | **Name**              | `fcpe-freres-lumieres`                                           |
+   | **Database Password** | cliquez **Generate a password**, puis **copiez-le quelque part** |
+   | **Region**            | une région **européenne** (voir ci-dessous)                      |
+   | **Plan**              | Free                                                             |
 
-4. Pour la **région**, choisissez `West EU (Ireland)` ou `Central EU (Frankfurt)`.
-   Le règlement européen n'interdit pas un serveur américain, mais il en demande la
+4. Pour la **région**, choisissez `West EU (Ireland)` ou `Central EU (Frankfurt)`.  
+   Le règlement européen n'interdit pas un serveur américain, mais il en demande la  
    justification, et la latence double.
-
-5. Cliquez **Create new project**, puis attendez **environ deux minutes** que le
+5. Cliquez **Create new project**, puis attendez **environ deux minutes** que le  
    projet soit prêt.
 
-> **Le mot de passe de la base ne servira pas dans la suite.** Notez-le quand même :
-> il est **irrécupérable**, et c'est le seul moyen de secours si un jour il faut
+> **Le mot de passe de la base ne servira pas dans la suite.** Notez-le quand même :  
+> il est **irrécupérable**, et c'est le seul moyen de secours si un jour il faut  
 > accéder à la base directement.
 
 ### 1.3 Créer les six tables
@@ -93,7 +92,7 @@ Vous allez coller **deux fichiers**, l'un après l'autre, dans cet ordre.
 supabase/migrations/20260916120000_init.sql
 ```
 
-Collez-le dans l'éditeur, puis cliquez **Run** (ou `Ctrl`+`Entrée`).
+Collez-le dans l'éditeur, puis cliquez **Run** (ou `Ctrl`+`Entrée`).  
 **Attendu : `Success. No rows returned`.**
 
 **Deuxième collage** — même chose avec :
@@ -102,48 +101,48 @@ Collez-le dans l'éditeur, puis cliquez **Run** (ou `Ctrl`+`Entrée`).
 supabase/seed.sql
 ```
 
-**Attendu : `Success. No rows returned`** — un `insert` ne renvoie pas de lignes,
+**Attendu : `Success. No rows returned`** — un `insert` ne renvoie pas de lignes,  
 donc le message est le même. C'est normal.
 
-> **Les deux fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez
-> ce qu'il signale et relancez **le même fichier** : il ne créera pas de doublon, et
+> **Les deux fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
+> ce qu'il signale et relancez **le même fichier** : il ne créera pas de doublon, et  
 > il n'y a pas besoin de repartir de zéro.
 
-> **Le second est facultatif.** C'est un jeu d'essai : des annonces et des menus
-> fictifs, pour que l'application ne s'ouvre pas sur des écrans vides. Ne
-> l'appliquez pas en production — les menus fictifs seraient pris pour de vrais
+> **Le second est facultatif.** C'est un jeu d'essai : des annonces et des menus  
+> fictifs, pour que l'application ne s'ouvre pas sur des écrans vides. Ne  
+> l'appliquez pas en production — les menus fictifs seraient pris pour de vrais  
 > menus.
 
 ### 1.4 Vérifier que les six tables sont là
 
-C'est la vraie vérification : le message `Success` ne dit pas que les tables
+C'est la vraie vérification : le message `Success` ne dit pas que les tables  
 existent, il dit que le SQL n'a pas échoué.
 
-**Je l'ai déjà faite pour vous**, depuis l'extérieur, avec la clé que vous m'avez
-envoyée : les six tables répondent, et chacune refuse la lecture avec
-`permission denied for table …`. Les deux moitiés comptent — une table absente
-répondrait `404`, une table ouverte aurait laissé passer la lecture. Les étapes
-ci-dessous ne sont donc plus à faire ; elles restent pour que vous puissiez voir
+**Je l'ai déjà faite pour vous**, depuis l'extérieur, avec la clé que vous m'avez  
+envoyée : les six tables répondent, et chacune refuse la lecture avec  
+`permission denied for table …`. Les deux moitiés comptent — une table absente  
+répondrait `404`, une table ouverte aurait laissé passer la lecture. Les étapes  
+ci-dessous ne sont donc plus à faire ; elles restent pour que vous puissiez voir  
 l'écran de vos propres yeux si vous le souhaitez.
 
 1. Dans le menu de gauche, cliquez **Table Editor**.
-2. Vous devez voir, dans la liste : `annonces`, `cantine_menus`,
+2. Vous devez voir, dans la liste : `annonces`, `cantine_menus`,  
    `cantine_reservations`, `discussion_messages`, `profiles`, `signalements`.
 3. Cliquez sur **annonces** : vous devez voir **2 lignes**.
 4. Cliquez sur **cantine_menus** : vous devez voir **8 lignes**.
 
-Si les tables sont là mais vides, c'est que `seed.sql` n'a pas été exécuté — ce
+Si les tables sont là mais vides, c'est que `seed.sql` n'a pas été exécuté — ce  
 n'est pas grave, relancez-le.
 
 ### 1.5 Récupérer les deux valeurs
 
 Il vous faut **deux** valeurs, et surtout pas une troisième.
 
-**Chemin rapide :** en haut du tableau de bord, le bouton **Connect** affiche
+**Chemin rapide :** en haut du tableau de bord, le bouton **Connect** affiche  
 l'URL du projet et la clé publishable, prêtes à copier.
 
-**Chemin complet :** menu de gauche → **Settings** (la roue crantée) → **API Keys**.
-C'est là que vivent toutes les clés. _(Il n'y a pas de page « Settings > API » : tout
+**Chemin complet :** menu de gauche → **Settings** (la roue crantée) → **API Keys**.  
+C'est là que vivent toutes les clés. _(Il n'y a pas de page « Settings > API » : tout  
 est dans « API Keys ».)_
 
 | Ce qu'il me faut    | À quoi ça ressemble                |
@@ -151,12 +150,12 @@ est dans « API Keys ».)_
 | **Project URL**     | `https://abcdefghijkl.supabase.co` |
 | **Publishable key** | `sb_publishable_…`                 |
 
-Sur un projet plus ancien, la clé publishable s'appelle **`anon public`** — c'est
+Sur un projet plus ancien, la clé publishable s'appelle **`anon public`** — c'est  
 exactement la même chose, prenez-la.
 
-> **⚠️ Ne prenez PAS la clé `sb_secret_…` / `service_role`**, qui se trouve juste à
-> côté. Celle-là contourne **toutes** les politiques de sécurité : elle donnerait un
-> accès complet à la base. `src/config/env.ts` la refuse de toute façon, mais autant
+> **⚠️ Ne prenez PAS la clé `sb_secret_…` / `service_role`**, qui se trouve juste à  
+> côté. Celle-là contourne **toutes** les politiques de sécurité : elle donnerait un  
+> accès complet à la base. `src/config/env.ts` la refuse de toute façon, mais autant  
 > ne pas la copier.
 
 ### 1.6 Me les transmettre
@@ -168,22 +167,22 @@ https://abcdefghijkl.supabase.co
 sb_publishable_AbCdEf123456...
 ```
 
-C'est sans danger, et c'est même prévu ainsi : la clé publishable est **publique par
-conception**. Elle finit de toute façon en clair dans l'APK que recevront les
-adhérents, et n'importe qui peut l'en extraire. Ce qui protège réellement les
-données, ce sont les politiques de sécurité écrites dans la base — pas le secret de
+C'est sans danger, et c'est même prévu ainsi : la clé publishable est **publique par  
+conception**. Elle finit de toute façon en clair dans l'APK que recevront les  
+adhérents, et n'importe qui peut l'en extraire. Ce qui protège réellement les  
+données, ce sont les politiques de sécurité écrites dans la base — pas le secret de  
 cette valeur.
 
 La règle à retenir : **la clé `sb_secret_…`, jamais. La clé `sb_publishable_…`, oui.**
 
 ### 1.7 Ce que je fais ensuite, sans vous
 
-- j'écris les deux valeurs aux **lignes 40 et 44** de `.env.local`, un fichier que
+- j'écris les deux valeurs aux **lignes 40 et 44** de `.env.local`, un fichier que  
   Git ignore ;
 - je lance `npm start` et je vérifie que l'écran de configuration disparaît ;
-- **vous** créez votre compte dans l'application (nom, adresse, mot de passe) — puis
-  je vous promeus administrateur, avec la transaction `disable trigger` /
-  `enable trigger`. Sans elle la commande échoue, parce que le verrou lit
+- **vous** créez votre compte dans l'application (nom, adresse, mot de passe) — puis  
+  je vous promeus administrateur, avec la transaction `disable trigger` /  
+  `enable trigger`. Sans elle la commande échoue, parce que le verrou lit  
   `auth.uid()`, qui vaut `NULL` dans l'éditeur SQL ;
 - j'enregistre les mêmes valeurs côté Expo, pour les trois environnements.
 
@@ -196,40 +195,40 @@ La règle à retenir : **la clé `sb_secret_…`, jamais. La clé `sb_publishabl
 | Le projet reste « Setting up » plus de 5 minutes           | rafraîchissez la page, puis dites-le moi                                               |
 | Vous ne trouvez pas **API Keys**                           | dites-moi ce que vous voyez dans le menu **Settings**                                  |
 
-**Dans tous les cas : copiez-moi le message d'erreur entier.** Je préfère un
+**Dans tous les cas : copiez-moi le message d'erreur entier.** Je préfère un  
 aller-retour de plus qu'un diagnostic deviné.
 
 ---
 
 ## Étape 2 — Expo (~5 min)
 
-Expo est le service qui fabrique l'APK. Le compte est gratuit, et le forfait gratuit
+Expo est le service qui fabrique l'APK. Le compte est gratuit, et le forfait gratuit  
 suffit largement.
 
 ### 2.1 Créer le compte
 
 1. Allez sur <https://expo.dev/signup>
-2. Choisissez un **nom d'utilisateur**, une adresse e-mail et un mot de passe — ou
+2. Choisissez un **nom d'utilisateur**, une adresse e-mail et un mot de passe — ou  
    passez par GitHub.
-3. **Retenez le nom d'utilisateur** : il apparaîtra dans l'adresse de
-   téléchargement de l'application. Quelque chose comme `fcpe-freres-lumieres` ou
+3. **Retenez le nom d'utilisateur** : il apparaîtra dans l'adresse de  
+   téléchargement de l'application. Quelque chose comme `fcpe-freres-lumieres` ou  
    `msoumaya2019` fait très bien l'affaire.
 
 ### 2.2 Me donner accès — deux options
 
-**Option A — recommandée.** Ouvrez un terminal **dans le dossier du projet** et
+**Option A — recommandée.** Ouvrez un terminal **dans le dossier du projet** et  
 lancez :
 
 ```bash
 npx --yes eas-cli@latest login
 ```
 
-> Le `--yes` n'est pas décoratif : `eas-cli` n'est pas une dépendance du projet, donc
-> `npx` doit le télécharger, et **sans `--yes` il s'arrête sur une invite**
+> Le `--yes` n'est pas décoratif : `eas-cli` n'est pas une dépendance du projet, donc  
+> `npx` doit le télécharger, et **sans `--yes` il s'arrête sur une invite**  
 > (« Ok to proceed? ») qui ressemble à un blocage.
 
-Saisissez vos identifiants **vous-même**, dans votre terminal. Je n'y vois rien, et
-le jeton reste stocké sur votre machine : je m'en sers ensuite sans jamais connaître
+Saisissez vos identifiants **vous-même**, dans votre terminal. Je n'y vois rien, et  
+le jeton reste stocké sur votre machine : je m'en sers ensuite sans jamais connaître  
 votre mot de passe.
 
 Pour vérifier que c'est bien vous qui êtes connecté :
@@ -238,99 +237,139 @@ Pour vérifier que c'est bien vous qui êtes connecté :
 npx --yes eas-cli@latest whoami
 ```
 
-**Option B — sans ouvrir de terminal.** Allez sur
-<https://expo.dev/settings/access-tokens>, cliquez **Create token**, nommez-le
-`workbuddy`, copiez la valeur et donnez-la moi. Elle est **révocable** depuis la même
+**Option B — sans ouvrir de terminal.** Allez sur  
+<https://expo.dev/settings/access-tokens>, cliquez **Create token**, nommez-le  
+`workbuddy`, copiez la valeur et donnez-la moi. Elle est **révocable** depuis la même  
 page le jour où vous n'en voulez plus.
 
 ### 2.3 Ce que je fais ensuite, sans vous
 
 - `eas init` — crée le projet côté Expo et écrit son identifiant dans `app.json` ;
-- `eas env:set` — enregistre les deux variables Supabase pour `development`,
-  `preview` et `production`. Nécessaire, parce que `.env.local` n'est **pas**
+- `eas env:set` — enregistre les deux variables Supabase pour `development`,  
+  `preview` et `production`. Nécessaire, parce que `.env.local` n'est **pas**  
   téléversé vers EAS, qui respecte `.gitignore` ;
 - `npm run eas:build:preview` — lance la compilation.
 
-**Aucune installation globale n'est nécessaire** : la CLI est cherchée à la demande
-par `npx`. Comptez **10 à 20 minutes** la première fois, puis un lien de
+**Aucune installation globale n'est nécessaire** : la CLI est cherchée à la demande  
+par `npx`. Comptez **10 à 20 minutes** la première fois, puis un lien de  
 téléchargement.
 
-> **Sur iPhone.** Le profil `preview` produit un APK Android, installable
-> directement. Pour iOS, la distribution interne d'EAS exige un compte Apple
-> Developer **payant** (99 $/an), qui enregistre l'appareil. Sans lui, la voie
-> gratuite est l'IPA non signé produit par GitHub Actions, à installer avec un outil
-> de sideloading. **Android est donc le chemin court pour le premier essai** — dites-moi
+> **Sur iPhone.** Le profil `preview` produit un APK Android, installable  
+> directement. Pour iOS, la distribution interne d'EAS exige un compte Apple  
+> Developer **payant** (99 $/an), qui enregistre l'appareil. Sans lui, la voie  
+> gratuite est l'IPA non signé produit par GitHub Actions, à installer avec un outil  
+> de sideloading. **Android est donc le chemin court pour le premier essai** — dites-moi  
 > si vous voulez l'iPhone tout de suite, je prépare l'autre chaîne.
 
 ---
 
 ## Étape 3 — Le jeton Expo pour GitHub _(facultatif, ~2 min)_
 
-Le dépôt contient déjà une compilation automatique
-(`.github/workflows/eas-build.yml`), déclenchée sur un tag `v*` ou à la main. Elle
-attend un secret `EXPO_TOKEN`, qui n'existe pas encore — c'est la raison pour
+Le dépôt contient déjà une compilation automatique  
+(`.github/workflows/eas-build.yml`), déclenchée sur un tag `v*` ou à la main. Elle  
+attend un secret `EXPO_TOKEN`, qui n'existe pas encore — c'est la raison pour  
 laquelle elle n'a jamais tourné.
 
-Si vous me donnez un jeton créé sur <https://expo.dev/settings/access-tokens>, je le
-pose moi-même en secret du dépôt et je vérifie que la compilation démarre. Sinon, on
-s'en passe très bien : je compile depuis votre machine à l'étape 2, ce qui donne le
+Si vous me donnez un jeton créé sur <https://expo.dev/settings/access-tokens>, je le  
+pose moi-même en secret du dépôt et je vérifie que la compilation démarre. Sinon, on  
+s'en passe très bien : je compile depuis votre machine à l'étape 2, ce qui donne le  
 même APK.
 
 ---
 
 ## Étape 4 — L'envoi des e-mails _(~10 min, peut attendre le premier essai)_
 
-**Mesuré le 18 septembre 2026 sur votre projet** : la confirmation d'e-mail est
-**exigée** (`mailer_autoconfirm` vaut `false`). Autrement dit, un compte neuf ne peut
-pas se connecter avant d'avoir cliqué le lien reçu — et tant que le SMTP n'est pas
-configuré, Supabase n'envoie ses messages qu'aux **adresses des membres du projet**.
+**Mesuré le 18 septembre 2026 sur votre projet** : la confirmation d'e-mail est  
+**exigée** (`mailer_autoconfirm` vaut `false`). Autrement dit, un compte neuf ne peut  
+pas se connecter avant d'avoir cliqué le lien reçu — et tant que le SMTP n'est pas  
+configuré, Supabase n'envoie ses messages qu'aux **adresses des membres du projet**.  
 Vous pourrez donc créer votre propre compte et le confirmer ; un parent, non.
 
-C'est la raison pour laquelle cette étape peut attendre **votre** essai, mais pas
+C'est la raison pour laquelle cette étape peut attendre **votre** essai, mais pas  
 l'ouverture aux adhérents.
 
-Sans configuration, Supabase envoie les e-mails de confirmation depuis son propre
+Sans configuration, Supabase envoie les e-mails de confirmation depuis son propre  
 service : **deux messages par heure**, et souvent classés en indésirable.
 
-Pour envoyer depuis votre domaine, il me faut quatre valeurs :
+Pour envoyer depuis votre domaine, il faut quatre valeurs. Vous avez ouvert un compte
+**Brevo** : les quatre se lisent donc au même endroit, et **la clef SMTP n'est pas la
+clef d'API** — Brevo les distingue, et le relais refuse la seconde.
 
-| Ce qu'il me faut          | Où le prendre                                            |
-| ------------------------- | -------------------------------------------------------- |
-| Hôte et port SMTP         | chez le fournisseur — `smtp.resend.com`, port 465 ou 587 |
-| Identifiant               | souvent `resend`, `apikey`, ou l'adresse complète        |
-| Mot de passe ou clé d'API | la clé fournie par le service                            |
-| Adresse d'expédition      | une adresse de votre domaine, ex. `noreply@…`            |
+| Ce qu'il faut        | Où le prendre                                                          |
+| -------------------- | ---------------------------------------------------------------------- |
+| Hôte et port SMTP    | `smtp-relay.brevo.com`, port **587** (ou 2525 ; **465** avec SSL)      |
+| Identifiant          | onglet **SMTP** de `app.brevo.com/settings/keys/smtp`                  |
+| Clef SMTP            | **le même écran**, même onglet — elle commence par `xsmtpsib-`         |
+| Adresse d'expédition | `mohamed.chiker@live.fr`, **à valider** dans _Senders & IP_ chez Brevo |
+
+**Mesuré le 19 septembre 2026.** La connexion au relais s'établit et le chiffrement
+aussi (`smtp-relay.brevo.com:587`, `STARTTLS` accepté), mais l'authentification est
+**refusée** : `535 5.7.8 Authentication failed`.
+
+**La cause est ailleurs, et Brevo la nomme.** Interrogée avec votre clef d'API, Brevo
+ne répond pas « clef inconnue » mais :
+
+> We have detected you are using an unrecognised IP address …
+
+Autrement dit : la clef est **valide**, et c'est le compte qui refuse toute adresse non
+déclarée. Or la page d'aide de Brevo est explicite — la liste d'IP autorisées est
+**partagée entre les clefs d'API et les clefs SMTP**, et autoriser une adresse **active
+le blocage de toutes les autres**, pour les deux. Le refus SMTP vient donc très
+probablement du même réglage, et non de la clef.
+
+**Ce qu'il faut faire — et pourquoi c'est important pour la suite.** Allez sur
+`app.brevo.com/security/authorised_ips` et, sur la ligne **SMTP keys**, cliquez
+**Deactivate for SMTP**.
+
+N'ajoutez pas votre propre adresse à la place : **Supabase envoie les e-mails depuis sa
+propre infrastructure**, dont les adresses ne sont ni connues d'avance ni stables. Une
+liste d'IP autorisées ne peut donc pas la couvrir, et un blocage SMTP laissé actif
+couperait la confirmation d'inscription **en production**, sans message qui l'explique.
+Ce réglage est utile pour une clef d'API appelée depuis un serveur fixe ; il est
+inadapté ici.
+
+Le blocage des clefs d'API peut rester actif : rien dans ce projet ne les utilise. Si
+vous vous en servez un jour, sachez que Brevo l'active **tout seul** après trente jours
+sans nouvelle adresse.
+
+Une fois le blocage SMTP levé, dites-le-moi : je refais l'essai, il ne prend qu'une
+seconde.
+
+Reste enfin l'adresse d'expédition : tant qu'elle n'est pas **validée** chez Brevo
+(_Senders & IP_), un envoi serait refusé même le blocage levé.
 
 **Ce réglage se fait dans le tableau de bord Supabase, et je ne peux pas cliquer à
-votre place** : je n'y ai pas accès. Je vous donnerai les quatre valeurs à recopier et
-l'écran exact, puis je vérifierai qu'un e-mail de confirmation arrive réellement.
+votre place** : je n'y ai pas accès. L'écran est **Authentication → Emails → SMTP
+Settings** ; les quatre valeurs ci-dessus s'y recopient telles quelles, et
+l'expéditeur y reprend l'adresse validée. Je vérifierai ensuite qu'un e-mail de
+confirmation arrive réellement.
 
 ---
 
 ## Étape 5 — Installer l'application _(~2 min)_
 
-C'est le seul geste qui ne s'automatise pas : installer un APK demande votre
+C'est le seul geste qui ne s'automatise pas : installer un APK demande votre  
 téléphone.
 
 1. Ouvrez le lien de téléchargement que je vous envoie, **depuis le téléphone**.
-2. Android affiche un avertissement : « Pour votre sécurité, votre téléphone n'est
-   pas autorisé à installer des applications inconnues provenant de cette source ».
+2. Android affiche un avertissement : « Pour votre sécurité, votre téléphone n'est  
+   pas autorisé à installer des applications inconnues provenant de cette source ».  
    Touchez **Paramètres**, puis activez **Autoriser depuis cette source**.
 3. Revenez en arrière et touchez **Installer**.
 4. À la première ouverture, l'application vous demandera de créer un compte.
 
-Je vous donnerai le chemin exact dans les réglages Android selon votre téléphone —
+Je vous donnerai le chemin exact dans les réglages Android selon votre téléphone —  
 c'est un écran qui change d'un constructeur à l'autre.
 
 ---
 
 ## Étape 6 — Les quatre réglages du tableau de bord _(~5 min, plus tard)_
 
-Ces quatre réglages vivent dans le tableau de bord Supabase et **pas** dans un
-fichier du dépôt : aucun test ne les protège, donc ils sont consignés dans le
-`README.md` (§4) plutôt que laissés à la mémoire. Je vous les donnerai un par un,
-avec l'écran et la valeur, **après** le premier essai sur téléphone — les changer
-maintenant n'apporterait rien, et il vaut mieux les régler quand on peut mesurer
+Ces quatre réglages vivent dans le tableau de bord Supabase et **pas** dans un  
+fichier du dépôt : aucun test ne les protège, donc ils sont consignés dans le  
+`README.md` (§4) plutôt que laissés à la mémoire. Je vous les donnerai un par un,  
+avec l'écran et la valeur, **après** le premier essai sur téléphone — les changer  
+maintenant n'apporterait rien, et il vaut mieux les régler quand on peut mesurer  
 leur effet.
 
 Pour que vous sachiez de quoi il s'agit :
@@ -342,9 +381,9 @@ Pour que vous sachiez de quoi il s'agit :
 | 3   | Authentication > Providers > Email                 | _Minimum password length_ = **6**, et la confirmation d'e-mail activée     |
 | 4   | Authentication > SMTP Settings                     | les identifiants de l'étape 4                                              |
 
-Le réglage 1 est **le plus important** : Supabase refuse toute redirection absente de
-cette liste, et l'adhérent qui a oublié son mot de passe ne recevrait alors aucun
-lien utilisable. Les deux adresses sont recopiées du fichier
+Le réglage 1 est **le plus important** : Supabase refuse toute redirection absente de  
+cette liste, et l'adhérent qui a oublié son mot de passe ne recevrait alors aucun  
+lien utilisable. Les deux adresses sont recopiées du fichier  
 `src/auth/redirectPaths.ts`, et un test vérifie qu'elles restent d'accord.
 
 ---
@@ -358,16 +397,16 @@ lien utilisable. Les deux adresses sont recopiées du fichier
 - [ ] La **région** est européenne — je ne peux pas la lire sans vos identifiants
 - [ ] Mot de passe de la base noté
 - [x] `20260916120000_init.sql` collé et exécuté → les six tables existent
-- [ ] `seed.sql` collé et exécuté → à confirmer : je ne peux pas compter les lignes
+- [ ] `seed.sql` collé et exécuté → à confirmer : je ne peux pas compter les lignes  
       depuis l'extérieur, les tables étant fermées à la clé publique
 - [ ] Table Editor : `annonces` a 2 lignes
 - [x] Project URL et publishable key envoyées dans la conversation
 - [ ] Compte Expo créé, nom d'utilisateur noté
 - [ ] `npx --yes eas-cli@latest login` lancé (ou jeton d'accès envoyé)
 
-**Il ne reste qu'une étape bloquante : l'étape 2.** Les cases cochées le sont parce
-que je les ai **mesurées**, pas parce qu'elles devraient l'être ; celles qui restent
-ouvertes demandent soit votre mot de passe, soit une lecture que la clé publique
+**Il ne reste qu'une étape bloquante : l'étape 2.** Les cases cochées le sont parce  
+que je les ai **mesurées**, pas parce qu'elles devraient l'être ; celles qui restent  
+ouvertes demandent soit votre mot de passe, soit une lecture que la clé publique  
 n'autorise pas.
 
 **Plus tard, après le premier essai :**
@@ -380,13 +419,13 @@ n'autorise pas.
 
 ## Ce qui est déjà fait
 
-Pour que vous sachiez ce que vous n'avez pas à faire : les cinq écrans et leur
-navigation, l'authentification et la réinitialisation de mot de passe, les six tables
-et leurs politiques de sécurité, les contrôles de schéma et de politiques, la chaîne
-de vérification complète (`npm run verify`, **27 fichiers de test**), les
+Pour que vous sachiez ce que vous n'avez pas à faire : les cinq écrans et leur  
+navigation, l'authentification et la réinitialisation de mot de passe, les six tables  
+et leurs politiques de sécurité, les contrôles de schéma et de politiques, la chaîne  
+de vérification complète (`npm run verify`, **28 fichiers de test**), les  
 deux flux GitHub Actions, le dépôt public sans aucun secret, et la documentation.
 
 ## Une seule chose à retenir
 
-**Rien ne bloque plus que l'étape 2.** Les étapes 3 à 6 peuvent attendre, et je
+**Rien ne bloque plus que l'étape 2.** Les étapes 3 à 6 peuvent attendre, et je  
 m'occupe de tout le reste dès que j'ai le compte Expo.

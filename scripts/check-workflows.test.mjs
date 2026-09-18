@@ -96,6 +96,7 @@ test('un dossier conforme est accepté — le témoin, sans quoi rien ne serait 
   const { code, sortie } = controler({
     'ci.yml': FLUX_VALIDE,
     'eas-build.yml': FLUX_VALIDE,
+    'ios-unsigned.yml': FLUX_VALIDE,
   });
 
   assert.equal(code, 0, `le contrôle refuse un dossier conforme :\n${sortie}`);
@@ -106,7 +107,10 @@ test('un flux attendu qui disparaît est refusé — le vert trompeur à interdi
   // C'est le scénario central : `eas-build.yml` écarté, le dossier contient
   // encore un flux parfaitement valide. Sans la liste fermée, le contrôle
   // annoncerait « 0 défaut » et sortirait en 0.
-  const { code, sortie } = controler({ 'ci.yml': FLUX_VALIDE });
+  const { code, sortie } = controler({
+    'ci.yml': FLUX_VALIDE,
+    'ios-unsigned.yml': FLUX_VALIDE,
+  });
 
   assert.equal(code, 1, `le contrôle reste vert alors qu’un flux a disparu :\n${sortie}`);
   assert.match(sortie, /1 défaut\(s\)/, `le décompte des défauts est faux :\n${sortie}`);
@@ -121,6 +125,7 @@ test('un flux ajouté mais non déclaré est refusé — sinon une garde qui ref
   const { code, sortie } = controler({
     'ci.yml': FLUX_VALIDE,
     'eas-build.yml': FLUX_VALIDE,
+    'ios-unsigned.yml': FLUX_VALIDE,
     'publication.yml': FLUX_VALIDE,
   });
 
@@ -136,6 +141,7 @@ test('un script `run:` refusé par bash fait tomber le contrôle', () => {
   const { code, sortie } = controler({
     'ci.yml': FLUX_VALIDE,
     'eas-build.yml': FLUX_BASH_INVALIDE,
+    'ios-unsigned.yml': FLUX_VALIDE,
   });
 
   assert.equal(code, 1, `un script invalide est accepté :\n${sortie}`);
@@ -159,7 +165,11 @@ test('un script contenant une expression GitHub n’est pas signalé à tort', (
     '        run: echo "${{ secrets.EXPO_TOKEN }}" "${{ github.ref }}"\n',
   );
 
-  const { code, sortie } = controler({ 'ci.yml': flux, 'eas-build.yml': flux });
+  const { code, sortie } = controler({
+    'ci.yml': flux,
+    'eas-build.yml': flux,
+    'ios-unsigned.yml': flux,
+  });
 
   assert.equal(code, 0, `une expression GitHub fait échouer l’analyse :\n${sortie}`);
 });
@@ -172,6 +182,6 @@ test('la fermeture de la liste porte aussi sur un dossier vide', () => {
   const { code, sortie } = controler({});
 
   assert.equal(code, 1, `un dossier vide est accepté :\n${sortie}`);
-  assert.match(sortie, /2 défaut\(s\)/, `le décompte des défauts est faux :\n${sortie}`);
+  assert.match(sortie, /3 défaut\(s\)/, `le décompte des défauts est faux :\n${sortie}`);
   assert.match(sortie, /\[flux-absent\]/, `le défaut signalé n’est pas le bon :\n${sortie}`);
 });

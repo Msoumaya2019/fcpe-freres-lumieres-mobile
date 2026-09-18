@@ -47,6 +47,12 @@
         }
       ],
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "364531c2-c046-4155-a0a5-f95de985c1f1"
+      }
+    },
+    "owner": "mchiker"
   }
 }
