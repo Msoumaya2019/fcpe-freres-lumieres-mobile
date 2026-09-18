@@ -490,6 +490,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 ├── scripts/
 │   ├── check-sql.mjs              analyse syntaxique du SQL
 │   ├── check-install-integrity.mjs  paquets installés à moitié extraits
+│   ├── check-workflows.mjs        les flux GitHub : forme du YAML, épinglage, `bash -n`
 │   ├── alias-loader.mjs           résolution de « @/ » pour node:test
 │   ├── register-alias.mjs         branchement du chargeur, avant les tests
 │   ├── stubs/                     doublures des paquets natifs, pour les tests
@@ -510,7 +511,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-screen-modes.test.mjs  les cinq visages de l'écran de connexion, et leurs branches
 │   ├── check-inventory.test.mjs   ce que le lanceur exécute, et ce que le README en décrit
 │   ├── check-read-bounds.test.mjs  les lectures de liste, et la borne de chacune
-│   └── check-schema-refs.test.mjs  les renvois du schéma : clés, types, portées, seed.sql, new/old
+│   ├── check-schema-refs.test.mjs  les renvois du schéma : clés, types, portées, seed.sql, new/old
+│   └── check-workflows.test.mjs   la fermeture de la liste des flux attendus
 └── .github/workflows/             CI et build EAS
 ```
 
@@ -1779,13 +1781,13 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Dix-huit fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Dix-neuf fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
   `check-pending-action`, `check-password-policy`, `check-weak-password`,
-  `check-screen-modes`, `check-inventory`, `check-schema-refs` et
-  `check-read-bounds`
+  `check-screen-modes`, `check-inventory`, `check-schema-refs`,
+  `check-read-bounds` et `check-workflows`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui
@@ -1805,7 +1807,15 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   l'application, mais **ce dépôt-ci** : que chaque banc soit nommé pour être
   exécuté — un `.spec.mjs` ne l'est pas, mesuré —, qu'aucun script de `scripts/`
   ne reste sans exécutant, et que ce fichier décrive exactement ce qui existe, au
-  mot près du décompte. `check-schema-refs` parcourt l'**arbre syntaxique** du
+  mot près du décompte. `check-workflows` ne regarde pas davantage
+  l'application : il analyse les deux flux de GitHub Actions — la forme du YAML,
+  l'épinglage de chaque action, la déclaration des permissions, et **chaque**
+  script `run:` passé à `bash -n` — et il tient la liste des flux attendus
+  **fermée** dans les deux sens, parce qu'un contrôle qui découvre ses sujets par
+  le contenu du dossier mesure ce qui reste, jamais ce qui manque : écarter
+  `eas-build.yml` ne ferait baisser qu'un décompte. Sa portée s'arrête à la
+  syntaxe — mesuré, `bash -n` accepte `echo ${{ a }}` alors que le même script
+  échoue à l'exécution. `check-schema-refs` parcourt l'**arbre syntaxique** du
   schéma, et non son texte : chaque clé étrangère doit viser une table et une
   colonne déclarées, chaque type énuméré cité doit exister, chaque fonction
   `security definer` doit fixer son `search_path`, chaque colonne nommée par

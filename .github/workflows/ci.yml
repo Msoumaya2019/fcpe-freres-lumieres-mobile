@@ -96,6 +96,15 @@ jobs:
         # en désignant le mauvais coupable.
         run: npm run check:install
 
+      - name: Vérifier les flux de travail
+        # `eas-build.yml` ne s'exécute jamais sur un push : il attend un tag ou
+        # un déclenchement manuel. Un défaut dans ce fichier ne se verrait donc
+        # qu'au moment où l'on en a le plus besoin, après vingt minutes
+        # d'installation et de compilation. Ce contrôle l'analyse ici, avec
+        # `bash -n` sur chaque script `run:` — deux secondes contre vingt
+        # minutes.
+        run: npm run check:workflows
+
       - name: Analyse syntaxique du SQL
         # Les politiques RLS de supabase/ sont la seule barrière de sécurité du
         # projet : une faute de frappe dans ce fichier ne se voit ni à la
