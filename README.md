@@ -97,16 +97,25 @@ Les fichiers `.env.local` ne sont **pas** téléversés : EAS respecte
 environnement — `eas.json` associe chaque profil à un environnement :
 
 ```bash
-npx --yes eas-cli@latest env:create --environment production \
+npx --yes eas-cli@latest env:set --environment production \
   --name EXPO_PUBLIC_SUPABASE_URL \
   --value "https://xxxxxxxx.supabase.co" --visibility plaintext
 
-npx --yes eas-cli@latest env:create --environment production \
+npx --yes eas-cli@latest env:set --environment production \
   --name EXPO_PUBLIC_SUPABASE_ANON_KEY \
   --value "sb_publishable_..." --visibility sensitive
 ```
 
 À répéter pour `development` et `preview` si ces profils servent aussi.
+
+> **`env:set`, et non `env:create`.** La sous-commande a été relevée sur la CLI
+> elle-même — `npx --yes eas-cli@latest env --help`, le 2026-09-18 : elle expose
+> `env:delete`, `env:exec`, `env:get`, `env:list`, `env:pull`, `env:push` et
+> `env:set`. `env:create` **n'existe pas**, et ce fichier comme `.env.example`
+> l'ont écrit pendant des semaines sans qu'aucune porte ne s'en aperçoive : une
+> commande citée dans une documentation n'est exécutée par rien. C'est la même
+> famille que `npm run doctor` appelant un binaire absent — sauf qu'ici, l'erreur
+> aurait été découverte par vous, au moment le plus coûteux.
 
 > **Ce qui est public et ce qui ne l'est pas.** La clé publishable finit en clair
 > dans le bundle, c'est normal : elle est conçue pour cela. La sécurité repose
