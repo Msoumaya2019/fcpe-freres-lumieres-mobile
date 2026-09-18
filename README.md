@@ -509,6 +509,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-weak-password.test.mjs  le signalement d'un mot de passe faible, et sa place
 │   ├── check-screen-modes.test.mjs  les cinq visages de l'écran de connexion, et leurs branches
 │   ├── check-inventory.test.mjs   ce que le lanceur exécute, et ce que le README en décrit
+│   ├── check-read-bounds.test.mjs  les lectures de liste, et la borne de chacune
 │   └── check-schema-refs.test.mjs  les renvois du schéma : clés, types, portées, seed.sql, new/old
 └── .github/workflows/             CI et build EAS
 ```
@@ -1356,6 +1357,30 @@ schéma juste dès la première colonne `boolean` : le schéma n'en a aucune
 aujourd'hui, ce qui rendait le défaut invisible. Le test lit maintenant le
 **schéma** du type, et seul `public.<nom>` doit être déclaré.
 
+**`check-read-bounds` est né d'une promesse fausse, et non d'un volume.** Le bouton de la cantine
+dit « Réserver » ou « Annuler ma réservation » : son libellé **affirme** un état du serveur. Or
+`fetchReservedMenuIds` lisait _toutes_ les réservations de l'adhérent, filtrées par `user_id` et
+rien d'autre — une lecture qui grandit avec le temps, une ligne par jour de cantine, alors que
+l'écran n'utilise que les menus affichés. Une lecture non bornée finit par être tronquée par un
+plafond du serveur ; la réservation tombée hors de la page fait alors dire « Réserver » à un repas
+déjà réservé, l'appui insère, la contrainte d'unicité absorbe le doublon **en silence**, la
+relecture relit la même page, et le libellé ne change pas. Mesuré sur le modèle de l'écran :
+libellé identique avant et après l'appui, aucun message, indéfiniment — le cycle que
+`check-pending-action` surveille, rentré par une autre porte.
+
+La règle est donc générale, et non locale au cas : **toute lecture de liste porte une borne
+explicite** — `.limit()` ou `.range()`, ou bien `.in()` sur une liste fournie par l'appelant. Une
+lecture d'une seule ligne (`.maybeSingle()`) est bornée par construction et n'a rien à déclarer. Le
+banc relève les sept lectures du projet, refuse celles qui ne portent aucune borne, et **nomme sa
+propre limite** : une borne `.in()` n'est bornée que si la liste reçue l'est, et le banc ne remonte
+pas jusqu'à l'appelant. La chaîne tient aujourd'hui ; elle ne tient pas par ce banc seul.
+
+Falsifié en huit scénarios : retirer la borne `.in()`, le `.limit()` des menus ou le
+`.maybeSingle()` du profil, ajouter une lecture sur une table nouvelle, rendre la règle du banc
+toujours vraie — cinq mutations, chacune faisant tomber le test visé — et trois remises en forme
+légitimes qui restent vertes : renommer la liste passée à `.in()`, extraire le `map` de l'écran dans
+une variable, échanger l'ordre de `.eq()` et `.in()`.
+
 ### Diagnostic Expo
 
 ```bash
@@ -1650,12 +1675,13 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Dix-sept fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Dix-huit fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
   `check-pending-action`, `check-password-policy`, `check-weak-password`,
-  `check-screen-modes`, `check-inventory` et `check-schema-refs`
+  `check-screen-modes`, `check-inventory`, `check-schema-refs` et
+  `check-read-bounds`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui

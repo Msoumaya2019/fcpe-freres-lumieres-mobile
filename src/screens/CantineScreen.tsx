@@ -30,12 +30,19 @@ export function CantineScreen() {
   const userId = useCurrentUserId();
 
   const loader = useCallback(async (): Promise<CantineData> => {
-    // Les deux requêtes partent ensemble : elles ne dépendent pas l'une de
-    // l'autre, et les enchaîner doublerait le temps d'affichage.
-    const [menus, reservedMenuIds] = await Promise.all([
-      fetchUpcomingMenus(),
-      fetchReservedMenuIds(userId),
-    ]);
+    // Les menus d'abord, les réservations ensuite : la seconde requête est
+    // **bornée par ce que l'écran affiche**, au lieu de ramener tout
+    // l'historique de l'adhérent. Les deux ne peuvent donc plus partir
+    // ensemble, et c'est le prix de l'exactitude : une lecture non bornée finit
+    // par être tronquée par un plafond du serveur, et une réservation absente de
+    // la réponse fait dire « Réserver » à un repas déjà réservé — un bouton qui
+    // ne fait rien, indéfiniment, puisque la contrainte d'unicité absorbe le
+    // doublon en silence et que la relecture relit la même page tronquée.
+    const menus = await fetchUpcomingMenus();
+    const reservedMenuIds = await fetchReservedMenuIds(
+      userId,
+      menus.map((menu) => menu.id),
+    );
     return { menus, reservedMenuIds };
   }, [userId]);
 
