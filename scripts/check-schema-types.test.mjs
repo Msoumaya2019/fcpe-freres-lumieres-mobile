@@ -96,7 +96,7 @@ function colonnesSql(corps) {
 
 function tablesSql() {
   const sql = sansCommentairesSql(lireFichier(MIGRATION));
-  const motif = /create table public\.(\w+)\s*\(([\s\S]*?)\n\);/g;
+  const motif = /create table (?:if not exists )?public\.(\w+)\s*\(([\s\S]*?)\n\);/g;
   const tables = new Map();
 
   let table;

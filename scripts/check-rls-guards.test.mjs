@@ -221,7 +221,9 @@ function position(ou, motif, origine) {
 }
 
 function tablesDeclarees(sql) {
-  return [...sql.matchAll(/create table public\.(\w+)/g)].map(([, table]) => table);
+  return [...sql.matchAll(/create table (?:if not exists )?public\.(\w+)/g)].map(
+    ([, table]) => table,
+  );
 }
 
 function tablesSousRls(sql) {
@@ -358,9 +360,9 @@ test('la promotion est documentée partout où elle est écrite', () => {
 
 /** Découpage par blocs `create table`, en-tête et corps séparés. */
 function blocsDeTable(sql) {
-  return [...sql.matchAll(/create table public\.(\w+)\s*\(([\s\S]*?)\n\);/g)].map(
-    ([, table, corps]) => ({ table, corps }),
-  );
+  return [
+    ...sql.matchAll(/create table (?:if not exists )?public\.(\w+)\s*\(([\s\S]*?)\n\);/g),
+  ].map(([, table, corps]) => ({ table, corps }));
 }
 
 /**

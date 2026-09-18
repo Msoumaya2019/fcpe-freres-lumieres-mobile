@@ -148,6 +148,71 @@ function corpsDe(fonction) {
 }
 
 /**
+ * Le corps d'un bloc `do $$ … $$`.
+ *
+ * `libpg-query` ne descend pas dedans : il le rend comme une **chaîne**, exactement
+ * comme le corps d'une fonction. Or c'est là que vivent désormais les types
+ * énumérés : PostgreSQL n'a pas de `create type if not exists`, donc la seule
+ * forme **rejouable** est le bloc `do`, avec `exception when duplicate_object`.
+ *
+ * Mesuré, sans cette descente : « types énumérés lus : 0 », puis trois colonnes
+ * signalées comme portant un type non déclaré — `profiles.role → member_role`.
+ * Le type existait pourtant, trois lignes plus haut, simplement derrière une
+ * chaîne que l'analyseur ne traversait pas.
+ */
+function corpsDeDo(bloc) {
+  const corps = (bloc.args ?? [])
+    .map((element) => element.DefElem)
+    .find((option) => option?.defname === 'as');
+  return typeof corps?.arg?.String?.sval === 'string' ? corps.arg.String.sval : null;
+}
+
+/**
+ * Les instructions SQL contenues dans un corps de bloc `do`.
+ *
+ * Le corps est du **PL/pgSQL** — `begin … exception … end` — et `libpg-query`
+ * n'analyse que le SQL : lui passer le corps entier échoue sur
+ * `syntax error at or near "create"`, mesuré. On retire donc l'enveloppe et
+ * l'on analyse ce qu'elle contient, ce qui est exactement ce que PostgreSQL
+ * fait : il confie chaque instruction au moteur SQL l'une après l'autre.
+ *
+ * Le découpage est strict à dessein. `begin` doit ouvrir, `end` doit fermer, et
+ * tout ce qui suit `exception` est un traitement d'erreur, sans SQL à analyser.
+ * Une forme qui ne s'y prête pas fait **échouer la lecture** avec un message qui
+ * dit quoi corriger — plutôt que d'être ignorée, ce qui laisserait le schéma
+ * partiellement vérifié sans que rien ne le signale.
+ */
+function instructionsDeDo(corps, fichier) {
+  const lignes = corps.split('\n');
+  const ouverture = lignes.findIndex((ligne) => ligne.trim() === 'begin');
+
+  assert.notEqual(
+    ouverture,
+    -1,
+    `bloc \`do\` de ${fichier} sans \`begin\` : ce contrôle ne sait pas le découper`,
+  );
+
+  const fermeture = lignes.findIndex(
+    (ligne, rang) => rang > ouverture && ['exception', 'end'].includes(ligne.trim()),
+  );
+
+  assert.notEqual(
+    fermeture,
+    -1,
+    `bloc \`do\` de ${fichier} sans \`end\` ni \`exception\` : ce contrôle ne sait pas le découper`,
+  );
+
+  const instructions = lignes.slice(ouverture + 1, fermeture).join('\n');
+  assert.notEqual(
+    instructions.trim(),
+    '',
+    `bloc \`do\` de ${fichier} sans instruction entre \`begin\` et \`end\``,
+  );
+
+  return instructions;
+}
+
+/**
  * Le nom du type énuméré que porte une colonne, ou `null` si le type n'est pas
  * de ceux que ce dépôt déclare.
  *
@@ -205,6 +270,7 @@ async function lireLeSchema() {
   const fonctions = [];
   const cles = [];
   const formes = [];
+  const blocs = [];
 
   for (const fichier of fichiers) {
     const arbre = await parse(readFileSync(join(MIGRATIONS, fichier), 'utf8'));
@@ -244,6 +310,18 @@ async function lireLeSchema() {
       const enumeration = stmt.CreateEnumStmt;
       if (enumeration !== undefined) {
         enums.add(dernierSegment(enumeration.typeName));
+        continue;
+      }
+
+      const bloc = stmt.DoStmt;
+      if (bloc !== undefined) {
+        const corps = corpsDeDo(bloc);
+        assert.ok(
+          corps !== null,
+          `bloc \`do\` sans corps lisible dans ${fichier} : ce qu'il déclare ne serait ` +
+            'pas analysé, et le contrôle resterait vert sur une partie du schéma',
+        );
+        blocs.push({ fichier, corps });
         continue;
       }
 
@@ -309,6 +387,27 @@ async function lireLeSchema() {
           });
         }
       }
+    }
+  }
+
+  // Les blocs `do` sont analysés à leur tour, avec le même analyseur : c'est la
+  // seule façon de voir les types énumérés, qui y vivent pour être rejouables.
+  //
+  // Ce qu'on y trouve est confronté à une liste **fermée** : un bloc qui
+  // contiendrait autre chose qu'un `create type` fait échouer la lecture plutôt
+  // que de laisser passer une instruction que ce fichier ne sait pas vérifier.
+  for (const { fichier, corps } of blocs) {
+    const arbre = await parse(instructionsDeDo(corps, fichier));
+
+    for (const { stmt } of arbre.stmts) {
+      const enumeration = stmt.CreateEnumStmt;
+      assert.ok(
+        enumeration !== undefined,
+        `un bloc \`do\` de ${fichier} contient « ${Object.keys(stmt).join(', ')} » : ce ` +
+          'contrôle ne sait lire que les `create type` dans un bloc, et laisserait ' +
+          'cette instruction sans vérification',
+      );
+      enums.add(dernierSegment(enumeration.typeName));
     }
   }
 

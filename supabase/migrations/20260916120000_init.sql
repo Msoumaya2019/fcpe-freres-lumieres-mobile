@@ -9,6 +9,25 @@
 --  bord Supabase. La CLI applique chaque migration dans une transaction.
 --
 -- -----------------------------------------------------------------------------
+--  REJOUABLE, ET POURQUOI
+-- -----------------------------------------------------------------------------
+--  Appliquée à la main — dans l'éditeur SQL ou par l'API Management — cette
+--  migration n'a AUCUN historique : un échec à mi-parcours ne dit pas où
+--  reprendre, et l'outil s'arrête à la première erreur. Chaque instruction doit
+--  donc pouvoir être rejouée sans dommage :
+--
+--      create table if not exists  /  create index if not exists
+--      drop policy if exists <nom> on <table>;   devant chaque create policy
+--      drop trigger if exists <nom> on <table>;  devant chaque create trigger
+--      un bloc `do $$ … exception when duplicate_object …` pour les types
+--      énumérés, qui n'ont pas de forme « if not exists »
+--
+--  `scripts/check-migration-rejouable.test.mjs` tient cet accord : il compte les
+--  gardes et exige qu'il y en ait une par instruction. Sans lui, la prochaine
+--  migration réintroduirait le piège — et il ne se verrait qu'au moment où l'on
+--  a le plus besoin de rejouer.
+--
+-- -----------------------------------------------------------------------------
 --  RÈGLE DIRECTRICE
 -- -----------------------------------------------------------------------------
 --  L'application mobile embarque une clé publique, extractible d'un APK par
@@ -38,11 +57,29 @@
 --  Déclarés en base plutôt que contraints par des chaînes libres : une valeur
 --  erronée est refusée à l'écriture, et non découverte à l'affichage.
 
-create type public.member_role as enum ('membre', 'admin');
+do $$
+begin
+  create type public.member_role as enum ('membre', 'admin');
+exception
+  when duplicate_object then null;
+end
+$$;
 
-create type public.signalement_category as enum ('cantine', 'transport', 'vie_scolaire', 'autre');
+do $$
+begin
+  create type public.signalement_category as enum ('cantine', 'transport', 'vie_scolaire', 'autre');
+exception
+  when duplicate_object then null;
+end
+$$;
 
-create type public.signalement_status as enum ('nouveau', 'en_cours', 'traite');
+do $$
+begin
+  create type public.signalement_status as enum ('nouveau', 'en_cours', 'traite');
+exception
+  when duplicate_object then null;
+end
+$$;
 
 
 -- =============================================================================
@@ -146,6 +183,7 @@ $$;
 
 revoke all on function public.handle_new_user() from public;
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row
@@ -195,7 +233,7 @@ create trigger on_auth_user_created
 --  rend `authenticated` équivalent à « quiconque a installé l'application ». Une
 --  contrainte d'unicité ne le corrigerait pas (deux homonymes existent) ; filtrer
 --  l'inscription, si. Voir SECURITY.md.
-create table public.profiles (
+create table if not exists public.profiles (
   id            uuid primary key references auth.users (id) on delete cascade,
   display_name  text not null default '',
   role          public.member_role not null default 'membre',
@@ -215,7 +253,7 @@ comment on table public.profiles is
 --  `author_id` est nullable avec `on delete set null` : une annonce publiée
 --  reste utile même si son auteur quitte l'association. La supprimer en cascade
 --  effacerait de l'information collective au motif qu'un compte a été fermé.
-create table public.annonces (
+create table if not exists public.annonces (
   id            uuid primary key default gen_random_uuid(),
   title         text not null,
   body          text not null,
@@ -235,7 +273,7 @@ create table public.annonces (
 --  `service_date` est une DATE, pas un horodatage : un menu concerne une journée
 --  civile. Stocker un instant obligerait chaque lecteur à choisir un fuseau, et
 --  ferait basculer l'affichage d'un jour à l'autre selon l'appareil.
-create table public.cantine_menus (
+create table if not exists public.cantine_menus (
   id            uuid primary key default gen_random_uuid(),
   service_date  date not null,
   starter       text,
@@ -255,7 +293,7 @@ create table public.cantine_menus (
 --  La contrainte d'unicité `(menu_id, user_id)` est une garantie de fond, pas
 --  un détail : sans elle, deux appuis rapprochés créent deux lignes, et le
 --  décompte des repas à préparer devient faux sans que personne ne s'en aperçoive.
-create table public.cantine_reservations (
+create table if not exists public.cantine_reservations (
   id          uuid primary key default gen_random_uuid(),
   menu_id     uuid not null references public.cantine_menus (id) on delete cascade,
   user_id     uuid not null references public.profiles (id) on delete cascade,
@@ -268,7 +306,7 @@ create table public.cantine_reservations (
 --  ---------------------------------------------------------------------------
 --  signalements — remontée d'un problème au bureau
 --  ---------------------------------------------------------------------------
-create table public.signalements (
+create table if not exists public.signalements (
   id          uuid primary key default gen_random_uuid(),
   author_id   uuid not null references public.profiles (id) on delete cascade,
   category    public.signalement_category not null default 'autre',
@@ -286,7 +324,7 @@ create table public.signalements (
 --  ---------------------------------------------------------------------------
 --  discussion_messages — salon unique des membres
 --  ---------------------------------------------------------------------------
-create table public.discussion_messages (
+create table if not exists public.discussion_messages (
   id          uuid primary key default gen_random_uuid(),
   author_id   uuid not null references public.profiles (id) on delete cascade,
   body        text not null,
@@ -302,19 +340,19 @@ create table public.discussion_messages (
 --  Chaque index correspond à une requête réellement écrite dans
 --  `src/services/`. Un index sans requête coûte à l'écriture et ne sert à rien.
 
-create index annonces_published_at_idx
+create index if not exists annonces_published_at_idx
   on public.annonces (published_at desc);
 
-create index cantine_menus_service_date_idx
+create index if not exists cantine_menus_service_date_idx
   on public.cantine_menus (service_date);
 
-create index cantine_reservations_user_idx
+create index if not exists cantine_reservations_user_idx
   on public.cantine_reservations (user_id);
 
-create index signalements_author_created_idx
+create index if not exists signalements_author_created_idx
   on public.signalements (author_id, created_at desc);
 
-create index discussion_messages_created_at_idx
+create index if not exists discussion_messages_created_at_idx
   on public.discussion_messages (created_at desc);
 
 
@@ -322,18 +360,22 @@ create index discussion_messages_created_at_idx
 --  5. Déclencheurs de cohérence
 -- =============================================================================
 
+drop trigger if exists profiles_set_updated_at on public.profiles;
 create trigger profiles_set_updated_at
   before update on public.profiles
   for each row execute function public.set_updated_at();
 
+drop trigger if exists annonces_set_updated_at on public.annonces;
 create trigger annonces_set_updated_at
   before update on public.annonces
   for each row execute function public.set_updated_at();
 
+drop trigger if exists cantine_menus_set_updated_at on public.cantine_menus;
 create trigger cantine_menus_set_updated_at
   before update on public.cantine_menus
   for each row execute function public.set_updated_at();
 
+drop trigger if exists signalements_set_updated_at on public.signalements;
 create trigger signalements_set_updated_at
   before update on public.signalements
   for each row execute function public.set_updated_at();
@@ -364,6 +406,7 @@ $$;
 
 revoke all on function public.prevent_role_change() from public;
 
+drop trigger if exists profiles_prevent_role_change on public.profiles;
 create trigger profiles_prevent_role_change
   before update on public.profiles
   for each row execute function public.prevent_role_change();
@@ -392,6 +435,7 @@ $$;
 
 revoke all on function public.prevent_status_change_by_member() from public;
 
+drop trigger if exists signalements_prevent_status_change on public.signalements;
 create trigger signalements_prevent_status_change
   before update on public.signalements
   for each row execute function public.prevent_status_change_by_member();
@@ -431,6 +475,7 @@ alter table public.discussion_messages  enable row level security;
 --  situation familiale impose de restreindre cette politique dans le même
 --  commit — et de vérifier que l'application n'a pas besoin de lire le nom des
 --  autres membres, ce qui est le cas aujourd'hui.
+drop policy if exists profiles_select_authenticated on public.profiles;
 create policy profiles_select_authenticated
   on public.profiles for select
   to authenticated
@@ -440,6 +485,7 @@ create policy profiles_select_authenticated
 --  `handle_new_user` n'a pas pu s'exécuter (compte créé hors de l'application,
 --  par exemple). Le rôle est figé à « membre » : on ne s'attribue pas des droits
 --  en s'insérant soi-même.
+drop policy if exists profiles_insert_own on public.profiles;
 create policy profiles_insert_own
   on public.profiles for insert
   to authenticated
@@ -471,22 +517,26 @@ create policy profiles_insert_own
 --  ---------------------------------------------------------------------------
 --  annonces — lecture par tous les membres, écriture par le bureau
 --  ---------------------------------------------------------------------------
+drop policy if exists annonces_select_authenticated on public.annonces;
 create policy annonces_select_authenticated
   on public.annonces for select
   to authenticated
   using (true);
 
+drop policy if exists annonces_insert_admin on public.annonces;
 create policy annonces_insert_admin
   on public.annonces for insert
   to authenticated
   with check (public.is_admin());
 
+drop policy if exists annonces_update_admin on public.annonces;
 create policy annonces_update_admin
   on public.annonces for update
   to authenticated
   using (public.is_admin())
   with check (public.is_admin());
 
+drop policy if exists annonces_delete_admin on public.annonces;
 create policy annonces_delete_admin
   on public.annonces for delete
   to authenticated
@@ -496,22 +546,26 @@ create policy annonces_delete_admin
 --  ---------------------------------------------------------------------------
 --  cantine_menus — lecture par tous les membres, écriture par le bureau
 --  ---------------------------------------------------------------------------
+drop policy if exists cantine_menus_select_authenticated on public.cantine_menus;
 create policy cantine_menus_select_authenticated
   on public.cantine_menus for select
   to authenticated
   using (true);
 
+drop policy if exists cantine_menus_insert_admin on public.cantine_menus;
 create policy cantine_menus_insert_admin
   on public.cantine_menus for insert
   to authenticated
   with check (public.is_admin());
 
+drop policy if exists cantine_menus_update_admin on public.cantine_menus;
 create policy cantine_menus_update_admin
   on public.cantine_menus for update
   to authenticated
   using (public.is_admin())
   with check (public.is_admin());
 
+drop policy if exists cantine_menus_delete_admin on public.cantine_menus;
 create policy cantine_menus_delete_admin
   on public.cantine_menus for delete
   to authenticated
@@ -524,6 +578,7 @@ create policy cantine_menus_delete_admin
 --  Le bureau doit pouvoir consulter l'ensemble des réservations : c'est la
 --  raison d'être de la table, il en a besoin pour commander les repas. D'où la
 --  seconde branche de la politique de lecture.
+drop policy if exists cantine_reservations_select_own_or_admin on public.cantine_reservations;
 create policy cantine_reservations_select_own_or_admin
   on public.cantine_reservations for select
   to authenticated
@@ -531,11 +586,13 @@ create policy cantine_reservations_select_own_or_admin
 
 --  On ne réserve que pour soi-même : `with check` refuse une ligne au nom d'un
 --  autre adhérent.
+drop policy if exists cantine_reservations_insert_own on public.cantine_reservations;
 create policy cantine_reservations_insert_own
   on public.cantine_reservations for insert
   to authenticated
   with check (user_id = (select auth.uid()));
 
+drop policy if exists cantine_reservations_delete_own_or_admin on public.cantine_reservations;
 create policy cantine_reservations_delete_own_or_admin
   on public.cantine_reservations for delete
   to authenticated
@@ -552,6 +609,7 @@ create policy cantine_reservations_delete_own_or_admin
 --  ---------------------------------------------------------------------------
 --  Un signalement peut concerner un enfant nommément : il n'a rien à faire sous
 --  les yeux de tous les adhérents. Seuls l'auteur et le bureau y accèdent.
+drop policy if exists signalements_select_own_or_admin on public.signalements;
 create policy signalements_select_own_or_admin
   on public.signalements for select
   to authenticated
@@ -567,6 +625,7 @@ create policy signalements_select_own_or_admin
 --
 --  La branche `is_admin()` reproduit la politique de modification : pour le
 --  bureau, décider du statut dès la création reste sa décision.
+drop policy if exists signalements_insert_own on public.signalements;
 create policy signalements_insert_own
   on public.signalements for insert
   to authenticated
@@ -575,6 +634,7 @@ create policy signalements_insert_own
     and (status = 'nouveau' or public.is_admin())
   );
 
+drop policy if exists signalements_update_own_or_admin on public.signalements;
 create policy signalements_update_own_or_admin
   on public.signalements for update
   to authenticated
@@ -588,11 +648,13 @@ create policy signalements_update_own_or_admin
 --  ---------------------------------------------------------------------------
 --  discussion_messages — lecture par tous les membres
 --  ---------------------------------------------------------------------------
+drop policy if exists discussion_messages_select_authenticated on public.discussion_messages;
 create policy discussion_messages_select_authenticated
   on public.discussion_messages for select
   to authenticated
   using (true);
 
+drop policy if exists discussion_messages_insert_own on public.discussion_messages;
 create policy discussion_messages_insert_own
   on public.discussion_messages for insert
   to authenticated
@@ -600,6 +662,7 @@ create policy discussion_messages_insert_own
 
 --  Chacun peut retirer son propre message ; le bureau peut retirer n'importe
 --  lequel, ce qui est nécessaire pour modérer un salon ouvert à tous.
+drop policy if exists discussion_messages_delete_own_or_admin on public.discussion_messages;
 create policy discussion_messages_delete_own_or_admin
   on public.discussion_messages for delete
   to authenticated

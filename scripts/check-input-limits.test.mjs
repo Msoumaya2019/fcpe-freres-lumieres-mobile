@@ -68,7 +68,7 @@ function fichiersSource() {
  */
 function contraintesBornees() {
   const sql = sansCommentairesSql(lireFichier(MIGRATION));
-  const tables = /create table public\.(\w+)\s*\(([\s\S]*?)\n\);/g;
+  const tables = /create table (?:if not exists )?public\.(\w+)\s*\(([\s\S]*?)\n\);/g;
   const relevees = [];
 
   let table;

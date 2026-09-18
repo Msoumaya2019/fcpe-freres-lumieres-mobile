@@ -513,7 +513,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-read-bounds.test.mjs  les lectures de liste, et la borne de chacune
 │   ├── check-schema-refs.test.mjs  les renvois du schéma : clés, types, portées, seed.sql, new/old
 │   ├── check-workflows.test.mjs   la fermeture de la liste des flux attendus
-│   └── check-eas-vocabulary.test.mjs  les clefs de eas.json, contre le schéma d'EAS
+│   ├── check-eas-vocabulary.test.mjs  les clefs de eas.json, contre le schéma d'EAS
+│   └── check-migration-rejouable.test.mjs  la migration, rejouable sans historique
 └── .github/workflows/             CI et build EAS
 ```
 
@@ -1782,13 +1783,14 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Vingt fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Vingt-et-un fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
   `check-pending-action`, `check-password-policy`, `check-weak-password`,
   `check-screen-modes`, `check-inventory`, `check-schema-refs`,
-  `check-read-bounds`, `check-workflows` et `check-eas-vocabulary`
+  `check-read-bounds`, `check-workflows`, `check-eas-vocabulary` et
+  `check-migration-rejouable`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui
@@ -1825,7 +1827,13 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   mutations, il en attrape **deux**. Le vocabulaire est donc recopié du schéma,
   avec sa source et sa date, et confronté clef par clef à la position où chacune
   se trouve — les positions elles-mêmes étant une liste fermée dans les deux
-  sens. `check-schema-refs` parcourt l'**arbre syntaxique** du
+  sens. `check-migration-rejouable` tient la même promesse pour le fichier SQL :
+  appliquée à la main, une migration n'a **aucun historique**, donc un échec à
+  mi-parcours ne dit pas où reprendre. Chaque `create table` porte son
+  `if not exists`, chaque `create index` aussi, chaque type énuméré vit dans un
+  bloc `do` qui tolère le doublon, et chaque politique comme chaque déclencheur
+  est précédé de sa garde — au **même nom** et sur la **même table**, ce qu'un
+  simple décompte ne vérifierait pas. `check-schema-refs` parcourt l'**arbre syntaxique** du
   schéma, et non son texte : chaque clé étrangère doit viser une table et une
   colonne déclarées, chaque type énuméré cité doit exister, chaque fonction
   `security definer` doit fixer son `search_path`, chaque colonne nommée par
