@@ -1,8 +1,8 @@
 # Mise en service — le guide, étape par étape
 
-> **En résumé.** L'étape 1 est faite. Il ne reste que **l'étape 2 — le compte Expo,  
-> 5 minutes** — et tout le reste peut attendre le premier essai sur téléphone. Je  
-> m'occupe de tout ce qui suit ce que vous me donnez.
+> **En résumé.** Les étapes 1, 2 et 3 sont faites : Supabase répond, le projet Expo
+> est créé, le jeton est posé. **Rien ne bloque plus l'APK.** Ce qui reste — le SMTP,
+> les quatre réglages, l'iPhone — peut attendre le premier essai sur téléphone.
 
 ---
 
@@ -29,8 +29,8 @@ service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 | 5   | Installer l'APK sur le téléphone                                  | ~2 min  | les vérifications sur appareil réel                             |
 | 6   | Les quatre réglages du tableau de bord                            | ~5 min  | le contrôle des quatre valeurs                                  |
 
-**L'étape 1 est faite ; seule l'étape 2 bloque.** Les autres attendent le premier  
-essai.
+**Les étapes 1, 2 et 3 sont faites ; aucune ne bloque plus l'APK.** L'étape 4 reste
+nécessaire avant d'ouvrir aux adhérents.
 
 ---
 
@@ -200,7 +200,11 @@ aller-retour de plus qu'un diagnostic deviné.
 
 ---
 
-## Étape 2 — Expo (~5 min)
+## Étape 2 — Expo (~5 min) ✅
+
+> **Faite.** Le compte existe, le projet `@mchiker/fcpe-freres-lumieres` est créé, son
+> identifiant est écrit dans `app.json`, et les deux variables Supabase sont
+> enregistrées pour `development`, `preview` et `production` — vérifiées une par une.
 
 Expo est le service qui fabrique l'APK. Le compte est gratuit, et le forfait gratuit  
 suffit largement.
@@ -256,19 +260,20 @@ téléchargement.
 
 > **Sur iPhone.** Le profil `preview` produit un APK Android, installable  
 > directement. Pour iOS, la distribution interne d'EAS exige un compte Apple  
-> Developer **payant** (99 $/an), qui enregistre l'appareil. Sans lui, la voie  
-> gratuite est l'IPA non signé produit par GitHub Actions, à installer avec un outil  
-> de sideloading. **Android est donc le chemin court pour le premier essai** — dites-moi  
-> si vous voulez l'iPhone tout de suite, je prépare l'autre chaîne.
+> Developer **payant** (99 $/an). La voie gratuite est désormais en place : le flux  
+> `.github/workflows/ios-unsigned.yml` compile un **IPA non signé** sur un exécuteur  
+> macOS, que vous signez ensuite avec ESign — voir l'étape 5.
 
 ---
 
-## Étape 3 — Le jeton Expo pour GitHub _(facultatif, ~2 min)_
+## Étape 3 — Le jeton Expo pour GitHub _(~2 min)_ ✅
+
+> **Faite.** Le jeton est posé en secret du dépôt, et la compilation automatique a
+> tourné : elle produit l'APK comme le flux manuel.
 
 Le dépôt contient déjà une compilation automatique  
 (`.github/workflows/eas-build.yml`), déclenchée sur un tag `v*` ou à la main. Elle  
-attend un secret `EXPO_TOKEN`, qui n'existe pas encore — c'est la raison pour  
-laquelle elle n'a jamais tourné.
+attend le secret `EXPO_TOKEN` — désormais posé, et la compilation a tourné.
 
 Si vous me donnez un jeton créé sur <https://expo.dev/settings/access-tokens>, je le  
 pose moi-même en secret du dépôt et je vérifie que la compilation démarre. Sinon, on  
@@ -347,10 +352,12 @@ confirmation arrive réellement.
 
 ---
 
-## Étape 5 — Installer l'application _(~2 min)_
+## Étape 5 — Installer l'application _(~2 min sur Android, ~10 min sur iPhone)_
 
-C'est le seul geste qui ne s'automatise pas : installer un APK demande votre  
+C'est le seul geste qui ne s'automatise pas : installer une application demande votre  
 téléphone.
+
+### Sur Android — l'APK
 
 1. Ouvrez le lien de téléchargement que je vous envoie, **depuis le téléphone**.
 2. Android affiche un avertissement : « Pour votre sécurité, votre téléphone n'est  
@@ -361,6 +368,29 @@ téléphone.
 
 Je vous donnerai le chemin exact dans les réglages Android selon votre téléphone —  
 c'est un écran qui change d'un constructeur à l'autre.
+
+### Sur iPhone — l'IPA non signé, puis ESign
+
+iOS **refuse** d'installer une application non signée : le système vérifie la
+signature avant d'exécuter quoi que ce soit, et ne dit pas pourquoi il refuse. L'IPA
+que je produis n'est donc pas un produit fini, c'est un **produit intermédiaire** — la
+compilation sans la signature — et c'est ESign qui pose la signature, sur le téléphone.
+
+1. Je vous envoie le lien de l'artefact **`ipa-non-signe`** : téléchargez-le **depuis
+   l'iPhone**.
+2. Ouvrez ESign et importez le fichier.
+3. Signez-le avec un certificat obtenu **sur l'appareil** — c'est le geste que je ne
+   peux pas faire à votre place, il engage votre identifiant Apple.
+4. Installez depuis ESign, puis ouvrez l'application.
+
+**Deux choses à savoir avant de commencer.** Un certificat gratuit **expire au bout de
+sept jours** : l'application cesse alors de s'ouvrir, et il faut re-signer. Et cette
+voie sert à **essayer** l'application — pour les adhérents, la voie normale reste le
+magasin.
+
+Si l'installation échoue, envoyez-moi le message d'ESign tel quel : il dit presque
+toujours laquelle des trois choses manque — le certificat, la signature, ou
+l'autorisation de l'appareil.
 
 ---
 
@@ -402,13 +432,14 @@ lien utilisable. Les deux adresses sont recopiées du fichier
       depuis l'extérieur, les tables étant fermées à la clé publique
 - [ ] Table Editor : `annonces` a 2 lignes
 - [x] Project URL et publishable key envoyées dans la conversation
-- [ ] Compte Expo créé, nom d'utilisateur noté
-- [ ] `npx --yes eas-cli@latest login` lancé (ou jeton d'accès envoyé)
+- [x] Compte Expo créé — nom d'utilisateur `mchiker`
+- [x] Jeton d'accès posé en secret du dépôt, et compilation lancée
+- [ ] Télécharger l'IPA non signé et le signer avec ESign
 
-**Il ne reste qu'une étape bloquante : l'étape 2.** Les cases cochées le sont parce  
-que je les ai **mesurées**, pas parce qu'elles devraient l'être ; celles qui restent  
-ouvertes demandent soit votre mot de passe, soit une lecture que la clé publique  
-n'autorise pas.
+**Aucune case ne bloque plus l'APK.** Les cases cochées le sont parce que je les ai  
+**mesurées**, pas parce qu'elles devraient l'être ; celles qui restent ouvertes  
+demandent soit votre mot de passe, soit une lecture que la clé publique n'autorise  
+pas.
 
 **Plus tard, après le premier essai :**
 
@@ -424,9 +455,10 @@ Pour que vous sachiez ce que vous n'avez pas à faire : les cinq écrans et leur
 navigation, l'authentification et la réinitialisation de mot de passe, les six tables  
 et leurs politiques de sécurité, les contrôles de schéma et de politiques, la chaîne  
 de vérification complète (`npm run verify`, **28 fichiers de test**), les  
-deux flux GitHub Actions, le dépôt public sans aucun secret, et la documentation.
+trois flux GitHub Actions, le dépôt public sans aucun secret, et la documentation.
 
 ## Une seule chose à retenir
 
-**Rien ne bloque plus que l'étape 2.** Les étapes 3 à 6 peuvent attendre, et je  
-m'occupe de tout le reste dès que j'ai le compte Expo.
+**Rien ne bloque plus l'APK.** L'étape 4 — les e-mails — est la seule qui doive être  
+faite avant d'ouvrir aux adhérents ; les étapes 5 et 6 peuvent attendre le premier  
+essai, et je m'occupe de tout le reste sans vous.
