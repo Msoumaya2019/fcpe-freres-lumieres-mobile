@@ -29,6 +29,13 @@
  * l'échec d'un rafraîchissement remplacerait le contenu affiché par un écran
  * d'erreur — exactement ce que `useAsyncData` conserve `data` pour éviter.
  *
+ * Ce contrôle lit désormais l'**arbre syntaxique** du fichier, et non le texte.
+ * Il lisait le texte, et refusait qu'un élément soit ouvert puis refermé entre
+ * la garde et le repli : un proxy qui a produit un faux positif dès qu'un envoi
+ * en cours a ajouté une seconde branche sous la même garde de vacuité. La
+ * propriété est structurelle, l'outil devait l'être aussi — même raison que les
+ * relevés de schéma, qui lisent l'AST depuis la passe 49.
+ *
  * Un dernier contrôle est venu du dossier lui-même : **aucun écran n'est
  * orphelin**. Le cas s'est présenté à la main, en cherchant qui montait
  * `ConfigurationScreen` : le relevé ne portait que sur `src/`, et il concluait
@@ -46,6 +53,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+
+import ts from 'typescript';
 
 const RACINE = fileURLToPath(new URL('../', import.meta.url));
 
@@ -188,34 +197,147 @@ test('un écran qui écrit relit sa liste', () => {
 });
 
 /**
- * Les `<AsyncFallback` d'une source, avec ce qui les précède depuis la garde la
- * plus proche — `ListEmptyComponent={` ou le `? (` d'un test de vacuité.
+ * Un enfant JSX qui produit quelque chose à l'écran.
  *
- * Le texte intermédiaire est rendu avec la garde pour que l'appelant puisse
- * exiger qu'**aucun élément n'y ait été ouvert puis refermé** : sans cette
- * condition, un `ListEmptyComponent` posé ailleurs dans le fichier blanchirait un
- * `AsyncFallback` rendu sans garde.
+ * Un commentaire JSX — une expression JSX dont l'`expression` est absente — est
+ * bien dans l'arbre, et il ne rend rien. Le compter comme un frère ferait tomber
+ * le contrôle sur du code juste : mesuré sur l'écran de discussion, dont le
+ * commentaire précède le ternaire.
  */
-function gardesDesEtatsVides(source) {
-  const releves = [];
-  const motif = /<AsyncFallback/g;
-
-  let trouve;
-  while ((trouve = motif.exec(source)) !== null) {
-    const avant = source.slice(0, trouve.index);
-    const marqueurs = [avant.lastIndexOf('ListEmptyComponent={'), avant.lastIndexOf('? (')].filter(
-      (position) => position !== -1,
-    );
-    const ligne = avant.split('\n').length;
-
-    releves.push(
-      marqueurs.length === 0
-        ? { ligne, garde: null }
-        : { ligne, garde: avant.slice(Math.max(...marqueurs)) },
-    );
+function estRendu(enfant) {
+  if (ts.isJsxElement(enfant) || ts.isJsxSelfClosingElement(enfant)) {
+    return true;
   }
 
-  return releves;
+  return ts.isJsxExpression(enfant) && enfant.expression !== undefined;
+}
+
+/** La première chose rendue par un conteneur JSX, ou `undefined`. */
+function premierRendu(conteneur) {
+  return conteneur.children.find(estRendu);
+}
+
+/**
+ * Les gardes qui enserrent un nœud, et les frères rendus avant lui.
+ *
+ * POURQUOI L'ARBRE ICI, ET PAS UN MOTIF SUR LE TEXTE
+ * -------------------------------------------------
+ * La première version de ce contrôle lisait le texte entre la garde et
+ * l'élément, et refusait qu'un élément y soit ouvert puis refermé. C'était un
+ * **proxy** de la propriété cherchée — « le repli n'est monté que si la liste
+ * est vide » — et il a produit un faux positif dès qu'un envoi en cours a ajouté
+ * une seconde branche au même endroit :
+ *
+ *     messages.length === 0 ? (envoiEnCours ? (<Attente />) : (<AsyncFallback />)) : (…)
+ *
+ * Le repli est bien sous la garde de vacuité, et le motif le déclarait fautif.
+ * Un banc qui tombe sur du code juste est un défaut du banc : la propriété est
+ * structurelle, l'outil devait l'être aussi. La chaîne relevée ici a été
+ * **mesurée** sur les quatre écrans avant d'être écrite, et non déduite.
+ *
+ * Les nœuds traversés sont ceux qui n'ajoutent pas de rendu : parenthèses,
+ * expressions JSX, ternaires, `&&`. Un conteneur JSX, lui, arrête la
+ * description : si quelque chose y est rendu avant nous, la garde ne nous
+ * protège plus seul.
+ */
+function enveloppe(noeud, fichier) {
+  const conditions = [];
+  const freresAvant = [];
+
+  let courant = noeud;
+  let parent = noeud.parent;
+
+  while (parent !== undefined) {
+    if (ts.isParenthesizedExpression(parent) || ts.isJsxExpression(parent)) {
+      courant = parent;
+      parent = parent.parent;
+      continue;
+    }
+
+    if (ts.isConditionalExpression(parent)) {
+      conditions.push(parent.condition.getText(fichier));
+      courant = parent;
+      parent = parent.parent;
+      continue;
+    }
+
+    if (
+      ts.isBinaryExpression(parent) &&
+      parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+    ) {
+      conditions.push(parent.left.getText(fichier));
+      courant = parent;
+      parent = parent.parent;
+      continue;
+    }
+
+    if (ts.isJsxAttribute(parent) && parent.name.getText(fichier) === 'ListEmptyComponent') {
+      conditions.push('ListEmptyComponent');
+      courant = parent;
+      parent = parent.parent;
+      continue;
+    }
+
+    if (ts.isJsxElement(parent) || ts.isJsxFragment(parent)) {
+      const premier = premierRendu(parent);
+      if (premier !== undefined && premier !== courant) {
+        freresAvant.push(premier.getText(fichier).replace(/\s+/g, ' ').slice(0, 60));
+      }
+      courant = parent;
+      parent = parent.parent;
+      continue;
+    }
+
+    break;
+  }
+
+  return { conditions, freresAvant };
+}
+
+/**
+ * Une garde qui dit « la liste est vide » — soit l'emplacement dédié d'une
+ * `FlatList`, soit un test de longueur. C'est elle qui rend vrai le commentaire
+ * d'`AsyncFallback` : le repli n'est **jamais** le mécanisme qui préserve une
+ * liste affichée, c'est son absence de montage qui le fait.
+ *
+ * LES DEUX FORMES RECONNUES SONT CELLES DU PROJET, ET RIEN DE PLUS
+ * `.length === 0`, `.length > 0`, `.length !== 0`, et leur négation `!x.length`.
+ * Deux formulations sont **fausses négatives** et feront donc tomber le
+ * contrôle sur du code juste : un test de vacuité placé dans une variable
+ * (`const vide = liste.length === 0`) et un test de véracité dont le repli
+ * occupe la branche fausse (`liste.length ? <Liste /> : <AsyncFallback />`).
+ * Aucune des deux n'existe dans le projet ; elles sont écrites ici pour que le
+ * prochain lecteur sache où s'arrête le contrôle, et où le corriger.
+ */
+const GARDE_DE_VACUITE = /!\s*[\w.$]*\.?length\b|\.length\s*(?:===|!==|==|!=|>=|<=|>|<)\s*0\b/;
+
+function estGardeDeVacuite(condition) {
+  return condition === 'ListEmptyComponent' || GARDE_DE_VACUITE.test(condition);
+}
+
+/** Les `<AsyncFallback>` d'un écran, avec la chaîne de gardes qui les enserre. */
+function replisDeLEcran(chemin) {
+  const source = lireFichier(chemin);
+  const fichier = ts.createSourceFile(
+    chemin,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const trouves = [];
+
+  const visiter = (noeud) => {
+    if (ts.isJsxSelfClosingElement(noeud) && noeud.tagName.getText(fichier) === 'AsyncFallback') {
+      const ligne = fichier.getLineAndCharacterOfPosition(noeud.getStart(fichier)).line + 1;
+      trouves.push({ ligne, ...enveloppe(noeud, fichier) });
+    }
+
+    ts.forEachChild(noeud, visiter);
+  };
+
+  visiter(fichier);
+  return trouves;
 }
 
 test("l'état vide est la seule porte d'`AsyncFallback`", () => {
@@ -226,25 +348,105 @@ test("l'état vide est la seule porte d'`AsyncFallback`", () => {
   const fautifs = [];
 
   for (const ecran of ECRANS_CHARGEANTS) {
-    const gardes = gardesDesEtatsVides(ecran.source);
+    const replis = replisDeLEcran(ecran.chemin);
 
-    if (gardes.length === 0) {
+    if (replis.length === 0) {
       fautifs.push(`${ecran.relatif} : aucun AsyncFallback relevé`);
       continue;
     }
 
-    for (const { ligne, garde } of gardes) {
-      if (garde === null) {
-        fautifs.push(`${ecran.relatif}:${ligne} : AsyncFallback hors de toute garde de vacuité`);
-      } else if (/\/>|<\//.test(garde)) {
+    for (const { ligne, conditions, freresAvant } of replis) {
+      if (conditions.length === 0) {
+        fautifs.push(`${ecran.relatif}:${ligne} : AsyncFallback hors de toute garde`);
+      } else if (!conditions.some(estGardeDeVacuite)) {
         fautifs.push(
-          `${ecran.relatif}:${ligne} : un élément est refermé entre la garde et AsyncFallback`,
+          `${ecran.relatif}:${ligne} : aucune garde de vacuité — gardes relevées : ${conditions.join(' | ')}`,
+        );
+      }
+
+      if (freresAvant.length > 0) {
+        fautifs.push(
+          `${ecran.relatif}:${ligne} : un élément est rendu avant lui dans la même branche — ${freresAvant[0]}`,
         );
       }
     }
   }
 
   assert.deepEqual(fautifs, []);
+});
+
+/**
+ * Le témoin : l'analyse est exercée sur des sources écrites ici, et dans les
+ * deux sens. Sans lui, une analyse qui ne trouve plus rien, ou qui trouve tout,
+ * rendrait le test précédent vert en ne mesurant rien — et le cas 1 est
+ * exactement la forme qui a fait tomber l'ancien contrôle.
+ */
+test("le témoin : l'analyse reconnaît une garde de vacuité, même imbriquée, et refuse son absence", () => {
+  const analyse = (source) => {
+    const fichier = ts.createSourceFile(
+      'temoin.tsx',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    );
+
+    let repli = null;
+    const visiter = (noeud) => {
+      if (ts.isJsxSelfClosingElement(noeud) && noeud.tagName.getText(fichier) === 'AsyncFallback') {
+        repli = noeud;
+      }
+      ts.forEachChild(noeud, visiter);
+    };
+    visiter(fichier);
+
+    assert.notStrictEqual(repli, null, 'le témoin ne contient aucun AsyncFallback');
+    return enveloppe(repli, fichier);
+  };
+
+  // 1. Deux gardes imbriquées : celle de vacuité enveloppe celle de l'envoi.
+  const imbriquee = analyse(
+    'const a = <>{liste.length === 0 ? (envoi ? (<Attente />) : (<AsyncFallback />)) : (<Liste />)}</>;',
+  );
+  assert.deepEqual(imbriquee.freresAvant, [], 'aucun élément ne précède le repli dans sa branche');
+  assert.ok(
+    imbriquee.conditions.some(estGardeDeVacuite),
+    `garde de vacuité non reconnue : ${imbriquee.conditions.join(' | ')}`,
+  );
+
+  // 2. L'emplacement dédié d'une `FlatList`.
+  const emplacement = analyse('const a = <FlatList ListEmptyComponent={<AsyncFallback />} />;');
+  assert.ok(emplacement.conditions.includes('ListEmptyComponent'));
+
+  // 3. Rendu sans aucune garde.
+  const nu = analyse('const a = <View><AsyncFallback /></View>;');
+  assert.deepEqual(nu.conditions, [], 'un repli nu ne doit relever aucune garde');
+
+  // 4. Gardé, mais par autre chose que la vacuité.
+  const autreGarde = analyse('const a = <>{envoi ? (<AsyncFallback />) : (<Attente />)}</>;');
+  assert.deepEqual(autreGarde.conditions, ['envoi']);
+  assert.ok(
+    !autreGarde.conditions.some(estGardeDeVacuite),
+    'une garde qui ne teste pas la vacuité ne doit pas passer pour telle',
+  );
+
+  // 4 bis. La négation, qui dit la même chose autrement.
+  const negation = analyse('const a = <>{!liste.length && <AsyncFallback />}</>;');
+  assert.ok(
+    negation.conditions.some(estGardeDeVacuite),
+    `négation non reconnue : ${negation.conditions.join(' | ')}`,
+  );
+
+  // 5. Quelque chose est rendu avant lui dans la même branche.
+  const frere = analyse(
+    'const a = <>{liste.length === 0 ? (<><Titre /><AsyncFallback /></>) : (<Liste />)}</>;',
+  );
+  assert.ok(frere.conditions.some(estGardeDeVacuite));
+  assert.deepEqual(
+    frere.freresAvant,
+    ['<Titre />'],
+    'un frère rendu avant le repli doit être relevé, avec son texte',
+  );
 });
 
 /**

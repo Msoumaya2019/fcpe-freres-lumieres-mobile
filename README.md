@@ -760,11 +760,41 @@ l'affichage n'est donc pas un état transmis, c'est l'**absence de montage** —
 cette absence n'était tenue par rien. Un `AsyncFallback` déplacé à côté de la
 liste remplacerait le contenu affiché par un écran d'erreur dès qu'un
 rafraîchissement échoue. Le banc exige désormais que chaque `AsyncFallback` reste
-derrière une garde de vacuité, et refuse qu'un élément soit ouvert puis refermé
-entre les deux — sans quoi un `ListEmptyComponent` posé ailleurs dans le fichier
-blanchirait l'appel. Éprouvé dans les deux sens : la garde retirée fait tomber le
-test en nommant le fichier et la ligne, la même garde remise sur une seule ligne
-ne le fait pas tomber.
+derrière une garde de vacuité, et que rien ne soit **rendu** avant lui dans sa
+branche — sans quoi un `ListEmptyComponent` posé ailleurs dans le fichier
+blanchirait l'appel.
+
+Ce contrôle a d'abord lu le **texte**, et refusé qu'un élément soit ouvert puis
+refermé entre la garde et le repli. C'était un proxy de la propriété, et il a
+produit un faux positif dès qu'un envoi en cours a ajouté une seconde branche au
+même endroit :
+
+```tsx
+messages.length === 0 ? envoiEnCours ? <Attente /> : <AsyncFallback /> : <Liste />;
+```
+
+Le repli est bien sous la garde de vacuité, et le motif le déclarait fautif. **Un
+banc qui tombe sur du code juste est un défaut du banc** : la propriété est
+structurelle, l'outil devait l'être aussi. Le contrôle lit maintenant l'**arbre
+syntaxique** produit par le compilateur TypeScript — le même choix que les relevés
+de schéma, qui lisent l'AST depuis la passe 49 — et remonte la chaîne des gardes
+qui enserrent le repli : ternaires, `&&`, `ListEmptyComponent`. Cette chaîne a été
+**mesurée** sur les quatre écrans avant d'être écrite, jamais déduite.
+
+Éprouvé dans les deux sens, sept scénarios : une garde qui cesse de tester la
+vacuité, l'emplacement dédié remplacé par un autre, un élément rendu avant le repli,
+et la règle de vacuité rendue toujours vraie font tomber un test chacun ; la garde
+écrite par sa négation (`!messages.length`), le ternaire sans parenthèses et un
+simple commentaire avant le repli le laissent vert. Le couple qui compte est le
+dernier : la **même** transformation structurelle fait tomber le banc avec un
+élément rendu, et pas avec un commentaire — un commentaire JSX est un nœud de
+l'arbre qui ne rend rien.
+
+Deux formulations restent hors de portée, et le banc le dit plutôt que de le
+laisser croire : un test de vacuité rangé dans une variable, et un test de véracité
+dont le repli occupe la branche fausse. Aucune n'existe dans le projet ; toutes
+deux feraient tomber le contrôle sur du code juste, et c'est écrit à l'endroit où
+il faudra le corriger.
 
 **Sa cinquième promesse est née d'une fausse alerte, et c'est ce qui la rend
 utile.** En cherchant qui montait `ConfigurationScreen`, le relevé ne portait que
@@ -833,12 +863,48 @@ extraire l'appel dans une variable intermédiaire — une remise en forme correc
 le faisait tomber, parce qu'il exigeait la ligne à l'octet près. L'invariant porte
 sur l'**origine** du marqueur, pas sur la forme de l'affectation.
 
-Enfin, **deux écrans relâchent tôt et c'est délibéré** : la discussion vide son
-brouillon (le bouton d'envoi exige un brouillon non vide) et le formulaire de
-signalement se referme. Dans les deux cas l'action ne peut pas être rejouée
-pendant la relecture, donc le défaut n'existe pas. Ce justificatif est écrit dans
-les deux fichiers **et** vérifié par le banc — sans quoi l'exception deviendrait
-fausse en silence.
+Enfin, **un seul écran relâche tôt, et c'est délibéré** : le formulaire de
+signalement se referme, donc son bouton « Envoyer » disparaît et l'action ne peut
+pas être rejouée pendant la relecture. Ce justificatif est écrit dans le fichier
+**et** vérifié par le banc — sans quoi l'exception deviendrait fausse en silence.
+
+La discussion, elle, relâchait tôt **pour la même raison apparente**, et c'était
+faux. Audit du parcours, même méthode que la cantine : le brouillon vidé empêche de
+rejouer le **même** texte, pas d'en écrire un autre — et l'écran proposait
+explicitement de le faire. Modèle d'état, salon vide, quatre instants :
+
+| étape                | zone de liste                                                     | invitation | envoi bloqué |
+| -------------------- | ----------------------------------------------------------------- | ---------- | ------------ |
+| avant l'appui        | « Aucun message / Ouvrez la discussion en écrivant le premier … » | oui        | non          |
+| insertion en vol     | la même invitation                                                | oui        | oui          |
+| relecture **en vol** | la même invitation                                                | oui        | **non**      |
+| relecture atterrie   | liste : 1 message                                                 | non        | non          |
+
+La troisième ligne est le défaut, et la deuxième en est un second : le serveur
+avait accepté le message, le champ était vide, et l'écran proposait d'écrire le
+premier. Aucune contrainte d'unicité n'absorbe ce doublon — `discussion_messages`
+n'en a pas — et le second message part chez **tous** les membres.
+
+Le correctif ne rend pas l'affichage optimiste pour autant : montrer la bulle avant
+la relecture mentirait dès qu'une politique RLS refuse l'insertion, ce que la
+cantine a déjà tranché. L'envoi est donc couvert **jusqu'à la relecture**, par deux
+mécanismes parce qu'aucun ne suffit seul — `sending` couvre l'aller-retour de
+l'insertion, `pendingTarget` prend le relais, et le second est inerte dès l'appui
+quand le statut est déjà en erreur, alors que le compositeur reste à l'écran. Et
+l'état vide cède la place à une attente tant que l'envoi dure.
+
+**Le banc tenait le défaut en place.** Son assertion
+`canSend = draft.trim() !== '' && !sending` épinglait la forme fautive elle-même :
+elle a dû être réécrite, et ce changement est un résultat de l'audit, pas une
+conséquence. Falsifié en huit scénarios — cinq mutations font tomber un test
+chacune, trois remises en forme légitimes (prédicat coupé sur deux lignes, marqueur
+extrait dans une variable, libellé de l'attente reformulé) le laissent vert.
+
+**Une limite est nommée, pas cachée** : `pendingTarget` relâche le marqueur sur une
+relecture en échec, sans quoi l'indicateur tournerait sans fin. Le compositeur
+rouvre donc pendant la relecture quand le statut était **déjà** en erreur au moment
+de l'appui avec du contenu affiché. Le cas est mesuré, laissé ouvert — un
+indicateur éternel serait pire — et écrit dans l'en-tête du banc.
 
 **`check-password-policy` est né d'une règle écrite deux fois, dans deux portées.**
 `MIN_PASSWORD_LENGTH` recopie un réglage qui ne vit pas dans ce dépôt, donc son
