@@ -454,7 +454,7 @@ pas.
 Pour que vous sachiez ce que vous n'avez pas à faire : les cinq écrans et leur  
 navigation, l'authentification et la réinitialisation de mot de passe, les six tables  
 et leurs politiques de sécurité, les contrôles de schéma et de politiques, la chaîne  
-de vérification complète (`npm run verify`, **28 fichiers de test**), les  
+de vérification complète (`npm run verify`, **29 fichiers de test**), les  
 trois flux GitHub Actions, le dépôt public sans aucun secret, et la documentation.
 
 ## Une seule chose à retenir

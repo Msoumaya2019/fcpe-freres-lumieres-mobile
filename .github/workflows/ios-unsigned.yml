@@ -232,33 +232,18 @@ jobs:
         # remplacé au **regroupement** : si la variable manquait, l'application
         # se compile, s'installe, s'ouvre, et n'affiche aucune donnée. Ce
         # contrôle transforme ce défaut silencieux en échec bruyant.
+        #
+        # Le contrôle vit dans `scripts/check-paquet.mjs`, et non ici. Écrit
+        # dans ce fichier, il cherchait un **mot** que le code source emploie
+        # déjà — `service_role` d'abord, puis `sb_secret_`, que
+        # `src/config/env.ts:139` porte littéralement — et il a refusé un paquet
+        # parfaitement sain. Un contrôle qu'on ne peut éprouver qu'en relançant
+        # une compilation de vingt minutes ne se corrige pas ; le sortir de ce
+        # fichier est ce qui a permis de le faire tomber exprès, sur un banc.
         run: |
           set -euo pipefail
 
-          if grep -qa "supabase.co" "$APP/main.jsbundle"; then
-            echo "URL Supabase présente dans le paquet."
-          else
-            echo "::error::l'URL Supabase est absente de main.jsbundle"
-            echo "Les variables EXPO_PUBLIC_* ne sont pas arrivées jusqu'au regroupement."
-            echo "Vérifiez les secrets SUPABASE_URL et SUPABASE_ANON_KEY du dépôt."
-            exit 1
-          fi
-
-          if grep -qa "sb_publishable_" "$APP/main.jsbundle"; then
-            echo "Clef publique présente dans le paquet."
-          else
-            echo "::error::la clef publique est absente de main.jsbundle"
-            exit 1
-          fi
-
-          # Une clef de service dans un paquet distribué serait une fuite : elle
-          # contourne toutes les politiques RLS. Le contrôle est ici parce que
-          # c'est le dernier endroit où l'on regarde encore le contenu réel.
-          if grep -qa "service_role" "$APP/main.jsbundle"; then
-            echo "::error::le paquet contient « service_role » : ne le distribuez pas"
-            exit 1
-          fi
-          echo "Aucune clef de service dans le paquet."
+          node scripts/check-paquet.mjs "$APP"
 
       - name: Résumer
         run: |

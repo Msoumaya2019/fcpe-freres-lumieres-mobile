@@ -196,6 +196,7 @@ const MOTS = new Map([
   [26, 'Vingt-six'],
   [27, 'Vingt-sept'],
   [28, 'Vingt-huit'],
+  [29, 'Vingt-neuf'],
 ]);
 
 test('tout fichier qui importe `node:test` est nommé pour être découvert', () => {

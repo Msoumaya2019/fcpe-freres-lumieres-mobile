@@ -23,6 +23,7 @@
     "sql:check": "node scripts/check-sql.mjs",
     "check:install": "node scripts/check-install-integrity.mjs",
     "check:workflows": "node scripts/check-workflows.mjs",
+    "check:paquet": "node scripts/check-paquet.mjs",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/register-alias.mjs --test",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test && npm run check:install && npm run check:workflows && npm run sql:check && npm run export:android",
     "doctor": "npx --yes expo-doctor@latest",

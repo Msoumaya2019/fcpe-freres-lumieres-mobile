@@ -507,6 +507,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-sql.mjs              analyse syntaxique du SQL
 │   ├── check-install-integrity.mjs  paquets installés à moitié extraits
 │   ├── check-workflows.mjs        les flux GitHub : forme du YAML, épinglage, `bash -n`
+│   ├── check-paquet.mjs           le contenu d'un paquet compilé : clefs, URL, fuites
 │   ├── alias-loader.mjs           résolution de « @/ » pour node:test
 │   ├── register-alias.mjs         branchement du chargeur, avant les tests
 │   ├── essai-postgres.mjs         la doublure de Supabase, partagée par les bancs qui exécutent
@@ -531,6 +532,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-read-bounds.test.mjs  les lectures de liste, et la borne de chacune
 │   ├── check-schema-refs.test.mjs  les renvois du schéma : clés, types, portées, seed.sql, new/old
 │   ├── check-workflows.test.mjs   la fermeture de la liste des flux attendus
+│   ├── check-paquet.test.mjs      un paquet sain passe, une clef en trop le fait tomber
 │   ├── check-eas-vocabulary.test.mjs  les clefs de eas.json, contre le schéma d'EAS
 │   ├── check-migration-rejouable.test.mjs  la migration, rejouable sans historique
 │   ├── check-migration-applicable.test.mjs  la migration, exécutée contre un vrai PostgreSQL
@@ -1854,13 +1856,13 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Vingt-huit fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Vingt-neuf fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
   `check-pending-action`, `check-password-policy`, `check-weak-password`,
   `check-screen-modes`, `check-inventory`, `check-schema-refs`,
-  `check-read-bounds`, `check-workflows`, `check-eas-vocabulary`,
+  `check-read-bounds`, `check-workflows`, `check-paquet`, `check-eas-vocabulary`,
   `check-migration-rejouable`, `check-migration-applicable`,
   `check-rls-comportement`, `check-sdk-pins`, `check-scripts-executables`,
   `check-markdown-listes`, `check-audit-scope` et `check-parser-surface`
