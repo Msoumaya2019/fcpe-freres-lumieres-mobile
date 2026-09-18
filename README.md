@@ -18,13 +18,13 @@ connexion, ce qui supprime la classe de bugs où un écran se ferme à peine ouv
 
 ## 1. Prérequis
 
-| Outil           | Version  | Remarque                                      |
-| --------------- | -------- | --------------------------------------------- |
-| Node.js         | 22.x     | `.nvmrc` fixe `22.22.2`, comme `eas.json`     |
-| npm             | 10.x     | livré avec Node 22                            |
-| Expo Go         | dernière | pour tester sur un téléphone sans compilation |
-| Compte Expo     | —        | nécessaire pour EAS Build (`eas login`)       |
-| Projet Supabase | —        | offre gratuite suffisante pour démarrer       |
+| Outil           | Version  | Remarque                                        |
+| --------------- | -------- | ----------------------------------------------- |
+| Node.js         | 22.x     | `.nvmrc` fixe `22.22.2`, comme `eas.json`       |
+| npm             | 10.x     | livré avec Node 22                              |
+| Expo Go         | dernière | pour tester sur un téléphone sans compilation   |
+| Compte Expo     | —        | nécessaire pour EAS Build (`npx eas-cli login`) |
+| Projet Supabase | —        | offre gratuite suffisante pour démarrer         |
 
 ## 2. Démarrage rapide
 
@@ -41,7 +41,7 @@ permet à l'intégration continue de compiler le bundle sans aucun secret.
 > **Mise en service, pas à pas.** [MISE-EN-SERVICE.md](MISE-EN-SERVICE.md) énumère
 > dans l'ordre les seules actions qui ne peuvent pas être automatisées — créer le
 > projet Supabase, coller les deux fichiers SQL, créer le compte Expo, lancer
-> `eas login` — et, pour chacune, ce qui s'ensuit côté dépôt. Le partage y est
+> `npx eas-cli login` — et, pour chacune, ce qui s'ensuit côté dépôt. Le partage y est
 > explicite : aucun identifiant n'est saisi par un tiers, mais tout ce qui peut
 > être fait sans vous l'est déjà.
 
@@ -97,11 +97,11 @@ Les fichiers `.env.local` ne sont **pas** téléversés : EAS respecte
 environnement — `eas.json` associe chaque profil à un environnement :
 
 ```bash
-eas env:create --environment production \
+npx --yes eas-cli@latest env:create --environment production \
   --name EXPO_PUBLIC_SUPABASE_URL \
   --value "https://xxxxxxxx.supabase.co" --visibility plaintext
 
-eas env:create --environment production \
+npx --yes eas-cli@latest env:create --environment production \
   --name EXPO_PUBLIC_SUPABASE_ANON_KEY \
   --value "sb_publishable_..." --visibility sensitive
 ```
@@ -523,7 +523,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-eas-vocabulary.test.mjs  les clefs de eas.json, contre le schéma d'EAS
 │   ├── check-migration-rejouable.test.mjs  la migration, rejouable sans historique
 │   ├── check-sdk-pins.test.mjs    les paquets installés, contre les épinglages du SDK
-│   └── check-scripts-executables.test.mjs  les commandes que `package.json` lance, et leur existence
+│   ├── check-scripts-executables.test.mjs  les commandes que `package.json` lance, et leur existence
+│   └── check-audit-scope.test.mjs  ce qui est livré, et ce qui est seulement construit
 └── .github/workflows/             CI et build EAS
 ```
 
@@ -1501,7 +1502,7 @@ garde le minimum exigé.
 ```bash
 npm run eas:build:preview       # APK à installer sur un téléphone
 npm run eas:build:production    # version destinée aux magasins
-eas submit --profile production --platform android
+npx --yes eas-cli@latest submit --profile production --platform android
 ```
 
 `appVersionSource: "remote"` délègue à EAS le numéro de version, et
@@ -1799,14 +1800,15 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Vingt-trois fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Vingt-quatre fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
   `check-pending-action`, `check-password-policy`, `check-weak-password`,
   `check-screen-modes`, `check-inventory`, `check-schema-refs`,
   `check-read-bounds`, `check-workflows`, `check-eas-vocabulary`,
-  `check-migration-rejouable`, `check-sdk-pins` et `check-scripts-executables`
+  `check-migration-rejouable`, `check-sdk-pins`, `check-scripts-executables` et
+  `check-audit-scope`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui
@@ -1874,7 +1876,29 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   nomme le paquet qu'il va chercher **et** porte `--yes` — sans quoi il s'arrête
   sur une invite —, et que la chaîne de `verify` ne télécharge rien : elle tourne
   à chaque poussée, elle ne peut pas dépendre d'un réseau ni d'une version qui
-  changent.
+  changent. `check-audit-scope` mesure enfin la distance entre ce que
+  `npm audit` signale et ce que l'adhérent reçoit : onze alertes modérées, une
+  seule racine — `uuid` < 11.1.1, atteint par `xcode`, que
+  `@expo/config-plugins` emploie pendant le prebuild pour manipuler les fichiers
+  de projet Xcode. `SECURITY.md` affirmait déjà que cette chaîne n'entre pas dans
+  le bundle livré ; c'était une lecture de l'arbre des dépendances, c'est
+  désormais un invariant, et il se vérifie en deux temps. **Aucun fichier de
+  `src/` n'importe la chaîne** : Metro ne construit que ce que les sources
+  atteignent, donc une seule importation de `uuid` ferait entrer l'alerte dans le
+  paquet livré **sans qu'aucune alerte ne change** — le silence exact que ce banc
+  existe pour rompre. Et le **répertoire du `main`** de la dépendance directe ne
+  la référence pas non plus : npm range `@expo/config-plugins` dans
+  `dependencies`, il ne sait pas exprimer « outil de construction », donc c'est
+  le code que Metro atteint qu'il faut lire, pas le paquet. Le second point est un
+  **faisceau**, pas une fermeture transitive calculée, et le banc écrit lui-même
+  où il s'arrête : une importation par chemin dynamique lui échapperait. Le
+  premier, lui, est exact. Comme les autres, il a été éprouvé dans les deux sens —
+  quatre mutations, dont deux témoins verts qu'une remise en forme ne doit pas
+  faire tomber. La première version du banc, elle, accusait le dépôt à tort : elle
+  lisait le chemin par `URL.pathname`, qui **encode en pourcentage**, donc le
+  dossier `WorkBuddy AI` lui arrivait en `WorkBuddy%20AI` et les deux cas
+  tombaient en `ENOENT`. Un rouge qui désigne le mauvais coupable se répare à la
+  source — ici `fileURLToPath` —, jamais en assouplissant l'assertion.
   `check-schema-refs` parcourt l'**arbre syntaxique** du
   schéma, et non son texte : chaque clé étrangère doit viser une table et une
   colonne déclarées, chaque type énuméré cité doit exister, chaque fonction

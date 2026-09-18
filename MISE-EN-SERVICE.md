@@ -116,11 +116,17 @@ n'en voulez plus.
 
 ### 2.3 Ce que je fais ensuite, sans vous
 
-- `eas init` — crée le projet côté Expo et écrit son identifiant dans `app.json` ;
-- `eas env:create` — enregistre les deux variables Supabase pour `development`,
-  `preview` et `production`. Nécessaire : les fichiers `.env.local` ne sont **pas**
-  téléversés vers EAS, qui respecte `.gitignore` ;
+- `npx --yes eas-cli@latest init` — crée le projet côté Expo et écrit son identifiant
+  dans `app.json` ;
+- `npx --yes eas-cli@latest env:create` — enregistre les deux variables Supabase pour
+  `development`, `preview` et `production`. Nécessaire : les fichiers `.env.local` ne
+  sont **pas** téléversés vers EAS, qui respecte `.gitignore` ;
 - `npm run eas:build:preview` — lance la compilation.
+
+**Aucune installation globale n'est nécessaire**, et les trois commandes ci-dessus
+fonctionnent telles quelles : la CLI est cherchée à la demande. Si vous préférez
+l'installer une fois pour toutes (`npm install -g eas-cli`), les scripts continueront de
+marcher — mais la version employée ne serait plus visible nulle part.
 
 Attendu : **10 à 20 minutes** la première fois, puis un lien de téléchargement.
 
