@@ -38,6 +38,13 @@ Sans configuration, l'application **ne plante pas** : elle affiche un écran
 expliquant les variables manquantes. C'est volontaire, et c'est aussi ce qui
 permet à l'intégration continue de compiler le bundle sans aucun secret.
 
+> **Mise en service, pas à pas.** [MISE-EN-SERVICE.md](MISE-EN-SERVICE.md) énumère
+> dans l'ordre les seules actions qui ne peuvent pas être automatisées — créer le
+> projet Supabase, coller les deux fichiers SQL, créer le compte Expo, lancer
+> `eas login` — et, pour chacune, ce qui s'ensuit côté dépôt. Le partage y est
+> explicite : aucun identifiant n'est saisi par un tiers, mais tout ce qui peut
+> être fait sans vous l'est déjà.
+
 ## 3. Configuration des clés d'API
 
 Toute la configuration passe par **un seul fichier** : `src/config/env.ts`.
