@@ -522,7 +522,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-workflows.test.mjs   la fermeture de la liste des flux attendus
 │   ├── check-eas-vocabulary.test.mjs  les clefs de eas.json, contre le schéma d'EAS
 │   ├── check-migration-rejouable.test.mjs  la migration, rejouable sans historique
-│   └── check-sdk-pins.test.mjs    les paquets installés, contre les épinglages du SDK
+│   ├── check-sdk-pins.test.mjs    les paquets installés, contre les épinglages du SDK
+│   └── check-scripts-executables.test.mjs  les commandes que `package.json` lance, et leur existence
 └── .github/workflows/             CI et build EAS
 ```
 
@@ -1462,7 +1463,7 @@ une variable, échanger l'ordre de `.eq()` et `.in()`.
 ### Diagnostic Expo
 
 ```bash
-npm run doctor          # npx expo-doctor
+npm run doctor          # npx --yes expo-doctor@latest
 ```
 
 Ce contrôle valide `app.json` contre le schéma du SDK **réellement installé**, et
@@ -1475,14 +1476,21 @@ qui n'aurait jamais pris la couleur de marque.
 
 Il n'est pas dans `npm run verify` : `npx` doit télécharger l'outil, ce qui
 suppose un accès réseau que la CI n'a pas à exiger. À lancer avant un build EAS.
+Mesuré : 21 contrôles sur 21 passent.
 
 ## 7. EAS Build
 
 ```bash
-npm install -g eas-cli
-eas login
-eas init          # renseigne extra.eas.projectId dans app.json
+npx --yes eas-cli@latest login
+npx --yes eas-cli@latest init    # renseigne extra.eas.projectId dans app.json
 ```
+
+**Aucune installation globale n'est nécessaire**, et c'est délibéré : les
+scripts `eas:build:*` de `package.json` passent eux aussi par `npx`. Une
+installation globale marcherait, mais elle rendrait la version de la CLI
+invisible — elle ne serait ni dans `package-lock.json`, ni sur une autre
+machine, ni dans l'intégration continue. Le champ `cli.version` d'`eas.json`
+garde le minimum exigé.
 
 | Profil        | Usage                                         | Distribution | Format |
 | ------------- | --------------------------------------------- | ------------ | ------ |
@@ -1791,14 +1799,14 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Vingt-deux fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Vingt-trois fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
   `check-pending-action`, `check-password-policy`, `check-weak-password`,
   `check-screen-modes`, `check-inventory`, `check-schema-refs`,
   `check-read-bounds`, `check-workflows`, `check-eas-vocabulary`,
-  `check-migration-rejouable` et `check-sdk-pins`
+  `check-migration-rejouable`, `check-sdk-pins` et `check-scripts-executables`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui
@@ -1856,7 +1864,17 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   non contraint l'empêcherait silencieusement de se mettre à jour. Les types de
   montée encore admis se **déduisent** de la plage du SDK plutôt que d'être
   recopiés : rien n'est proposé sur un épinglage exact, le correctif seul passe
-  sous un « ~ », et la mineure sous un « ^ ».
+  sous un « ~ », et la mineure sous un « ^ ». `check-scripts-executables` regarde
+  ce que `package.json` promet, et que rien n'exécutait : ses commandes. Une
+  commande peut nommer un binaire absent pendant des mois sans qu'aucune porte ne
+  s'en aperçoive — mesuré, `npm run doctor` appelait `expo-doctor`, qui n'existe
+  pas dans `node_modules/.bin/`, et les trois `npm run eas:build:*` appelaient un
+  `eas` qui supposait une installation globale. Le banc exige que chaque commande
+  soit un binaire du dépôt ou l'une des trois déclarées hors du dépôt, qu'un `npx`
+  nomme le paquet qu'il va chercher **et** porte `--yes` — sans quoi il s'arrête
+  sur une invite —, et que la chaîne de `verify` ne télécharge rien : elle tourne
+  à chaque poussée, elle ne peut pas dépendre d'un réseau ni d'une version qui
+  changent.
   `check-schema-refs` parcourt l'**arbre syntaxique** du
   schéma, et non son texte : chaque clé étrangère doit viser une table et une
   colonne déclarées, chaque type énuméré cité doit exister, chaque fonction
