@@ -49,9 +49,27 @@
  *
  * CE QUE CE FICHIER NE PEUT PAS VOIR
  * ----------------------------------
- * Il lit le fichier, il n'exécute rien : que la migration soit **valide** est
- * l'affaire de `npm run sql:check` (l'analyseur PostgreSQL), et que son
- * application ait réussi est l'affaire de la vérification qui interroge la base.
+ * Il lit le fichier, il n'exécute rien. La frontière a longtemps été écrite
+ * ainsi : « que la migration soit **valide** est l'affaire de `npm run
+ * sql:check`, et que son application ait réussi est l'affaire de la vérification
+ * qui interroge la base ». **Les deux moitiés étaient fausses, et mesurées
+ * telles.**
+ *
+ * `npm run sql:check` passe le fichier à l'analyseur PostgreSQL : il en vérifie
+ * la **syntaxe**, et ne résout aucun nom de table. Quant à « la vérification qui
+ * interroge la base », elle n'existait pas — aucun banc n'exécutait la migration.
+ *
+ * Conséquence, et c'est ce qui a bloqué la mise en service : un adhérent a collé
+ * le fichier dans l'éditeur SQL de Supabase et reçu `42P01: relation
+ * "public.profiles" does not exist`, alors que **toute la suite était verte**.
+ * `is_admin()` était la seule fonction en `language sql` du fichier, et un corps
+ * `language sql` est analysé à sa création : la section « Fonctions utilitaires »
+ * précédait la section « Tables ».
+ *
+ * La frontière est désormais tenue par `check-migration-applicable.test.mjs`, qui
+ * **exécute** la migration et le seed, deux fois chacun, contre un vrai
+ * PostgreSQL. Les deux bancs sont complémentaires : celui-ci lit le texte et dit
+ * quelle garde manque, l'autre exécute et dit que le fichier s'applique.
  *
  * LA LISTE DES FICHIERS EST FERMÉE, ET ELLE A FALLU LA FERMER
  * -----------------------------------------------------------

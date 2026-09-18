@@ -40,6 +40,12 @@ updates:
           - 'react-native-*'
         update-types: ['minor', 'patch']
       # Outillage : aucun impact sur le bundle livré, donc sans risque.
+      #
+      # `libpg-query` analyse la syntaxe SQL, `@electric-sql/pglite` **exécute**
+      # la migration contre un vrai PostgreSQL — tous deux en développement
+      # seulement. Une montée de l'un comme de l'autre est sans risque pour une
+      # raison précise : les bancs les exercent, donc une rupture de leur part
+      # fait tomber `npm run verify` au lieu de passer inaperçue.
       tooling:
         patterns:
           - 'eslint'
@@ -49,6 +55,7 @@ updates:
           - 'prettier'
           - 'typescript'
           - 'libpg-query'
+          - '@electric-sql/pglite'
         update-types: ['minor', 'patch']
       # Reste : Supabase, React Navigation, React.
       other:

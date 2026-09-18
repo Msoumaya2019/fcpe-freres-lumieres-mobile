@@ -83,115 +83,7 @@ $$;
 
 
 -- =============================================================================
---  2. Fonctions utilitaires
--- =============================================================================
-
---  ---------------------------------------------------------------------------
---  `is_admin()` — test de rôle, utilisable dans les politiques RLS
---  ---------------------------------------------------------------------------
---  `security definer` est indispensable : la fonction lit `profiles`, et une
---  politique de `profiles` qui interrogerait `profiles` par les droits de
---  l'appelant se rappellerait elle-même — PostgreSQL renvoie alors
---  « infinite recursion detected in policy ». En s'exécutant avec les droits du
---  propriétaire, la lecture contourne les politiques et la récursion disparaît.
---
---  `set search_path = ''` ferme l'autre piège classique de `security definer` :
---  sans lui, un schéma placé plus haut dans le `search_path` de l'appelant
---  pourrait redéfinir `profiles` et faire exécuter la fonction sur une fausse
---  table. Tous les noms sont donc qualifiés explicitement.
-create or replace function public.is_admin()
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select exists (
-    select 1
-    from public.profiles
-    where id = (select auth.uid())
-      and role = 'admin'
-  );
-$$;
-
---  `auth.uid()` est enveloppé dans un sous-`select` partout dans ce fichier :
---  PostgreSQL l'évalue alors une seule fois par requête au lieu d'une fois par
---  ligne, ce qui change tout sur une table de quelques milliers de messages.
-comment on function public.is_admin() is
-  'Vrai si l''appelant est un administrateur. Utilisée par les politiques RLS.';
-
-revoke all on function public.is_admin() from public;
-grant execute on function public.is_admin() to authenticated;
-
-
---  ---------------------------------------------------------------------------
---  `set_updated_at()` — horodatage automatique des modifications
---  ---------------------------------------------------------------------------
---  Sans ce déclencheur, `updated_at` reste à sa valeur d'insertion et devient
---  trompeur : il faut alors le renseigner depuis chaque appelant, ce qui finit
---  par être oublié à un endroit.
-create or replace function public.set_updated_at()
-returns trigger
-language plpgsql
-as $$
-begin
-  new.updated_at = now();
-  return new;
-end;
-$$;
-
---  Révoqué comme les autres fonctions du fichier, pour que la règle soit
---  uniforme et vérifiable d'un coup d'œil. Ce n'est pas une faille corrigée :
---  une fonction qui rend `trigger` ne peut pas être appelée directement, et les
---  déclencheurs de ce fichier s'exécutent sans que l'appelant ait besoin du
---  droit `execute` — `handle_new_user` et `prevent_role_change` en sont la
---  preuve, révoquées elles aussi et parfaitement fonctionnelles.
-revoke all on function public.set_updated_at() from public;
-
-
---  ---------------------------------------------------------------------------
---  `handle_new_user()` — création du profil à l'inscription
---  ---------------------------------------------------------------------------
---  Le profil est créé par la base, au moment de l'insertion dans `auth.users`,
---  et non par l'application après l'inscription. Sinon, une application fermée
---  entre les deux laisserait un compte sans profil, donc sans nom affichable
---  dans la discussion — un état dont on ne sort qu'à la main.
---
---  Le nom vient des métadonnées transmises par `signUp()`. À défaut, la partie
---  locale de l'adresse e-mail fait un libellé acceptable — l'adresse est lue
---  sur `auth.users`, pas recopiée dans `profiles`.
-create or replace function public.handle_new_user()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-  insert into public.profiles (id, display_name)
-  values (
-    new.id,
-    coalesce(
-      nullif(btrim(new.raw_user_meta_data ->> 'display_name'), ''),
-      split_part(coalesce(new.email, ''), '@', 1)
-    )
-  )
-  on conflict (id) do nothing;
-
-  return new;
-end;
-$$;
-
-revoke all on function public.handle_new_user() from public;
-
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row
-  execute function public.handle_new_user();
-
-
--- =============================================================================
---  3. Tables
+--  2. Tables
 -- =============================================================================
 
 --  ---------------------------------------------------------------------------
@@ -332,6 +224,123 @@ create table if not exists public.discussion_messages (
 
   constraint discussion_messages_body_not_blank check (char_length(btrim(body)) between 1 and 2000)
 );
+
+
+-- =============================================================================
+--  3. Fonctions utilitaires
+-- =============================================================================
+
+--  ---------------------------------------------------------------------------
+--  `is_admin()` — test de rôle, utilisable dans les politiques RLS
+--  ---------------------------------------------------------------------------
+--  `security definer` est indispensable : la fonction lit `profiles`, et une
+--  politique de `profiles` qui interrogerait `profiles` par les droits de
+--  l'appelant se rappellerait elle-même — PostgreSQL renvoie alors
+--  « infinite recursion detected in policy ». En s'exécutant avec les droits du
+--  propriétaire, la lecture contourne les politiques et la récursion disparaît.
+--
+--  `set search_path = ''` ferme l'autre piège classique de `security definer` :
+--  sans lui, un schéma placé plus haut dans le `search_path` de l'appelant
+--  pourrait redéfinir `profiles` et faire exécuter la fonction sur une fausse
+--  table. Tous les noms sont donc qualifiés explicitement.
+--  Cette fonction est la **seule** du fichier ecrite en `language sql`, et c'est
+--  ce qui impose l'ordre des sections : un corps `language sql` est analyse **a
+--  sa creation**, pas a son premier appel, donc `public.profiles` doit deja
+--  exister. Mesure contre un vrai PostgreSQL : dans l'ordre precedent, l'editeur
+--  SQL de Supabase renvoie `42P01: relation "public.profiles" does not exist`.
+--  Les quatre autres fonctions sont en PL/pgSQL, dont le corps n'est analyse
+--  qu'a l'execution — elles pourraient preceder les tables, mais la section reste
+--  groupee pour que la regle se lise d'un coup.
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = (select auth.uid())
+      and role = 'admin'
+  );
+$$;
+
+--  `auth.uid()` est enveloppé dans un sous-`select` partout dans ce fichier :
+--  PostgreSQL l'évalue alors une seule fois par requête au lieu d'une fois par
+--  ligne, ce qui change tout sur une table de quelques milliers de messages.
+comment on function public.is_admin() is
+  'Vrai si l''appelant est un administrateur. Utilisée par les politiques RLS.';
+
+revoke all on function public.is_admin() from public;
+grant execute on function public.is_admin() to authenticated;
+
+
+--  ---------------------------------------------------------------------------
+--  `set_updated_at()` — horodatage automatique des modifications
+--  ---------------------------------------------------------------------------
+--  Sans ce déclencheur, `updated_at` reste à sa valeur d'insertion et devient
+--  trompeur : il faut alors le renseigner depuis chaque appelant, ce qui finit
+--  par être oublié à un endroit.
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+--  Révoqué comme les autres fonctions du fichier, pour que la règle soit
+--  uniforme et vérifiable d'un coup d'œil. Ce n'est pas une faille corrigée :
+--  une fonction qui rend `trigger` ne peut pas être appelée directement, et les
+--  déclencheurs de ce fichier s'exécutent sans que l'appelant ait besoin du
+--  droit `execute` — `handle_new_user` et `prevent_role_change` en sont la
+--  preuve, révoquées elles aussi et parfaitement fonctionnelles.
+revoke all on function public.set_updated_at() from public;
+
+
+--  ---------------------------------------------------------------------------
+--  `handle_new_user()` — création du profil à l'inscription
+--  ---------------------------------------------------------------------------
+--  Le profil est créé par la base, au moment de l'insertion dans `auth.users`,
+--  et non par l'application après l'inscription. Sinon, une application fermée
+--  entre les deux laisserait un compte sans profil, donc sans nom affichable
+--  dans la discussion — un état dont on ne sort qu'à la main.
+--
+--  Le nom vient des métadonnées transmises par `signUp()`. À défaut, la partie
+--  locale de l'adresse e-mail fait un libellé acceptable — l'adresse est lue
+--  sur `auth.users`, pas recopiée dans `profiles`.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.profiles (id, display_name)
+  values (
+    new.id,
+    coalesce(
+      nullif(btrim(new.raw_user_meta_data ->> 'display_name'), ''),
+      split_part(coalesce(new.email, ''), '@', 1)
+    )
+  )
+  on conflict (id) do nothing;
+
+  return new;
+end;
+$$;
+
+revoke all on function public.handle_new_user() from public;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row
+  execute function public.handle_new_user();
 
 
 -- =============================================================================

@@ -531,6 +531,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-workflows.test.mjs   la fermeture de la liste des flux attendus
 │   ├── check-eas-vocabulary.test.mjs  les clefs de eas.json, contre le schéma d'EAS
 │   ├── check-migration-rejouable.test.mjs  la migration, rejouable sans historique
+│   ├── check-migration-applicable.test.mjs  la migration, exécutée contre un vrai PostgreSQL
 │   ├── check-sdk-pins.test.mjs    les paquets installés, contre les épinglages du SDK
 │   ├── check-scripts-executables.test.mjs  les commandes que `package.json` lance, et leur existence
 │   ├── check-audit-scope.test.mjs  ce qui est livré, et ce qui est seulement construit
@@ -1810,14 +1811,15 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Vingt-cinq fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Vingt-six fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
   `check-pending-action`, `check-password-policy`, `check-weak-password`,
   `check-screen-modes`, `check-inventory`, `check-schema-refs`,
   `check-read-bounds`, `check-workflows`, `check-eas-vocabulary`,
-  `check-migration-rejouable`, `check-sdk-pins`, `check-scripts-executables`,
+  `check-migration-rejouable`, `check-migration-applicable`, `check-sdk-pins`,
+  `check-scripts-executables`,
   `check-audit-scope` et `check-parser-surface`
   couvrent les
   gardes, les
@@ -1861,7 +1863,21 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   `if not exists`, chaque `create index` aussi, chaque type énuméré vit dans un
   bloc `do` qui tolère le doublon, et chaque politique comme chaque déclencheur
   est précédé de sa garde — au **même nom** et sur la **même table**, ce qu'un
-  simple décompte ne vérifierait pas. `check-sdk-pins` regarde un accord qui
+  simple décompte ne vérifierait pas. `check-migration-applicable` a été écrit
+  **après coup**, et il manquait : il **exécute** la migration — et le seed —
+  deux fois chacun, contre un vrai PostgreSQL 18.3 compilé en WebAssembly, dans
+  le processus de test, sans serveur ni Docker. Motif mesuré : un adhérent a collé
+  le fichier dans l'éditeur SQL de Supabase et reçu `42P01: relation
+"public.profiles" does not exist (ligne 111)`, alors que **toute la suite était
+  verte**. `is_admin()` est la seule fonction du fichier écrite en `language sql`,
+  et un corps `language sql` est analysé **à sa création** — la section
+  « Fonctions utilitaires » ne pouvait donc pas précéder la section « Tables ».
+  Aucun banc lisant le texte ne pouvait le voir : `sql:check` en vérifie la
+  syntaxe sans résoudre un seul nom de table, et `check-migration-rejouable`
+  comptait les gardes d'un fichier qui ne s'appliquait pas. Sa portée s'arrête où
+  elle doit : il prouve que le SQL **s'applique**, pas que les politiques RLS
+  **filtrent** — PGlite n'a ni GoTrue ni jetons, et un `grant` à un rôle vide ne
+  démontre rien. `check-sdk-pins` regarde un accord qui
   n'avait aucun gardien : celui des paquets installés avec les versions que le SDK
   d'Expo contraint. `package.json` et l'API d'Expo ne peuvent pas se lire, et la
   divergence va **dans le sens qui ne fait aucun bruit** — `react-native@0.86.3`
