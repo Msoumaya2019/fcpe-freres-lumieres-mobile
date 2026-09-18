@@ -521,7 +521,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-schema-refs.test.mjs  les renvois du schéma : clés, types, portées, seed.sql, new/old
 │   ├── check-workflows.test.mjs   la fermeture de la liste des flux attendus
 │   ├── check-eas-vocabulary.test.mjs  les clefs de eas.json, contre le schéma d'EAS
-│   └── check-migration-rejouable.test.mjs  la migration, rejouable sans historique
+│   ├── check-migration-rejouable.test.mjs  la migration, rejouable sans historique
+│   └── check-sdk-pins.test.mjs    les paquets installés, contre les épinglages du SDK
 └── .github/workflows/             CI et build EAS
 ```
 
@@ -1790,14 +1791,14 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Vingt-et-un fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Vingt-deux fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
   `check-pending-action`, `check-password-policy`, `check-weak-password`,
   `check-screen-modes`, `check-inventory`, `check-schema-refs`,
-  `check-read-bounds`, `check-workflows`, `check-eas-vocabulary` et
-  `check-migration-rejouable`
+  `check-read-bounds`, `check-workflows`, `check-eas-vocabulary`,
+  `check-migration-rejouable` et `check-sdk-pins`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui
@@ -1840,7 +1841,17 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   `if not exists`, chaque `create index` aussi, chaque type énuméré vit dans un
   bloc `do` qui tolère le doublon, et chaque politique comme chaque déclencheur
   est précédé de sa garde — au **même nom** et sur la **même table**, ce qu'un
-  simple décompte ne vérifierait pas. `check-schema-refs` parcourt l'**arbre syntaxique** du
+  simple décompte ne vérifierait pas. `check-sdk-pins` regarde un accord qui
+  n'avait aucun gardien : celui des paquets installés avec les versions que le SDK
+  d'Expo épingle. `package.json` et l'API d'Expo ne peuvent pas se lire, et la
+  divergence va **dans le sens qui ne fait aucun bruit** — `react-native@0.86.3`
+  accepte `react: ^19.2.3`, donc une montée de `react` à `19.3.0` passe `npm ci`,
+  passe `tsc`, et rompt l'accord. Dependabot l'avait proposée trois fois de suite.
+  Le relevé vient de `api.expo.dev`, avec sa source et sa date, et la liste des
+  paquets épinglés est comparée dans les deux sens à celle que `dependabot.yml`
+  ignore : cesser d'ignorer un paquet épinglé produirait une pull request qui
+  rompt l'accord, et ignorer un paquet non épinglé l'empêcherait silencieusement
+  de se mettre à jour. `check-schema-refs` parcourt l'**arbre syntaxique** du
   schéma, et non son texte : chaque clé étrangère doit viser une table et une
   colonne déclarées, chaque type énuméré cité doit exister, chaque fonction
   `security definer` doit fixer son `search_path`, chaque colonne nommée par

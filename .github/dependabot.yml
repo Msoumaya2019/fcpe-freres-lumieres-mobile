@@ -56,6 +56,29 @@ updates:
           - '*'
         update-types: ['minor', 'patch']
 
+    # Paquets dont la version est épinglée par le SDK d'Expo, et non choisie ici.
+    #
+    # Relevé le 2026-09-18 sur `https://api.expo.dev/v2/versions/latest` :
+    # `sdkVersions["57.0.0"]` déclare `facebookReactVersion = 19.2.3`,
+    # `facebookReactNativeVersion = 0.86.3`, `relatedPackages.react = 19.2.3`,
+    # `relatedPackages.typescript = ~6.0.3`, `relatedPackages["@types/react"] = ~19.2.4`.
+    #
+    # Sans cette liste, Dependabot propose des montées qui **passent npm** et
+    # divergent en silence de ce que le SDK attend : `react-native@0.86.3` accepte
+    # `react: ^19.2.3`, donc rien ne proteste à l'installation. Mesuré — trois des
+    # quatre pull requests ouvertes venaient de là.
+    #
+    # Ces paquets se montent par `npx expo install --fix`, après une montée de SDK,
+    # et pas par npm. `scripts/check-sdk-pins.test.mjs` tient l'accord entre cette
+    # liste et `package.json` : les deux doivent nommer les mêmes paquets.
+    ignore:
+      - dependency-name: react
+      - dependency-name: react-native
+      - dependency-name: '@types/react'
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+      - dependency-name: typescript
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
