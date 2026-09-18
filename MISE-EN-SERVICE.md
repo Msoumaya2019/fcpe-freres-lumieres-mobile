@@ -1,8 +1,10 @@
 # Mise en service — le guide, étape par étape
 
 > **En résumé.** Les étapes 1, 2 et 3 sont faites : Supabase répond, le projet Expo
-> est créé, le jeton est posé. **Rien ne bloque plus l'APK.** Ce qui reste — le SMTP,
-> les quatre réglages, l'iPhone — peut attendre le premier essai sur téléphone.
+> est créé, le jeton est posé. **Les deux binaires sont livrés** — l'APK Android et
+> l'IPA non signé —, et **le relais SMTP est vérifié de bout en bout**, remise
+> comprise. Ce qui reste tient en trois gestes : recopier les quatre valeurs SMTP dans
+> Supabase, y poser les quatre réglages, et installer l'application sur un téléphone.
 
 ---
 
@@ -297,45 +299,47 @@ Sans configuration, Supabase envoie les e-mails de confirmation depuis son propr
 service : **deux messages par heure**, et souvent classés en indésirable.
 
 Pour envoyer depuis votre domaine, il faut quatre valeurs. Vous avez ouvert un compte
-**Brevo** : les quatre se lisent donc au même endroit, et **la clef SMTP n'est pas la
-clef d'API** — Brevo les distingue, et le relais refuse la seconde.
+**Brevo** : les quatre se lisent au même endroit, et **la clef SMTP n'est pas la clef
+d'API** — Brevo les distingue, et le relais refuse la seconde.
 
-| Ce qu'il faut        | Où le prendre                                                          |
+| Ce qu'il faut        | Valeur mesurée le 19 septembre 2026                                    |
 | -------------------- | ---------------------------------------------------------------------- |
 | Hôte et port SMTP    | `smtp-relay.brevo.com`, port **587** (ou 2525 ; **465** avec SSL)      |
-| Identifiant          | onglet **SMTP** de `app.brevo.com/settings/keys/smtp`                  |
-| Clef SMTP            | **le même écran**, même onglet — elle commence par `xsmtpsib-`         |
-| Adresse d'expédition | `mohamed.chiker@live.fr`, **à valider** dans _Senders & IP_ chez Brevo |
+| Identifiant          | `ba01ac001@smtp-brevo.com` — **celui du relais**, pas l'adresse e-mail |
+| Clef SMTP            | la clef du compte, `xsmtpsib-…` — **pas la clef d'API** `xkeysib-…`    |
+| Adresse d'expédition | `mohamed.chiker@live.fr`, validée et **active** chez Brevo             |
 
-**Mesuré le 19 septembre 2026 — le 535 ne venait pas du blocage d'IP.** La connexion au
-relais s'établit et le chiffrement aussi (`smtp-relay.brevo.com:587`, `STARTTLS`
-accepté), mais l'authentification est **refusée** : `535 5.7.8 Authentication failed`.
+**Le `535` est résolu, et ce n'était pas le blocage d'IP.** La cause était une **clef
+SMTP étrangère au compte**. Quatre essais croisés le montrent, et ils sont tous
+mesurés :
 
-Le blocage des adresses inconnues a bien été levé, et c'est mesurable : la clef d'API
-répond désormais `200`. Ce qu'elle dit du compte :
+| Clef essayée          | Identifiant                | Réponse            |
+| --------------------- | -------------------------- | ------------------ |
+| celle qui était notée | `ba01ac001@smtp-brevo.com` | **refusée** `535`  |
+| celle qui était notée | `mohamed.chiker@live.fr`   | **refusée** `535`  |
+| **celle du compte**   | `ba01ac001@smtp-brevo.com` | **acceptée** `235` |
+| celle du compte       | `mohamed.chiker@live.fr`   | **refusée** `535`  |
 
-| Constat                           | Valeur                                            |
-| --------------------------------- | ------------------------------------------------- |
-| Compte                            | `mohamed.chiker@live.fr` (société `Msoumaya2019`) |
-| Forfait                           | gratuit, **300 envois**                           |
-| Relais SMTP                       | **activé**                                        |
-| Adresse d'expédition              | `mohamed.chiker@live.fr`, **validée et active**   |
-| Envois SMTP des 90 derniers jours | **0**                                             |
+Deux enseignements : la clef doit être celle du compte, et l'identifiant est celui du
+relais — jamais l'adresse e-mail. L'hypothèse du blocage d'IP, plausible, était donc
+fausse ; elle a été réfutée par la mesure, deux fois plutôt qu'une.
 
-Autrement dit : tout est en place **sauf** l'authentification. Et le blocage d'IP étant
-levé, il ne l'explique pas — l'hypothèse était plausible, la mesure la réfute. Il reste
-donc deux causes, et deux seulement :
+**La remise est prouvée, pas seulement l'acceptation.** Un message d'essai a été
+envoyé, le relais a répondu sans erreur, puis l'API du compte a rendu l'événement
+`delivered`, horodaté, avec son identifiant de message. Le compteur du forfait est
+passé de **300 à 299** envois. Ce que le compte déclare par ailleurs :
 
-1. **Le blocage est levé pour l'API, pas pour le SMTP.** Les deux se règlent séparément,
-   sur le même écran : `app.brevo.com/security/authorised_ips`, une ligne **API keys** et
-   une ligne **SMTP keys**. Vérifiez que **les deux** sont _Deactivated_.
-2. **La clef SMTP n'est plus celle du compte.** Reprenez-la sur
-   `app.brevo.com/settings/keys/smtp`, onglet **SMTP**, **avec l'identifiant du même
-   écran** — Brevo ne montre la clef qu'une fois, et une clef régénérée invalide
-   l'ancienne sans prévenir.
+| Constat              | Valeur                                                        |
+| -------------------- | ------------------------------------------------------------- |
+| Compte               | `mohamed.chiker@live.fr` (société `Msoumaya2019`)             |
+| Forfait              | gratuit, **300 envois** — 299 restants                        |
+| Relais SMTP          | **activé**, et il annonce lui-même `ba01ac001@smtp-brevo.com` |
+| Adresse d'expédition | `mohamed.chiker@live.fr`, **validée et active**               |
 
-Dans l'un comme dans l'autre cas, dites-le-moi : je refais l'essai, il ne prend qu'une
-seconde.
+Une précaution de lecture, pour la prochaine fois : les statistiques de l'API
+**retardent de quelques minutes**. Deux interrogations à deux minutes d'intervalle ont
+donné **0** puis **2** événements pour le même message. Une liste vide ne prouve donc
+pas qu'un envoi a échoué — il faut interroger de nouveau avant de conclure.
 
 **Pourquoi il ne faut pas se contenter d'ajouter une adresse IP.** **Supabase envoie les
 e-mails depuis sa propre infrastructure**, dont les adresses ne sont ni connues d'avance
@@ -344,11 +348,10 @@ laissé actif couperait la confirmation d'inscription **en production**, sans me
 l'explique. Ce réglage est utile pour une clef d'API appelée depuis un serveur fixe ; il
 est inadapté ici.
 
-**Ce réglage se fait dans le tableau de bord Supabase, et je ne peux pas cliquer à
-votre place** : je n'y ai pas accès. L'écran est **Authentication → Emails → SMTP
-Settings** ; les quatre valeurs ci-dessus s'y recopient telles quelles, et
-l'expéditeur y reprend l'adresse validée. Je vérifierai ensuite qu'un e-mail de
-confirmation arrive réellement.
+**Il ne reste qu'à recopier ces valeurs dans le tableau de bord Supabase, et je ne peux
+pas cliquer à votre place** : je n'y ai pas accès. L'écran est
+**Authentication → Emails → SMTP Settings** ; les quatre valeurs ci-dessus s'y recopient
+telles quelles. Je vérifierai ensuite qu'un e-mail de confirmation arrive réellement.
 
 ---
 
@@ -434,9 +437,9 @@ lien utilisable. Les deux adresses sont recopiées du fichier
 - [x] Project URL et publishable key envoyées dans la conversation
 - [x] Compte Expo créé — nom d'utilisateur `mchiker`
 - [x] Jeton d'accès posé en secret du dépôt, et compilation lancée
-- [ ] Télécharger l'IPA non signé et le signer avec ESign
+- [ ] Signer l'IPA non signé avec ESign _(il est compilé et vérifié)_
 
-**Aucune case ne bloque plus l'APK.** Les cases cochées le sont parce que je les ai  
+**Aucune case ne bloque plus l'APK ni l'IPA.** Les cases cochées le sont parce que je les ai  
 **mesurées**, pas parce qu'elles devraient l'être ; celles qui restent ouvertes  
 demandent soit votre mot de passe, soit une lecture que la clé publique n'autorise  
 pas.
@@ -444,7 +447,7 @@ pas.
 **Plus tard, après le premier essai :**
 
 - [ ] Les quatre réglages du tableau de bord
-- [ ] Le SMTP
+- [ ] Recopier les quatre valeurs SMTP dans Supabase _(le relais, lui, est vérifié)_
 - [ ] Le jeton Expo pour GitHub _(facultatif)_
 
 ---
@@ -455,10 +458,13 @@ Pour que vous sachiez ce que vous n'avez pas à faire : les cinq écrans et leur
 navigation, l'authentification et la réinitialisation de mot de passe, les six tables  
 et leurs politiques de sécurité, les contrôles de schéma et de politiques, la chaîne  
 de vérification complète (`npm run verify`, **29 fichiers de test**), les  
-trois flux GitHub Actions, le dépôt public sans aucun secret, et la documentation.
+trois flux GitHub Actions, le dépôt public sans aucun secret, les deux binaires  
+compilés — l'APK Android et l'IPA non signé —, le relais SMTP vérifié de bout en  
+bout, remise comprise, et la documentation.
 
 ## Une seule chose à retenir
 
-**Rien ne bloque plus l'APK.** L'étape 4 — les e-mails — est la seule qui doive être  
-faite avant d'ouvrir aux adhérents ; les étapes 5 et 6 peuvent attendre le premier  
-essai, et je m'occupe de tout le reste sans vous.
+**Rien ne bloque plus l'APK ni l'IPA, et le SMTP est vérifié.** L'étape 4 — recopier
+les quatre valeurs dans Supabase — est la seule qui doive être faite avant d'ouvrir aux
+adhérents ; les étapes 5 et 6 peuvent attendre le premier essai, et je m'occupe de tout
+le reste sans vous.
