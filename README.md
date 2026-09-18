@@ -1941,6 +1941,19 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   fonction écrite en SQL doit se résoudre dans sa portée — de l'intérieur vers
   l'extérieur, comme PostgreSQL — et chaque colonne lue sur `new` ou `old` dans un
   corps PL/pgSQL doit appartenir à la table du déclencheur qui l'exécute. Une
+  table citée dans un `from` doit être déclarée, et **la condition d'une
+  jointure est lue comme le reste**. Ce dernier point a été trouvé par la mesure,
+  pas par la lecture : un `on` vit dans le `from`, que le parcours évite pour ne
+  pas relire les sous-requêtes, et **rien ne le lisait**. Une jointure sur une
+  colonne inexistante et une jointure sur une table inexistante laissaient le banc
+  vert — parce que le SQL du projet ne contient aucune jointure, et que la branche
+  n'était donc exercée par rien. Une table d'un autre schéma, elle, reste
+  acceptée : ses colonnes ne sont pas dans nos migrations, et l'accepter est la
+  seule réponse honnête — mais une table `public` non déclarée n'est pas
+  « inconnue », elle n'existe pas, et les deux cas rendaient pourtant le même
+  `null`. La branche est désormais exercée par six formes légitimes — `left join`,
+  jointures imbriquées, schéma écrit des deux côtés, table externe — qui ne
+  doivent pas la faire tomber. Une
   faute de frappe y est une syntaxe valide, que
   `sql:check` laisse donc passer.
   Les trois

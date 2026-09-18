@@ -423,17 +423,32 @@ const SCHEMA = await lireLeSchema();
  * (`colonnes`) pour une sous-requête nommée, soit **rien de connu** — c'est le
  * cas d'une table externe comme `auth.users`, dont les colonnes ne sont pas dans
  * nos migrations : accepter tout est alors la seule réponse honnête.
+ *
+ * **Une table `public` non déclarée n'est pas ce cas-là.** Ses colonnes ne sont
+ * pas « inconnues » : la table n'existe pas, et la référence échouerait à
+ * l'exécution. Confondre les deux faisait passer une table absente sans un mot —
+ * mesuré, `from public.inconnue p` laissait le banc vert, et `colonnesDe`
+ * rendait `null`, que `resoudre` lit comme « tout se résout ». Le schéma est
+ * donc vérifié ici, à l'endroit où la portée se construit, et l'écart est
+ * rapporté comme les autres.
  */
-function portee(select) {
+function portee(select, rapport, contexte) {
   const entrees = [];
 
   for (const element of select.fromClause ?? []) {
     const variable = element.RangeVar;
     if (variable !== undefined) {
+      const schema = variable.schemaname ?? SCHEMA_PUBLIC;
+      const table = variable.relname;
+
+      if (schema === SCHEMA_PUBLIC && !SCHEMA.tables.has(table)) {
+        rapport?.fautives.push(`${contexte} : la table « ${table} » n'est pas déclarée`);
+      }
+
       entrees.push({
-        nom: variable.alias?.aliasname ?? variable.relname,
-        schema: variable.schemaname ?? SCHEMA_PUBLIC,
-        table: variable.relname,
+        nom: variable.alias?.aliasname ?? table,
+        schema,
+        table,
       });
       continue;
     }
@@ -454,14 +469,64 @@ function portee(select) {
 
     const jointure = element.JoinExpr;
     if (jointure !== undefined) {
-      entrees.push(...portee({ fromClause: [jointure.larg, jointure.rarg] }));
+      entrees.push(...portee({ fromClause: [jointure.larg, jointure.rarg] }, rapport, contexte));
     }
   }
 
   return entrees;
 }
 
-/** Les colonnes qu'une entrée de portée porte, ou `null` si elles sont inconnues. */
+/**
+ * Les conditions de jointure d'un `from`, à tous les niveaux.
+ *
+ * Le parcours générique **évite le `from` entier** — pour ne pas relire les
+ * sous-requêtes, déjà lues avec leur propre portée. La condition d'une jointure
+ * vit pourtant là, et n'était donc atteinte par personne : un `on` n'était
+ * jamais lu, et une colonne inconnue y passait sans bruit. Mesuré, deux
+ * mutations — `on a.author_idd = p.id`, `on a.author_id = p.inexistant` — sont
+ * restées vertes.
+ *
+ * C'est le défaut que la branche `JoinExpr` portait depuis le début : le SQL du
+ * projet ne contient **aucune jointure**, donc rien ne l'exerçait. Un garde-fou
+ * que rien n'exerce n'existe pas.
+ *
+ * La descente suit `larg` et `rarg`, parce qu'une jointure s'imbrique : `a join
+ * b on … join c on …` est un `JoinExpr` dans un `JoinExpr`.
+ */
+function conditionsDeJointure(noeud, trouvees = []) {
+  if (Array.isArray(noeud)) {
+    for (const element of noeud) {
+      conditionsDeJointure(element, trouvees);
+    }
+    return trouvees;
+  }
+  if (noeud === null || typeof noeud !== 'object') {
+    return trouvees;
+  }
+
+  const jointure = noeud.JoinExpr;
+  if (jointure === undefined) {
+    return trouvees;
+  }
+
+  if (jointure.quals !== undefined) {
+    trouvees.push(jointure.quals);
+  }
+  conditionsDeJointure([jointure.larg, jointure.rarg], trouvees);
+  return trouvees;
+}
+
+/**
+ * Les colonnes qu'une entrée de portée porte, ou `null` si elles sont inconnues.
+ *
+ * `null` couvre deux situations qu'il ne faut **pas** confondre : une table d'un
+ * autre schéma, dont les colonnes ne sont pas dans nos migrations et qu'on
+ * accepte faute de mieux ; et une table `public` non déclarée, dont l'absence
+ * est signalée par `portee` au moment où la portée se construit. Ici, les deux
+ * rendent `null` — donc « ne juge pas » —, précisément pour ne pas ajouter au
+ * signalement une seconde phrase qui accuserait les colonnes d'une table qui
+ * n'existe pas.
+ */
 function colonnesDe(entree) {
   if (entree.colonnes !== undefined) {
     return entree.colonnes;
@@ -533,7 +598,7 @@ function lireRequete(noeud, portees, contexte, rapport) {
 
   const select = noeud.SelectStmt;
   if (select !== undefined) {
-    const entrees = portee(select);
+    const entrees = portee(select, rapport, contexte);
     const pile = [entrees, ...portees];
 
     // Une sous-requête du `from` voit la portée qu'elle vient d'ouvrir, plus les
@@ -543,6 +608,12 @@ function lireRequete(noeud, portees, contexte, rapport) {
       if (entree.sousRequete !== undefined) {
         lireRequete(entree.sousRequete, pile, contexte, rapport);
       }
+    }
+
+    // Les conditions de jointure, que le parcours ci-dessous laisse de côté avec
+    // le reste du `from`.
+    for (const condition of conditionsDeJointure(select.fromClause)) {
+      lireRequete(condition, pile, contexte, rapport);
     }
 
     for (const [cle, valeur] of Object.entries(select)) {
