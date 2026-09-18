@@ -1843,15 +1843,21 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   est précédé de sa garde — au **même nom** et sur la **même table**, ce qu'un
   simple décompte ne vérifierait pas. `check-sdk-pins` regarde un accord qui
   n'avait aucun gardien : celui des paquets installés avec les versions que le SDK
-  d'Expo épingle. `package.json` et l'API d'Expo ne peuvent pas se lire, et la
+  d'Expo contraint. `package.json` et l'API d'Expo ne peuvent pas se lire, et la
   divergence va **dans le sens qui ne fait aucun bruit** — `react-native@0.86.3`
   accepte `react: ^19.2.3`, donc une montée de `react` à `19.3.0` passe `npm ci`,
-  passe `tsc`, et rompt l'accord. Dependabot l'avait proposée trois fois de suite.
-  Le relevé vient de `api.expo.dev`, avec sa source et sa date, et la liste des
-  paquets épinglés est comparée dans les deux sens à celle que `dependabot.yml`
-  ignore : cesser d'ignorer un paquet épinglé produirait une pull request qui
-  rompt l'accord, et ignorer un paquet non épinglé l'empêcherait silencieusement
-  de se mettre à jour. `check-schema-refs` parcourt l'**arbre syntaxique** du
+  passe `tsc`, et rompt l'accord. Mesuré : sur sept pull requests ouvertes par
+  Dependabot, **six** proposaient une version que le SDK refuse. Le relevé vient
+  des deux points d'entrée que `expo install --check` interroge lui-même
+  (`/v2/sdks/…/native-modules` et `/v2/versions/latest`), avec sa source et sa
+  date ; **seize** paquets installés y figurent, et la liste est comparée dans les
+  deux sens à celle que `dependabot.yml` ignore — cesser d'ignorer un paquet
+  contraint produirait une pull request qui rompt l'accord, et ignorer un paquet
+  non contraint l'empêcherait silencieusement de se mettre à jour. Les types de
+  montée encore admis se **déduisent** de la plage du SDK plutôt que d'être
+  recopiés : rien n'est proposé sur un épinglage exact, le correctif seul passe
+  sous un « ~ », et la mineure sous un « ^ ».
+  `check-schema-refs` parcourt l'**arbre syntaxique** du
   schéma, et non son texte : chaque clé étrangère doit viser une table et une
   colonne déclarées, chaque type énuméré cité doit exister, chaque fonction
   `security definer` doit fixer son `search_path`, chaque colonne nommée par
