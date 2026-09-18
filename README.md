@@ -18,13 +18,13 @@ connexion, ce qui supprime la classe de bugs où un écran se ferme à peine ouv
 
 ## 1. Prérequis
 
-| Outil           | Version  | Remarque                                      |
-| --------------- | -------- | --------------------------------------------- |
-| Node.js         | 22.x     | `.nvmrc` fixe `22.22.2`, comme `eas.json`     |
-| npm             | 10.x     | livré avec Node 22                            |
-| Expo Go         | dernière | pour tester sur un téléphone sans compilation |
-| Compte Expo     | —        | nécessaire pour EAS Build (`eas login`)       |
-| Projet Supabase | —        | offre gratuite suffisante pour démarrer       |
+| Outil           | Version  | Remarque                                        |
+| --------------- | -------- | ----------------------------------------------- |
+| Node.js         | 22.x     | `.nvmrc` fixe `22.22.2`, comme `eas.json`       |
+| npm             | 10.x     | livré avec Node 22                              |
+| Expo Go         | dernière | pour tester sur un téléphone sans compilation   |
+| Compte Expo     | —        | nécessaire pour EAS Build (`npx eas-cli login`) |
+| Projet Supabase | —        | offre gratuite suffisante pour démarrer         |
 
 ## 2. Démarrage rapide
 
@@ -41,7 +41,7 @@ permet à l'intégration continue de compiler le bundle sans aucun secret.
 > **Mise en service, pas à pas.** [MISE-EN-SERVICE.md](MISE-EN-SERVICE.md) énumère
 > dans l'ordre les seules actions qui ne peuvent pas être automatisées — créer le
 > projet Supabase, coller les deux fichiers SQL, créer le compte Expo, lancer
-> `eas login` — et, pour chacune, ce qui s'ensuit côté dépôt. Le partage y est
+> `npx eas-cli login` — et, pour chacune, ce qui s'ensuit côté dépôt. Le partage y est
 > explicite : aucun identifiant n'est saisi par un tiers, mais tout ce qui peut
 > être fait sans vous l'est déjà.
 
@@ -97,11 +97,11 @@ Les fichiers `.env.local` ne sont **pas** téléversés : EAS respecte
 environnement — `eas.json` associe chaque profil à un environnement :
 
 ```bash
-eas env:create --environment production \
+npx --yes eas-cli@latest env:create --environment production \
   --name EXPO_PUBLIC_SUPABASE_URL \
   --value "https://xxxxxxxx.supabase.co" --visibility plaintext
 
-eas env:create --environment production \
+npx --yes eas-cli@latest env:create --environment production \
   --name EXPO_PUBLIC_SUPABASE_ANON_KEY \
   --value "sb_publishable_..." --visibility sensitive
 ```
@@ -1501,7 +1501,7 @@ garde le minimum exigé.
 ```bash
 npm run eas:build:preview       # APK à installer sur un téléphone
 npm run eas:build:production    # version destinée aux magasins
-eas submit --profile production --platform android
+npx --yes eas-cli@latest submit --profile production --platform android
 ```
 
 `appVersionSource: "remote"` délègue à EAS le numéro de version, et
