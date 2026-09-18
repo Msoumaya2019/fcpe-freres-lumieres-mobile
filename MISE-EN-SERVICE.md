@@ -302,41 +302,42 @@ clef d'API** — Brevo les distingue, et le relais refuse la seconde.
 | Clef SMTP            | **le même écran**, même onglet — elle commence par `xsmtpsib-`         |
 | Adresse d'expédition | `mohamed.chiker@live.fr`, **à valider** dans _Senders & IP_ chez Brevo |
 
-**Mesuré le 19 septembre 2026.** La connexion au relais s'établit et le chiffrement
-aussi (`smtp-relay.brevo.com:587`, `STARTTLS` accepté), mais l'authentification est
-**refusée** : `535 5.7.8 Authentication failed`.
+**Mesuré le 19 septembre 2026 — le 535 ne venait pas du blocage d'IP.** La connexion au
+relais s'établit et le chiffrement aussi (`smtp-relay.brevo.com:587`, `STARTTLS`
+accepté), mais l'authentification est **refusée** : `535 5.7.8 Authentication failed`.
 
-**La cause est ailleurs, et Brevo la nomme.** Interrogée avec votre clef d'API, Brevo
-ne répond pas « clef inconnue » mais :
+Le blocage des adresses inconnues a bien été levé, et c'est mesurable : la clef d'API
+répond désormais `200`. Ce qu'elle dit du compte :
 
-> We have detected you are using an unrecognised IP address …
+| Constat                           | Valeur                                            |
+| --------------------------------- | ------------------------------------------------- |
+| Compte                            | `mohamed.chiker@live.fr` (société `Msoumaya2019`) |
+| Forfait                           | gratuit, **300 envois**                           |
+| Relais SMTP                       | **activé**                                        |
+| Adresse d'expédition              | `mohamed.chiker@live.fr`, **validée et active**   |
+| Envois SMTP des 90 derniers jours | **0**                                             |
 
-Autrement dit : la clef est **valide**, et c'est le compte qui refuse toute adresse non
-déclarée. Or la page d'aide de Brevo est explicite — la liste d'IP autorisées est
-**partagée entre les clefs d'API et les clefs SMTP**, et autoriser une adresse **active
-le blocage de toutes les autres**, pour les deux. Le refus SMTP vient donc très
-probablement du même réglage, et non de la clef.
+Autrement dit : tout est en place **sauf** l'authentification. Et le blocage d'IP étant
+levé, il ne l'explique pas — l'hypothèse était plausible, la mesure la réfute. Il reste
+donc deux causes, et deux seulement :
 
-**Ce qu'il faut faire — et pourquoi c'est important pour la suite.** Allez sur
-`app.brevo.com/security/authorised_ips` et, sur la ligne **SMTP keys**, cliquez
-**Deactivate for SMTP**.
+1. **Le blocage est levé pour l'API, pas pour le SMTP.** Les deux se règlent séparément,
+   sur le même écran : `app.brevo.com/security/authorised_ips`, une ligne **API keys** et
+   une ligne **SMTP keys**. Vérifiez que **les deux** sont _Deactivated_.
+2. **La clef SMTP n'est plus celle du compte.** Reprenez-la sur
+   `app.brevo.com/settings/keys/smtp`, onglet **SMTP**, **avec l'identifiant du même
+   écran** — Brevo ne montre la clef qu'une fois, et une clef régénérée invalide
+   l'ancienne sans prévenir.
 
-N'ajoutez pas votre propre adresse à la place : **Supabase envoie les e-mails depuis sa
-propre infrastructure**, dont les adresses ne sont ni connues d'avance ni stables. Une
-liste d'IP autorisées ne peut donc pas la couvrir, et un blocage SMTP laissé actif
-couperait la confirmation d'inscription **en production**, sans message qui l'explique.
-Ce réglage est utile pour une clef d'API appelée depuis un serveur fixe ; il est
-inadapté ici.
-
-Le blocage des clefs d'API peut rester actif : rien dans ce projet ne les utilise. Si
-vous vous en servez un jour, sachez que Brevo l'active **tout seul** après trente jours
-sans nouvelle adresse.
-
-Une fois le blocage SMTP levé, dites-le-moi : je refais l'essai, il ne prend qu'une
+Dans l'un comme dans l'autre cas, dites-le-moi : je refais l'essai, il ne prend qu'une
 seconde.
 
-Reste enfin l'adresse d'expédition : tant qu'elle n'est pas **validée** chez Brevo
-(_Senders & IP_), un envoi serait refusé même le blocage levé.
+**Pourquoi il ne faut pas se contenter d'ajouter une adresse IP.** **Supabase envoie les
+e-mails depuis sa propre infrastructure**, dont les adresses ne sont ni connues d'avance
+ni stables. Une liste d'IP autorisées ne peut donc pas la couvrir, et un blocage SMTP
+laissé actif couperait la confirmation d'inscription **en production**, sans message qui
+l'explique. Ce réglage est utile pour une clef d'API appelée depuis un serveur fixe ; il
+est inadapté ici.
 
 **Ce réglage se fait dans le tableau de bord Supabase, et je ne peux pas cliquer à
 votre place** : je n'y ai pas accès. L'écran est **Authentication → Emails → SMTP

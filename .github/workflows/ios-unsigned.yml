@@ -86,16 +86,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          VERSION=$(xcodebuild -version | head -1 | sed 's/^Xcode //')
+          # La sortie est capturée **entière** avant d'être tronquée, et ce n'est
+          # pas un détail de style. Mesuré : `xcodebuild -version | head -1` ne
+          # renvoie pas la première ligne — `head` ferme le tuyau, `xcodebuild`
+          # reçoit un SIGPIPE, lève une exception non capturée et s'arrête sur le
+          # code 134. Le travail tombait en dix-sept secondes, avant toute
+          # installation, sur un message qui ne parlait ni de Xcode ni de tuyau.
+          INFO=$(xcodebuild -version)
+          VERSION=$(printf '%s\n' "$INFO" | sed -n '1s/^Xcode //p')
           MAJEURE=${VERSION%%.*}
 
           echo "Xcode $VERSION ($(xcode-select -p))"
 
           if [ "$MAJEURE" -lt 26 ]; then
             echo "::error::Xcode $VERSION est trop ancien. Le SDK 57 exige Xcode 26 ou plus."
-            echo "Le manifeste de `expo-modules-jsi` déclare swift-tools-version 6.2,"
-            echo "que Xcode $MAJEURE ne sait pas lire. Choisissez une autre étiquette"
-            echo "d'exécuteur plutôt que de retenter : réessayer ne changera rien."
+            echo "Le manifeste de expo-modules-jsi declare swift-tools-version 6.2,"
+            echo "que Xcode $MAJEURE ne sait pas lire. Choisissez une autre etiquette"
+            echo "d'executeur plutot que de retenter : reessayer ne changera rien."
             exit 1
           fi
 

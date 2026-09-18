@@ -32,6 +32,23 @@
  * limite à connaître avant de lui faire confiance : une faute de frappe dans
  * `${CHEMIN}` ne sera signalée ni ici, ni par `tsc`, ni par ESLint.
  *
+ * UN TUYAU TRONQUÉ TUE LE PRODUCTEUR
+ * -----------------------------------
+ * `bash -n` accepte parfaitement `xcodebuild -version | head -1`, et ce script ne
+ * fait pas ce qu'il annonce. Mesuré sur un exécuteur macOS, dans
+ * `ios-unsigned.yml` : le travail est tombé **dix-sept secondes** après le
+ * lancement, avant toute installation, sur une `NSFileHandleOperationException`
+ * et un **code 134**. `head` avait fermé le tuyau après une ligne ; `xcodebuild`
+ * a reçu un SIGPIPE, levé une exception non capturée, et n'a **jamais rendu sa
+ * version** — le contrôle qui devait vérifier Xcode ne l'a donc pas vérifiée.
+ *
+ * C'est un défaut que ni la syntaxe, ni les types, ni le lint ne voient : le
+ * script est valide, il échoue à l'exécution. Le contrôle refuse donc `head` en
+ * bout de tuyau, et le remède tient en une ligne — capturer la sortie, puis la
+ * tronquer. `grep -q`, `grep -m`, `sed 1q` et un `awk` qui appelle `exit`
+ * ferment le tuyau de la même façon : ils ne sont pas encore contrôlés, et la
+ * raison est écrite au-dessus du contrôle.
+ *
  * LA LISTE DES FLUX EST FERMÉE, ET C'EST LE POINT LE PLUS IMPORTANT
  * -----------------------------------------------------------------
  * Ce contrôle découvre ses sujets par `readdir` : il mesure donc ce qui
@@ -126,6 +143,24 @@ function verifier(condition, defaut) {
  */
 function neutraliser(script) {
   return script.replace(/\$\{\{[^}]*\}\}/g, 'VALEUR');
+}
+
+/**
+ * Le script **sans ses commentaires**.
+ *
+ * Un commentaire qui explique un défaut contient le motif du défaut. Mesuré : la
+ * première version de ce contrôle a refusé `ios-unsigned.yml` **à cause de la
+ * phrase qui expliquait pourquoi il ne fallait pas écrire `| head`**. Le défaut
+ * n'était donc pas seulement faux, il poussait à retirer l'explication pour
+ * obtenir un vert — ce qui est le contraire de ce qu'on veut.
+ *
+ * En shell, `#` ouvre un commentaire au début d'un mot. La variante retenue
+ * (`(^|\s)#`) laisse donc intacts `${VAR#motif}` et une adresse qui porte un
+ * fragment. Elle retirerait en revanche un `#` entre guillemets — sans
+ * conséquence ici, où l'on ne cherche qu'une forme de tuyau.
+ */
+function sansCommentairesShell(script) {
+  return script.replace(/(^|\s)#.*$/gm, '$1');
 }
 
 /**
@@ -347,6 +382,30 @@ function analyserFlux(nom, source) {
         etape: nomEtape,
         tag: 'script-invalide',
         message: `le script est refusé par \`bash -n\` : ${analyse.detail}`,
+      });
+
+      // Un tuyau tronqué tue le producteur. Mesuré sur un exécuteur macOS :
+      // `xcodebuild -version | head -1` n'a pas rendu sa première ligne —
+      // `head` a fermé le tuyau, `xcodebuild` a reçu un SIGPIPE, levé une
+      // exception non capturée et s'est arrêté sur le **code 134**, dix-sept
+      // secondes après le lancement, sur un message qui ne parlait ni de Xcode
+      // ni de tuyau. Le remède est toujours gratuit : capturer la sortie, puis
+      // la tronquer.
+      //
+      // Le contrôle ne retient que `head`, et c'est une limite assumée : `grep
+      // -q`, `grep -m`, `sed 1q` et un `awk` qui appelle `exit` ferment le tuyau
+      // de la même façon. Les chercher demanderait d'analyser la ligne de
+      // commande, pas de la reconnaître — le jour où l'un d'eux mordra, c'est
+      // ici qu'il faudra l'ajouter, avec la mesure qui l'a fait entrer.
+      const tronque = /\|\s*head\b/.exec(sansCommentairesShell(etape.run));
+      verifier(tronque === null, {
+        fichier: nom,
+        etape: nomEtape,
+        tag: 'tuyau-tronque',
+        message:
+          'le script branche une commande sur `head`, qui ferme le tuyau dès la ' +
+          'première ligne : le producteur peut recevoir un SIGPIPE et s’arrêter ' +
+          'sans avoir rien dit. Capturez la sortie, puis tronquez-la',
       });
     }
   }
