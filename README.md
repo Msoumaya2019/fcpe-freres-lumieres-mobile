@@ -512,7 +512,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-inventory.test.mjs   ce que le lanceur exécute, et ce que le README en décrit
 │   ├── check-read-bounds.test.mjs  les lectures de liste, et la borne de chacune
 │   ├── check-schema-refs.test.mjs  les renvois du schéma : clés, types, portées, seed.sql, new/old
-│   └── check-workflows.test.mjs   la fermeture de la liste des flux attendus
+│   ├── check-workflows.test.mjs   la fermeture de la liste des flux attendus
+│   └── check-eas-vocabulary.test.mjs  les clefs de eas.json, contre le schéma d'EAS
 └── .github/workflows/             CI et build EAS
 ```
 
@@ -1781,13 +1782,13 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Dix-neuf fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Vingt fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
   `check-pending-action`, `check-password-policy`, `check-weak-password`,
   `check-screen-modes`, `check-inventory`, `check-schema-refs`,
-  `check-read-bounds` et `check-workflows`
+  `check-read-bounds`, `check-workflows` et `check-eas-vocabulary`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui
@@ -1815,7 +1816,16 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   le contenu du dossier mesure ce qui reste, jamais ce qui manque : écarter
   `eas-build.yml` ne ferait baisser qu'un décompte. Sa portée s'arrête à la
   syntaxe — mesuré, `bash -n` accepte `echo ${{ a }}` alors que le même script
-  échoue à l'exécution. `check-schema-refs` parcourt l'**arbre syntaxique** du
+  échoue à l'exécution. `check-eas-vocabulary` tient le même genre de liste pour
+  `eas.json` : le fichier qui décide **ce que l'adhérent recevra** — un `apk`
+  installable ou un `app-bundle` réservé au magasin — est lu par un service
+  distant, jamais par ce dépôt, donc une clef mal orthographiée y est
+  silencieuse : EAS l'ignore et applique sa valeur par défaut. Mesuré, le schéma
+  officiel n'oppose `additionalProperties: false` à aucun niveau : sur quatorze
+  mutations, il en attrape **deux**. Le vocabulaire est donc recopié du schéma,
+  avec sa source et sa date, et confronté clef par clef à la position où chacune
+  se trouve — les positions elles-mêmes étant une liste fermée dans les deux
+  sens. `check-schema-refs` parcourt l'**arbre syntaxique** du
   schéma, et non son texte : chaque clé étrangère doit viser une table et une
   colonne déclarées, chaque type énuméré cité doit exister, chaque fonction
   `security definer` doit fixer son `search_path`, chaque colonne nommée par
