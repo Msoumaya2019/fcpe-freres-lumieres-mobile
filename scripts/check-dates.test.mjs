@@ -20,22 +20,39 @@
  * ------------------------------------
  * Ce fichier a longtemps porté cette phrase : « Node ignore `TZ` sur cette
  * machine, donc un test de fuseau passerait partout, y compris sur un code
- * fautif ». Elle était **fausse**, et d'une façon instructive : elle généralisait
- * à partir d'**une seule forme** de la variable. Mesuré, processus fils compris :
+ * fautif ». Elle était **fausse** — mais la correction qui a suivi en a produit
+ * une seconde, plus coûteuse, parce qu'elle a généralisé une mesure faite sur
+ * **une seule plateforme**.
  *
- *     TZ=America/New_York  → fuseau inchangé (GMT+0200)   ← la forme essayée
- *     TZ=Asia/Tokyo        → fuseau inchangé
- *     TZ=Europe/London     → fuseau inchangé
- *     TZ=UTC               → +00:00
- *     TZ=GMT-5             → -05:00
- *     TZ=GMT+14            → +14:00
+ * Mesuré sous **Windows** (Node 22.22.2, processus fils, `TZ` passé par `env`) :
  *
- * Les noms **IANA** ne sont pas lus, les décalages **fixes** le sont. Il y avait
- * donc bien un fuseau à essayer, et c'est celui qui compte : un fuseau **en
- * retard** sur UTC, le seul où `new Date('2020-09-16')` — minuit UTC — change de
- * jour. Les deux tests de fuseau mesurent leur propre prémisse — le décalage
- * appliqué, et le fait que le piège change bien de jour — pour qu'ils **échouent**
- * sur une machine qui ignorerait `TZ`, au lieu de passer à vide.
+ *     TZ=GMT-5               → -05:00    TZ=Etc/GMT+5          → -05:00
+ *     TZ=GMT+14              → +14:00    TZ=Etc/GMT-14         → +14:00
+ *     TZ=America/Bogota      → -05:00    TZ=Pacific/Kiritimati → +14:00
+ *     TZ=Asia/Tokyo          → +09:00    TZ=America/New_York   → -04:00 (DST)
+ *     TZ=UTC                 → +00:00    (aucun TZ)            → +02:00
+ *
+ * Conclusion de l'époque : « les noms IANA ne sont pas lus, les décalages fixes
+ * le sont ». **Faux**, et le tableau ci-dessus le montre : `Asia/Tokyo` donne bien
+ * `+09:00`. Ce qui s'était passé est plus instructif que l'erreur elle-même — la
+ * forme essayée d'abord était un nom IANA **à décalage variable**, et sa valeur
+ * d'été a été lue comme « la variable n'est pas appliquée ».
+ *
+ * Le vrai piège était ailleurs, et il a fallu pousser le dépôt pour le voir :
+ * `GMT-5` ne veut pas dire la même chose partout. Sous Windows, `-05:00` ; sous
+ * Linux, `+05:00` — l'une lit « moins cinq », l'autre applique la convention
+ * POSIX, où le décalage est celui qu'on **ajoute** à l'heure locale pour obtenir
+ * UTC. Au premier `push` de ce dépôt, le 18 septembre 2026, l'intégration continue
+ * a donc rendu « le fuseau demandé n'a pas été appliqué au processus fils —
+ * 5 !== -5 » : le banc ne mesurait rien sous Linux, et il ne pouvait pas le dire,
+ * n'ayant jamais tourné ailleurs.
+ *
+ * La correction ne consiste pas à ajouter une forme de plus, mais à **chercher**
+ * celle qui produit le décalage voulu, parmi des noms IANA — leur sens est le même
+ * partout, y compris leur signe inversé, bizarrerie stable de la base de données.
+ * Les deux tests mesurent toujours leur propre prémisse — le décalage appliqué, et
+ * le fait que le piège change bien de jour — pour qu'ils **échouent** sur une
+ * machine qui ignorerait `TZ`, au lieu de passer à vide.
  *
  * Sans dépendance : `node:test` est intégré, et le *type stripping* de Node 22
  * permet d'importer directement le fichier TypeScript.
@@ -60,7 +77,7 @@ const { formatMenuDate, formatDateTime } = await import(MODULE);
  * est passé comme dans la suite, pour que le jour où `date.ts` importera un
  * module interne, ce test ne tombe pas pour une raison qui n'a rien à voir.
  */
-function dansLeFuseau(fuseau) {
+function mesurer(fuseau) {
   const programme = [
     "const { formatMenuDate } = await import('./src/utils/date.ts');",
     "const correcte = formatMenuDate('2020-09-16');",
@@ -88,6 +105,44 @@ function dansLeFuseau(fuseau) {
   );
 
   return JSON.parse(sortie);
+}
+
+/**
+ * Les formes de `TZ` essayées, dans l'ordre, pour chaque décalage voulu.
+ *
+ * `Etc/GMT+n` porte le signe **inversé** : `Etc/GMT+5` est UTC-5. C'est une
+ * bizarrerie de la base IANA, mais elle est stable et lue de la même façon par
+ * toutes les plateformes — contrairement à `GMT-5`, dont le sens s'inverse.
+ * Les seconds choix sont des zones **sans heure d'été**, donc à décalage fixe.
+ */
+const FORMES = {
+  '-5': ['Etc/GMT+5', 'America/Bogota'],
+  14: ['Etc/GMT-14', 'Pacific/Kiritimati'],
+};
+
+/**
+ * Mesure dans le premier fuseau qui produit réellement le décalage voulu.
+ *
+ * Chercher, plutôt que déclarer : c'est ce qui rend le test portable. La valeur
+ * retenue est celle qui a été **mesurée**, et `essais` est rendue à l'appelant
+ * pour que l'assertion de prémisse puisse nommer ce qui a été tenté si aucun
+ * fuseau ne s'applique.
+ */
+function dansLeFuseau(attendu) {
+  const candidats = FORMES[String(attendu)];
+  if (candidats === undefined) {
+    throw new Error(`aucune forme de TZ connue pour le décalage ${attendu}`);
+  }
+
+  const essais = [];
+  let dernier = null;
+  for (const fuseau of candidats) {
+    dernier = mesurer(fuseau);
+    essais.push(`${fuseau} → ${dernier.offset}`);
+    if (dernier.offset === attendu) return { ...dernier, essais };
+  }
+
+  return { ...dernier, essais };
 }
 
 /** Date civile `AAAA-MM-JJ` d'un jour décalé, lue sur l'horloge courante. */
@@ -190,12 +245,16 @@ test('un horodatage illisible est rendu tel quel', () => {
 });
 
 test('une date civile ne glisse pas dans un fuseau en retard sur UTC', () => {
-  const mesure = dansLeFuseau('GMT-5');
+  const mesure = dansLeFuseau(-5);
 
   // Les deux prémisses, et elles ne sont pas décoratives : sans elles, ce test
   // serait vert sur une machine qui ignore `TZ` — c'est-à-dire qu'il ne
   // mesurerait rien tout en ayant l'air de passer.
-  assert.equal(mesure.offset, -5, 'le fuseau demandé n’a pas été appliqué au processus fils');
+  assert.equal(
+    mesure.offset,
+    -5,
+    `aucun fuseau n’a été appliqué au processus fils — essayé : ${mesure.essais.join(', ')}`,
+  );
   assert.equal(
     mesure.jourDuPiege,
     15,
@@ -206,9 +265,13 @@ test('une date civile ne glisse pas dans un fuseau en retard sur UTC', () => {
 });
 
 test('une date civile tient aussi dans un fuseau en avance sur UTC', () => {
-  const mesure = dansLeFuseau('GMT+14');
+  const mesure = dansLeFuseau(14);
 
-  assert.equal(mesure.offset, 14, 'le fuseau demandé n’a pas été appliqué au processus fils');
+  assert.equal(
+    mesure.offset,
+    14,
+    `aucun fuseau n’a été appliqué au processus fils — essayé : ${mesure.essais.join(', ')}`,
+  );
 
   // Ce fuseau-là ne discrimine pas : minuit UTC y tombe le même jour. Il est là
   // pour l'autre moitié de la promesse — le rendu ne doit pas dépendre du **sens**
