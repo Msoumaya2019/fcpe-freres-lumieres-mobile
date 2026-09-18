@@ -1570,6 +1570,22 @@ machine restés actifs — `core.ignorecase`, `core.filemode`, `core.symlinks` �
 n'ont donc rien eu à mordre, et c'est ce qui a décidé de **ne pas** les bancariser
 (voir §6) : une famille ouverte se ferme par la mesure, pas par symétrie.
 
+Ce « même » mérite d'être précisé, parce qu'il ne porte **pas** sur les octets. Deux
+exports du même source ne sont jamais identiques octet pour octet : mesuré sur deux
+exports successifs, le bundle diffère de **41 octets en huit groupes**. Le premier
+groupe est un chemin temporaire de la machine de compilation, gravé dans le bundle —
+`…\AppData\Local\Temp\expo-bundler-0.35266264999259844-1789684273290\index.js` contre
+`…-0.18778068920292768-1789744695461\index.js` : un tirage aléatoire et un horodatage,
+différents à chaque compilation. Le second, les **vingt derniers octets**, est le SHA-1
+du reste du fichier — vérifié sur les deux exports —, et il suit le premier par
+construction.
+
+L'identité reproductible est donc le **nom du fichier** : `index-dde9478a…hbc`, calculé
+par Metro à partir du graphe de modules, et non des octets. C'est lui que le relevé
+compare, et c'est ce qui rend la comparaison concluante. Comparer deux bundles par leur
+SHA-256 montrerait une différence à **chaque** compilation : un tel écart n'est pas une
+régression, et il ne doit pas être lu comme telle.
+
 ### Secrets à déclarer (Settings > Secrets and variables > Actions)
 
 | Nom          | Type   | Usage                                               |
