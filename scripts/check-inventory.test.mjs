@@ -199,6 +199,7 @@ const MOTS = new Map([
   [29, 'Vingt-neuf'],
   [30, 'Trente'],
   [31, 'Trente-et-un'],
+  [32, 'Trente-deux'],
 ]);
 
 test('tout fichier qui importe `node:test` est nommé pour être découvert', () => {
@@ -264,6 +265,26 @@ test('l’arborescence décrit chaque fichier de `scripts/`, et rien de plus', (
 
   assert.deepEqual(manquants, [], `absent de l’arborescence du §5 : ${manquants.join(', ')}`);
   assert.deepEqual(fantomes, [], `décrit mais inexistant : ${fantomes.join(', ')}`);
+});
+
+test('chaque banc se nomme de façon à être vu par la liste du §9', () => {
+  // La liste du §9 est extraite par un motif qui ne reconnaît que `check-…`.
+  // Un banc nommé autrement n'est donc pas vu **manquant** : il est vu
+  // inexistant, et le contrôle tombe sur « nommé au §9 mais inexistant » — un
+  // message qui envoie chercher le défaut au mauvais endroit, et qu'aucune
+  // correction de la liste ne ferait taire, puisque l'y ajouter ne changerait
+  // rien. Mesuré en écrivant le banc de `provenance-release.mjs`, dont le
+  // script — lui — n'a pas à porter ce préfixe.
+  const malNommes = [...fichiersDeScripts().keys()]
+    .filter((nom) => nom.endsWith('.test.mjs'))
+    .filter((nom) => !nom.startsWith('check-'));
+
+  assert.deepEqual(
+    malNommes,
+    [],
+    `le §9 du README est lu par un motif qui ne reconnaît que « check-… » : ` +
+      `ce banc y serait invisible, et le §9 demanderait de l'y ajouter sans effet — ${malNommes.join(', ')}`,
+  );
 });
 
 test('la liste du §9 nomme les mêmes bancs, et le mot annoncé les compte', () => {

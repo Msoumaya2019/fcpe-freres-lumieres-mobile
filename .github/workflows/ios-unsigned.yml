@@ -332,9 +332,16 @@ jobs:
             # dans la même version : l'échec est alors sans conséquence. Il n'est
             # pas ignoré pour autant — la suite du script exige que la release
             # existe, et c'est exactement ce que vérifie le bloc suivant.
+            #
+            # Le texte vient de `scripts/provenance-release.mjs`, jamais d'une
+            # phrase écrite ici : écrit une seule fois, un texte survit aux
+            # fichiers qu'il décrit, et la version 0.1.0 a annoncé pendant une
+            # heure un commit qui n'était plus le sien. Sans fichier, le script
+            # n'écrit que l'en-tête — le cas exact d'une version qui naît.
+            printf '' | node scripts/provenance-release.mjs > "$RUNNER_TEMP/corps-version.md"
             gh release create "$TAG" \
               --title "FCPE Frères Lumières $VERSION" \
-              --notes "Binaires de la version $VERSION, compilés depuis le commit $GITHUB_SHA." \
+              --notes-file "$RUNNER_TEMP/corps-version.md" \
               --target "$GITHUB_SHA" || true
           fi
 
@@ -350,7 +357,31 @@ jobs:
           cp "$IPA" "$FICHIER"
           echo "$FICHIER : $(wc -c < "$FICHIER") octets"
 
+          # La provenance est ici **certaine**, et non relevée : cet IPA vient
+          # d'être compilé par `xcodebuild` dans cette exécution, donc depuis son
+          # commit. Le flux Android, lui, doit demander à EAS lequel de ses
+          # builds il vient de récupérer.
+          COMMIT="$GITHUB_SHA"
+
           gh release upload "$TAG" "$FICHIER" --clobber
+
+          # Le texte de la version est recomposé **après** chaque dépôt, et il
+          # nomme le commit du fichier qu'on vient de déposer. Deux flux écrivent
+          # le même texte à la même minute : le dernier gagne, et le pire cas est
+          # une ligne omise — jamais une ligne fausse. La relecture qui suit
+          # n'existe que pour cette course.
+          for ESSAI in 1 2; do
+            gh release view "$TAG" --json body --jq .body \
+              | node scripts/provenance-release.mjs "$FICHIER" "$COMMIT" > "$RUNNER_TEMP/corps-version.md"
+            gh release edit "$TAG" --notes-file "$RUNNER_TEMP/corps-version.md"
+            if gh release view "$TAG" --json body --jq .body | grep -qF "$FICHIER"; then
+              break
+            fi
+            sleep 3
+          done
+          if ! gh release view "$TAG" --json body --jq .body | grep -qF "$FICHIER"; then
+            echo "::warning::le texte de $TAG ne nomme pas $FICHIER après deux essais"
+          fi
 
           echo "### IPA publié dans la version $TAG" >> "$GITHUB_STEP_SUMMARY"
           echo >> "$GITHUB_STEP_SUMMARY"

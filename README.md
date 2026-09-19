@@ -533,6 +533,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-install-integrity.mjs  paquets installés à moitié extraits
 │   ├── check-workflows.mjs        les flux GitHub : forme du YAML, épinglage, `bash -n`
 │   ├── check-paquet.mjs           le contenu d'un paquet compilé : clefs, URL, fuites
+│   ├── provenance-release.mjs     le texte d'une version : le commit de chaque binaire déposé
 │   ├── alias-loader.mjs           résolution de « @/ » pour node:test
 │   ├── register-alias.mjs         branchement du chargeur, avant les tests
 │   ├── essai-postgres.mjs         la doublure de Supabase, partagée par les bancs qui exécutent
@@ -559,6 +560,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-workflows.test.mjs   la fermeture de la liste des flux attendus
 │   ├── check-paquet.test.mjs      un paquet sain passe, une clef en trop le fait tomber
 │   ├── check-eas-vocabulary.test.mjs  les clefs de eas.json, contre le schéma d'EAS
+│   ├── check-provenance-release.test.mjs  le texte d'une version : la phrase figée disparaît, un dépôt le remplace
 │   ├── check-migration-rejouable.test.mjs  la migration, rejouable sans historique
 │   ├── check-migration-applicable.test.mjs  la migration, exécutée contre un vrai PostgreSQL
 │   ├── check-rls-comportement.test.mjs  les politiques RLS, jouées sous chaque rôle
@@ -1857,6 +1859,17 @@ flux pour un événement provoqué par `GITHUB_TOKEN`, afin d'empêcher les
 boucles. Mesuré — `v0.1.0`, créé par `eas-build.yml` le 2026-09-19, ne porte
 aucune exécution.
 
+**Le texte d'une release est recomposé à chaque dépôt de binaire**, par
+`scripts/provenance-release.mjs` — et c'est le seul endroit qui l'écrive. Une
+release est un objet à deux durées de vie : ses fichiers sont remplacés à chaque
+compilation, son texte ne l'était qu'à sa création. La version `0.1.0` a donc
+annoncé « compilés depuis le commit `dd5f872` » alors que les deux binaires
+déposés ensuite venaient de `e49297d` — sur la seule page d'où un adhérent peut
+télécharger. Le script conserve la ligne de provenance de chaque fichier déjà
+décrite, remplace la sienne et écarte le reste ; `check-build-config` tient
+l'invariant, et interdit qu'un flux repasse un texte **littéral** à
+`gh release`, qui serait figé par construction.
+
 ## 9. Limites connues
 
 - **La réinitialisation de mot de passe n'est pas éprouvée de bout en bout.**
@@ -1898,13 +1911,14 @@ aucune exécution.
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Trente-et-un fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Trente-deux fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
   `check-pending-action`, `check-password-policy`, `check-weak-password`,
   `check-screen-modes`, `check-inventory`, `check-schema-refs`,
   `check-read-bounds`, `check-workflows`, `check-paquet`, `check-eas-vocabulary`,
+  `check-provenance-release`,
   `check-migration-rejouable`, `check-migration-applicable`,
   `check-rls-comportement`, `check-sdk-pins`, `check-scripts-executables`,
   `check-markdown-listes`, `check-audit-scope`, `check-parser-surface`,

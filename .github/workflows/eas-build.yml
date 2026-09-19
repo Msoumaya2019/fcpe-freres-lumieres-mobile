@@ -159,14 +159,24 @@ jobs:
           # Ce n'est pas un défaut : publier une prévisualisation ne doit pas
           # consommer un build de production. Pour en obtenir un, poussez le tag
           # — `git push origin v0.1.0`.
+          #
+          # Le texte de la version est **recomposé**, jamais figé. Il l'était, et
+          # il annonçait encore « compilés depuis le commit dd5f872… » alors que
+          # les binaires déposés ensuite venaient de `e49297d` — mesuré le
+          # 2026-09-19. Or cette page est la seule adresse d'où un parent peut
+          # télécharger : une provenance fausse à l'endroit exact où l'on vient
+          # chercher une garantie. C'est `scripts/provenance-release.mjs` qui
+          # écrit ce texte, et lui seul — sans fichier, il n'écrit que l'en-tête,
+          # ce qui est exactement le cas d'une version qui vient de naître.
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             # La création peut perdre une course avec l'autre flux, qui publie
             # dans la même version : l'échec est alors sans conséquence. Il n'est
             # pas ignoré pour autant — la suite du script exige que la release
             # existe, et c'est exactement ce que vérifie le bloc suivant.
+            printf '' | node scripts/provenance-release.mjs > "$RUNNER_TEMP/corps-version.md"
             gh release create "$TAG" \
               --title "FCPE Frères Lumières $VERSION" \
-              --notes "Binaires de la version $VERSION, compilés depuis le commit $GITHUB_SHA." \
+              --notes-file "$RUNNER_TEMP/corps-version.md" \
               --target "$GITHUB_SHA" || true
           fi
 
@@ -185,13 +195,28 @@ jobs:
             # terminer, et `concurrency` empêche deux builds du même commit de
             # se chevaucher. La liste est filtrée par plateforme, sans quoi un
             # build iOS répondrait à une demande Android.
-            URL=$(eas build:list --platform "$PLATEFORME" --limit 1 \
-              --non-interactive --json | jq -r '.[0].artifacts.buildUrl')
+            #
+            # Le JSON est gardé entier, et non réduit à l'adresse : le commit du
+            # build y est relevé **dans le même objet**, ce qui interdit que
+            # l'adresse et la provenance désignent deux builds différents.
+            JSON=$(eas build:list --platform "$PLATEFORME" --limit 1 \
+              --non-interactive --json)
+
+            URL=$(printf '%s' "$JSON" | jq -r '.[0].artifacts.buildUrl')
 
             if [ -z "$URL" ] || [ "$URL" = "null" ]; then
               echo "::error::aucune adresse d'artefact pour $PLATEFORME — le build a-t-il abouti ?"
               exit 1
             fi
+
+            # Le commit réellement compilé. EAS le publie sous `gitCommitHash` ;
+            # s'il ne le publie pas, la provenance porte celui de l'exécution —
+            # et la ligne ci-dessous le dit, pour que l'absence du champ soit une
+            # **mesure** et non une supposition. Elle s'imprime à chaque build :
+            # c'est ainsi qu'on saura, sans relire ce fichier, ce qu'EAS annonce.
+            COMMIT_EAS=$(printf '%s' "$JSON" | jq -r '.[0].gitCommitHash // empty')
+            COMMIT="${COMMIT_EAS:-$GITHUB_SHA}"
+            echo "commit du binaire : $COMMIT (EAS : ${COMMIT_EAS:-non annoncé}, exécution : $GITHUB_SHA)"
 
             # L'adresse porte une signature en paramètres : on l'écarte avant de
             # lire l'extension, sinon le nom du fichier contiendrait la requête.
@@ -217,6 +242,25 @@ jobs:
             fi
 
             gh release upload "$TAG" "$FICHIER" --clobber
+
+            # Le texte de la version est recomposé **après** chaque dépôt, et il
+            # nomme le commit du fichier qu'on vient de déposer. Deux flux
+            # écrivent le même texte à la même minute : le dernier gagne, et le
+            # pire cas est une ligne omise — jamais une ligne fausse. La relecture
+            # qui suit n'existe que pour la course ; sans elle, une ligne perdue
+            # ne se verrait que sur la page.
+            for ESSAI in 1 2; do
+              gh release view "$TAG" --json body --jq .body \
+                | node scripts/provenance-release.mjs "$FICHIER" "$COMMIT" > "$RUNNER_TEMP/corps-version.md"
+              gh release edit "$TAG" --notes-file "$RUNNER_TEMP/corps-version.md"
+              if gh release view "$TAG" --json body --jq .body | grep -qF "$FICHIER"; then
+                break
+              fi
+              sleep 3
+            done
+            if ! gh release view "$TAG" --json body --jq .body | grep -qF "$FICHIER"; then
+              echo "::warning::le texte de $TAG ne nomme pas $FICHIER après deux essais"
+            fi
           done
 
           echo "### Binaires publiés dans la version $TAG" >> "$GITHUB_STEP_SUMMARY"

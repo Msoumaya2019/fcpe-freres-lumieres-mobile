@@ -657,6 +657,68 @@ test('les deux flux construisent leurs noms avec la version de `app.json`', () =
   }
 });
 
+test('les deux flux recomposent le texte de la version, par le même script', () => {
+  // Le défaut mesuré, et sa cause. Une version GitHub est un objet à deux durées
+  // de vie : ses **fichiers** sont remplacés à chaque compilation, son **texte**
+  // n'était écrit qu'à la création. La version 0.1.0 annonçait donc encore
+  // « compilés depuis le commit dd5f872… » alors que les deux binaires déposés
+  // ensuite venaient de `e49297d` — sur la seule page d'où un parent peut
+  // télécharger, puisque les artefacts d'un flux exigent un compte.
+  //
+  // Ce que ce contrôle tient, et dans les deux sens :
+  //   - les deux flux passent par **le même** script, donc une correction ne
+  //     peut pas n'atteindre qu'une plateforme ;
+  //   - aucun flux ne passe de texte **littéral** à `gh release`. C'est la
+  //     direction qui empêche le défaut de revenir : une phrase écrite dans le
+  //     YAML est figée par construction, et c'est précisément ce qui avait
+  //     produit l'annonce fausse.
+  //
+  // La première version de ce contrôle ne cherchait que le **nom** du script, et
+  // elle est restée verte sur deux mutations : remplacer l'appel de la
+  // recréation, ou casser le tuyau qui relit le texte, la laissait passer —
+  // parce que le nom apparaît à plusieurs endroits du fichier. Un contrôle qui
+  // cherche un nom quelque part ne dit pas que la commande est là. C'est la
+  // commande entière qu'il faut décrire, d'où la recoloration des continuations
+  // de ligne : un tuyau réparti sur deux lignes n'est pas vu par un motif d'une
+  // seule ligne.
+  assert.ok(
+    readdirSync('scripts').includes('provenance-release.mjs'),
+    'le script qui écrit le texte des versions a disparu : les deux flux le nomment encore',
+  );
+
+  const RELIT =
+    /gh release view "\$TAG" --json body --jq \.body\s+\|\s+node scripts\/provenance-release\.mjs/g;
+  const REECRIT = /gh release edit "\$TAG" --notes-file/g;
+
+  for (const flux of ['eas-build.yml', 'ios-unsigned.yml']) {
+    const source = lire(`.github/workflows/${flux}`).replace(/\\\n\s*/g, ' ');
+
+    const relit = [...source.matchAll(RELIT)].length;
+    const reecrit = [...source.matchAll(REECRIT)].length;
+
+    assert.equal(
+      relit,
+      1,
+      `${flux} : le texte courant de la version doit être relu **et** recomposé par le ` +
+        `script commun, une fois — trouvé ${relit} fois. Sans cette relecture, la ligne de ` +
+        'l’autre plateforme est perdue ; sans le script, la provenance n’est plus recomposée',
+    );
+    assert.equal(
+      reecrit,
+      relit,
+      `${flux} : ${relit} relecture(s) du texte pour ${reecrit} réécriture(s) — une lecture ` +
+        'sans écriture ne laisse aucune trace sur la page',
+    );
+
+    assert.doesNotMatch(
+      source,
+      /--notes\s+"/,
+      `${flux} passe un texte littéral à \`gh release\` : un texte figé survit aux ` +
+        'fichiers qu’il décrit, et annonce un commit qui n’est plus le leur',
+    );
+  }
+});
+
 test('l’extension annoncée par le guide est celle que le profil produit', () => {
   // Le guide promet un `.apk`. Cette promesse ne dépend pas du flux, qui lit
   // l'extension de l'adresse fournie par EAS : elle dépend de `eas.json`, où
