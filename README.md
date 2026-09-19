@@ -1835,12 +1835,21 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
 - `ci.yml` — à chaque push et à chaque pull request : formatage, ESLint, types,
   analyse SQL, export Expo.
 - `eas-build.yml` — sur un tag `v*` ou manuellement : build EAS `preview` ou
-  `production`. Manuel car un build EAS consomme du quota ; le déclencher à
-  chaque push serait coûteux et inutile.
+  `production`, puis dépôt du binaire dans la **release** de la version.
+  Manuel car un build EAS consomme du quota ; le déclencher à chaque push
+  serait coûteux et inutile.
 - `ios-unsigned.yml` — manuellement seulement : compile un IPA **non signé**
   sur un exécuteur macOS, sans compte Apple Developer, pour signature par
-  ESign. Un exécuteur macOS coûte bien plus cher qu'un exécuteur Linux, d'où
-  l'absence de tout déclenchement automatique.
+  ESign, puis le dépose dans la même release. Un exécuteur macOS coûte bien
+  plus cher qu'un exécuteur Linux, d'où l'absence de tout déclenchement
+  automatique.
+
+Les deux déposent dans la release `v<version de app.json>`, et ce n'est pas un
+détail de rangement : c'est la **seule** des trois voies qui réponde à un
+visiteur sans compte. Mesuré le 2026-09-19, sans jeton : l'artefact d'un flux
+répond `401`, l'adresse affichée par EAS en fin de build refuse la lecture du
+build (« viewer = AnonymousViewerContext »), et un asset de release répond
+`302`. L'adhérent n'a que son téléphone.
 
 ## 9. Limites connues
 
