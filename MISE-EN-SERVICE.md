@@ -32,20 +32,22 @@ service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 
 ## Ce que vous faites, et ce que je fais ensuite
 
-| #   | Vous                                                              | Durée   | Moi, dès réception                                              |
-| --- | ----------------------------------------------------------------- | ------- | --------------------------------------------------------------- |
-| 1   | Un projet Supabase, les deux fichiers SQL collés, l'URL et la clé | ~10 min | `.env.local`, promotion admin, variables EAS                    |
-| 2   | Un compte Expo, et la connexion faite une fois                    | ~5 min  | `eas init`, variables EAS, compilation de l'APK                 |
-| 3   | Un jeton Expo pour GitHub _(facultatif)_                          | ~2 min  | le secret `EXPO_TOKEN`, qui réveille la compilation automatique |
-| 4   | Recopier les quatre identifiants SMTP                             | ~5 min  | ✅ les e-mails partent, jusqu'au clic sur le lien               |
-| 5   | Installer l'APK, ou signer l'IPA puis l'installer                 | ~2 min  | les vérifications sur appareil réel                             |
-| 6   | Les quatre réglages du tableau de bord                            | ~5 min  | le contrôle des quatre valeurs                                  |
+| #   | Vous                                                                                    | Durée   | Moi, dès réception                                              |
+| --- | --------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------- |
+| 1   | Un projet Supabase, les deux fichiers SQL collés, le compartiment créé, l'URL et la clé | ~10 min | `.env.local`, variables EAS                                     |
+| 2   | Un compte Expo, et la connexion faite une fois                                          | ~5 min  | `eas init`, variables EAS, compilation de l'APK                 |
+| 3   | Un jeton Expo pour GitHub _(facultatif)_                                                | ~2 min  | le secret `EXPO_TOKEN`, qui réveille la compilation automatique |
+| 4   | Recopier les quatre identifiants SMTP                                                   | ~5 min  | ✅ les e-mails partent, jusqu'au clic sur le lien               |
+| 5   | Installer l'APK, ou signer l'IPA puis l'installer                                       | ~2 min  | les vérifications sur appareil réel                             |
+| 6   | Les quatre réglages du tableau de bord                                                  | ~5 min  | le contrôle des quatre valeurs                                  |
 
 **Où en est la mise en service : la « liste à cocher », plus bas, fait foi.** À ce  
 jour, les étapes 2, 3 et 4 sont faites — les e-mails fonctionnent jusqu'au clic sur le  
 lien reçu. De l'**étape 1**, il reste **deux gestes** : le second fichier SQL (§1.3) et  
-le compartiment des documents (§1.4). Ensuite viennent les quatre réglages du tableau  
-de bord, puis l'installation sur un téléphone.
+le compartiment des documents (§1.4). Viennent ensuite, dans cet ordre : installer  
+l'application (§5), créer votre compte, **vous promouvoir administrateur** (§1.8 — une  
+commande à coller, qui ne peut pas être la mienne), puis les quatre réglages du tableau  
+de bord (§6).
 
 Les deux binaires, eux, sont à jour du code actuel : la page des versions nomme, pour  
 chacun, le commit dont il est né. Un binaire antérieur à la refonte vous montrerait  
@@ -259,25 +261,51 @@ cette valeur.
 
 La règle à retenir : **la clé `sb_secret_…`, jamais. La clé `sb_publishable_…`, oui.**
 
-### 1.8 Ce que je fais ensuite, sans vous
+### 1.8 Ce qui reste, et à qui
 
-- j'écris les deux valeurs aux **lignes 40 et 44** de `.env.local`, un fichier que  
-  Git ignore ;
-- je lance `npm start` et je vérifie que l'écran de configuration disparaît ;
-- **vous** créez votre compte dans l'application (nom, adresse, mot de passe) — puis  
-  je vous promeus administrateur, avec la transaction `disable trigger` /  
-  `enable trigger`. Sans elle la commande échoue, parce que le verrou lit  
-  `auth.uid()`, qui vaut `NULL` dans l'éditeur SQL ;
-- j'enregistre les mêmes valeurs côté Expo, pour les trois environnements.
+**Déjà fait, et mesuré** : les deux valeurs sont écrites aux **lignes 40 et 44** de
+`.env.local` — un fichier que Git ignore. La compilation, elle, reçoit les siennes de
+l'environnement Expo, et le binaire publié a été **relu avant publication** : la clef
+qu'il contient est une clef publique, et c'est la même que celle enregistrée dans le
+dépôt.
+
+À la première ouverture de l'application, l'écran de configuration ne doit **pas**
+apparaître. S'il apparaît, c'est que les valeurs n'ont pas été lues — c'est le seul
+symptôme possible, et il ne dit rien d'autre.
+
+**Ce qui reste est un geste qui ne peut pas être le mien : vous promouvoir
+administrateur.** Le compte que vous créez dans l'application naît « membre » : la
+colonne `role` est verrouillée par un déclencheur, précisément pour qu'un membre ne
+puisse pas s'attribuer de droits. La promotion est donc **une commande SQL**, à coller
+dans l'éditeur SQL de Supabase.
+
+L'ordre compte : la commande ne peut rien promouvoir avant que votre compte existe, et
+votre compte se crée **dans l'application** — donc après l'installation (§5).
+
+Je ne peux pas la lancer à votre place : je ne détiens que la **clé publique** de votre
+projet, et c'est voulu — cette clé ne peut rien écrire que les politiques n'autorisent,
+et la colonne `role` est justement fermée. Un jeton capable d'écrire sans les politiques
+serait un jeton à ne pas faire circuler.
+
+La commande est écrite dans **`supabase/README.md`**, section « Après l'installation ».
+Copiez-la telle quelle, **en remplaçant `votre.adresse@exemple.fr` par l'adresse avec
+laquelle vous avez créé votre compte**. Si vous laissez l'adresse d'exemple, la
+commande ne trouvera aucune ligne — et **elle ne le dira pas** : un `update` qui ne
+touche rien n'est pas une erreur.
+
+Elle est encadrée par `disable trigger` / `enable trigger`, et ce n'est pas une
+précaution de style : le verrou lit `auth.uid()`, qui vaut `NULL` dans l'éditeur SQL.
+Sans cette parenthèse, la commande échoue sur « Seul un administrateur peut modifier le
+rôle d'un membre » — le message exact de ce que vous cherchez à faire.
 
 ### Si quelque chose ne marche pas
 
-| Ce que vous voyez                                          | Ce qui se passe                                                                        |
-| ---------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `relation "public.xxx" already exists`                     | normal, le fichier est rejouable : relancez, ou passez au suivant                      |
-| `Seul un administrateur peut modifier le rôle d'un membre` | c'est la promotion admin, pas la création des tables — je m'en occupe, c'est mon geste |
-| Le projet reste « Setting up » plus de 5 minutes           | rafraîchissez la page, puis dites-le moi                                               |
-| Vous ne trouvez pas **API Keys**                           | dites-moi ce que vous voyez dans le menu **Settings**                                  |
+| Ce que vous voyez                                          | Ce qui se passe                                                                                                                                                                                               |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `relation "public.xxx" already exists`                     | normal, le fichier est rejouable : relancez, ou passez au suivant                                                                                                                                             |
+| `Seul un administrateur peut modifier le rôle d'un membre` | c'est la promotion admin, et elle doit être encadrée par `disable trigger` / `enable trigger`. La commande complète est dans `supabase/README.md` — collez-la telle quelle, en remplaçant l'adresse d'exemple |
+| Le projet reste « Setting up » plus de 5 minutes           | rafraîchissez la page, puis dites-le moi                                                                                                                                                                      |
+| Vous ne trouvez pas **API Keys**                           | dites-moi ce que vous voyez dans le menu **Settings**                                                                                                                                                         |
 
 **Dans tous les cas : copiez-moi le message d'erreur entier.** Je préfère un  
 aller-retour de plus qu'un diagnostic deviné.
@@ -561,6 +589,9 @@ pas.
 
 **Plus tard, après le premier essai :**
 
+- [ ] Créer votre compte dans l'application, puis **vous promouvoir administrateur** —
+      une commande à coller depuis `supabase/README.md` (§1.8) : c'est votre geste, je
+      n'ai que la clé publique
 - [ ] Les quatre réglages du tableau de bord
 - [x] Recopier les quatre valeurs SMTP dans Supabase — vérifié jusqu'au clic sur le lien
 - [ ] Le jeton Expo pour GitHub _(facultatif)_

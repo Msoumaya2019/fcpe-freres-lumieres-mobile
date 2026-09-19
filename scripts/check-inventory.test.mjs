@@ -72,7 +72,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -284,6 +284,129 @@ test('chaque banc se nomme de façon à être vu par la liste du §9', () => {
     [],
     `le §9 du README est lu par un motif qui ne reconnaît que « check-… » : ` +
       `ce banc y serait invisible, et le §9 demanderait de l'y ajouter sans effet — ${malNommes.join(', ')}`,
+  );
+});
+
+/**
+ * Les renvois d'un document vers la **section** d'un autre : « `X.md`, section
+ * « Titre » ».
+ *
+ * Deux précautions, toutes deux mesurées.
+ *
+ * Le mot « section » est exigé : sans lui, la phrase « `README.md`,
+ * `supabase/README.md`, et les entrées « Redirect URLs » du tableau de bord »
+ * serait prise pour un renvoi vers une section nommée « Redirect URLs ».
+ *
+ * Et l'on ne retient que la suite **immédiate** des guillemets — « A », puis
+ * « et « B » » ou « , « B » » — en s'arrêtant au premier qui ne suit pas. Lire
+ * jusqu'à la fin du paragraphe ramassait huit fausses sections d'un coup, dont
+ * « ~ », « ^ » et « traité » : le paragraphe qui cite `SECURITY.md` continue
+ * ensuite sur d'autres citations, sans rapport avec le renvoi.
+ *
+ * Le texte reçu est **déjà normalisé** — ses retours à la ligne sont devenus des
+ * espaces. Sans cela, un renvoi que Prettier coupe sur deux lignes ne serait plus
+ * reconnu, et le contrôle deviendrait muet au lieu de tomber : c'est la leçon des
+ * continuations de ligne d'un fichier YAML, ici en Markdown.
+ */
+function renvoisVersUneSection(document, texte) {
+  const renvois = [];
+  const ouverture = /`([\w./-]+\.md)`[^.\n]{0,40}?sections?\s*«/g;
+
+  for (const nomme of texte.matchAll(ouverture)) {
+    const cible = nomme[1];
+    let reste = texte.slice(nomme.index + nomme[0].length);
+
+    for (;;) {
+      const titre = /^([^»]+) »/.exec(reste);
+      if (titre === null) {
+        break;
+      }
+
+      renvois.push({ document, cible, cite: titre[1] });
+      reste = reste.slice(titre[0].length);
+
+      const suivant = /^\s*(?:et|,)\s*«\s*/.exec(reste);
+      if (suivant === null) {
+        break;
+      }
+      reste = reste.slice(suivant[0].length);
+    }
+  }
+
+  return renvois;
+}
+
+/** Les titres d'un document, espaces normalisés : un titre cité peut être coupé sur deux lignes. */
+function titresDe(texte) {
+  return texte
+    .split('\n')
+    .filter((ligne) => /^#{1,6}\s/.test(ligne))
+    .map((ligne) => normaliser(ligne.replace(/^#{1,6}\s/, '')));
+}
+
+function normaliser(texte) {
+  return texte.replace(/\s+/g, ' ').trim();
+}
+
+/** Les documents du dépôt : la racine, et ceux de `supabase/`. */
+function documentsDuDepot() {
+  return [
+    ...readdirSync(RACINE).filter((nom) => nom.endsWith('.md')),
+    ...readdirSync(join(RACINE, 'supabase'))
+      .filter((nom) => nom.endsWith('.md'))
+      .map((nom) => `supabase/${nom}`),
+  ];
+}
+
+test('un renvoi vers une section nommée désigne un titre qui existe', () => {
+  // Un renvoi est une **adresse**, et une adresse peut être fausse. Celui-ci l'a
+  // été : le guide faisait coller la promotion du premier administrateur depuis
+  // « `supabase/README.md`, section « Premier administrateur » », et cette section
+  // n'existe pas — elle s'appelle « Après l'installation ». Le lecteur cherchait un
+  // titre absent, à l'endroit exact où il avait besoin de la commande.
+  //
+  // C'est la même famille que les cinq vérités recopiées : une affirmation qu'on
+  // peut relire, mais que personne ne relisait. La différence est qu'ici la copie
+  // est un **nom de section**, donc sa vérité est mécanique — un titre existe ou
+  // n'existe pas.
+  //
+  // Le titre cité peut être un **préfixe** du vrai : `README.md` cite « Ce que
+  // `authenticated` signifie » pour « Ce que `authenticated` signifie, et ne
+  // signifie pas ». C'est la seule tolérance, et elle reste vérifiante.
+  const fautifs = [];
+  let renvois = 0;
+
+  for (const document of documentsDuDepot()) {
+    for (const { cible, cite } of renvoisVersUneSection(
+      document,
+      normaliser(readFileSync(join(RACINE, document), 'utf8')),
+    )) {
+      renvois += 1;
+
+      if (!existsSync(join(RACINE, cible))) {
+        fautifs.push(`${document} renvoie vers \`${cible}\`, qui n'existe pas`);
+        continue;
+      }
+
+      const titres = titresDe(readFileSync(join(RACINE, cible), 'utf8'));
+      if (!titres.some((titre) => titre.startsWith(normaliser(cite)))) {
+        fautifs.push(`${document} renvoie vers « ${cite} » dans \`${cible}\`, sans ce titre`);
+      }
+    }
+  }
+
+  // Le nombre est un **plancher**, pas un décompte : il existe pour qu'un motif
+  // qui ne trouve plus rien fasse tomber le test au lieu de le laisser vert sur
+  // zéro renvoi. Il ne dit pas combien de renvois le dépôt contient.
+  assert.ok(
+    renvois >= 3,
+    `renvois lus : ${renvois} — le motif ne reconnaît plus les renvois, et ce test ne mesurerait rien`,
+  );
+
+  assert.deepEqual(
+    fautifs,
+    [],
+    `des renvois désignent un titre qui n'existe pas :\n  ${fautifs.join('\n  ')}`,
   );
 });
 
