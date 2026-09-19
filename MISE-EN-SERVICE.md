@@ -180,19 +180,23 @@ Le schéma `storage` est géré par Supabase et n'existe pas dans nos migrations
 une instruction le concernant empêcherait les fichiers ci-dessus d'être rejouables.
 Le compartiment se crée donc à la main, une fois.
 
-1. Menu de gauche → **Storage** → **New bucket**.
-2. Nom : `documents` — exactement, en minuscules.
-3. **Public bucket : laissez décoché.** L'application ne sert jamais un fichier
-   directement : elle demande une **adresse signée**, valable une heure. Un
-   compartiment public rendrait tous les documents lisibles par quiconque
-   possède l'adresse.
-4. Créez, puis ouvrez **Policies** sur ce compartiment, et collez-y **deux**
-   politiques de lecture dans l'éditeur SQL, comme les fichiers ci-dessus — le
-   tableau de bord les crée à l'identique, mais par des cases à cocher qu'on peut
-   mal remplir :
+1. Menu de gauche → **Storage**. **Si le compartiment `documents` existe déjà, ne
+   le recréez pas** — c'est le cas le plus fréquent, et c'est le bon : le tableau
+   de bord refuse deux compartiments du même nom, et il n'y a rien à réparer.
+   Passez directement à l'étape 3, qui est la seule qui compte.
+2. Sinon, **New bucket**. Nom : `documents` — exactement, en minuscules.
+3. **Public bucket : laissez décoché** — et vérifiez-le **même** sur un
+   compartiment qui existe déjà, car c'est le seul réglage qui ne se lit pas dans
+   le SQL. L'application ne sert jamais un fichier directement : elle demande une
+   **adresse signée**, valable une heure. Un compartiment public rendrait tous les
+   documents lisibles par quiconque possède l'adresse.
+4. Ouvrez **Policies** sur ce compartiment, et collez-y **deux** politiques de
+   lecture dans l'éditeur SQL, comme les fichiers ci-dessus — le tableau de bord
+   les crée à l'identique, mais par des cases à cocher qu'on peut mal remplir :
 
    ```sql
    --  Les documents destinés aux familles : lisibles par un parent sans compte.
+   drop policy if exists storage_documents_select_familles on storage.objects;
    create policy storage_documents_select_familles
    on storage.objects for select to anon
    using (
@@ -205,9 +209,38 @@ Le compartiment se crée donc à la main, une fois.
    );
 
    --  Tout le reste : réservé aux porteurs d'un jeton.
+   drop policy if exists storage_documents_select_bureau on storage.objects;
    create policy storage_documents_select_bureau
    on storage.objects for select to authenticated
    using (bucket_id = 'documents');
+   ```
+
+   Les deux `drop policy if exists` ne sont pas décoratifs : **sans eux, coller ce
+   bloc une seconde fois échoue** sur « policy … already exists ». Avec eux, le
+   bloc se rejoue, comme les fichiers de migration — et si vous ne savez plus si
+   vous les avez déjà collées, collez-le : le résultat est le même.
+
+   **Pour vérifier ce qui est réellement en place**, collez ceci dans l'éditeur
+   SQL — il liste **toutes** les politiques du compartiment, pas seulement les
+   nôtres :
+
+   ```sql
+   select policyname, cmd, roles
+     from pg_policies
+    where schemaname = 'storage'
+      and tablename = 'objects'
+    order by policyname;
+   ```
+
+   Vous devez y lire **nos deux lignes** : `storage_documents_select_familles`
+   pour `{anon}`, et `storage_documents_select_bureau` pour `{authenticated}`.
+   **Toute autre ligne sur ce compartiment est à supprimer** : les cases à cocher
+   du tableau de bord en créent d'autres, plus larges — une « public read » rend
+   le compartiment public sans que son réglage change, et tous les documents du
+   bureau deviennent lisibles par quiconque a l'adresse. Le cas échéant :
+
+   ```sql
+   drop policy if exists "nom exact lu ci-dessus" on storage.objects;
    ```
 
    **Les deux sont nécessaires, et pour deux raisons opposées.** Sans la
@@ -742,7 +775,7 @@ lien utilisable. Les deux adresses sont recopiées du fichier
 - [ ] `20260919120000_rubriques.sql` collé et exécuté → les six tables des rubriques
 - [ ] `20260920120000_acces_public.sql` collé et exécuté → l'application s'ouvre  
       **sans compte** : conversations avec le bureau, sondages, documents des familles
-- [ ] Compartiment `documents` créé dans Storage, **privé**, et ses **deux**  
+- [ ] Compartiment `documents` **privé** dans Storage, et ses **deux**  
       politiques de lecture collées _(sans elles, l'écran Documents est vide ou  
       échoue : une politique manquante rend une liste vide, pas une erreur)_
 - [ ] `seed.sql` collé et exécuté → à confirmer : je ne peux pas compter les lignes  
