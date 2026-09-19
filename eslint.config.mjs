@@ -25,6 +25,10 @@ export default tseslint.config(
       'ios/**',
       'expo-env.d.ts',
       'eslint.config.mjs',
+      // Tous les dossiers que Git ignore sont ici, sauf celui-ci — et c'est
+      // celui qui reçoit des fichiers : un script d'outillage oublié dedans
+      // faisait tomber `npm run lint`, sans rapport avec l'application.
+      '.workbuddy-ai/**',
     ],
   },
   js.configs.recommended,

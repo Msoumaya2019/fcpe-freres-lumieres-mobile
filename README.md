@@ -1950,6 +1950,17 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   serveur. Rien de tout cela n'est dans l'application, et rien n'y est
   nécessaire : le jour où l'émetteur existe, il n'y a que
   `enregistrerAppareil` à appeler depuis un écran.
+  **Mesuré sur une compilation native, et invisible autrement** :
+  `expo-notifications` est installé, mais son greffon n'est **pas** déclaré dans
+  `app.json` — donc aucune icône, aucune couleur, aucun canal — et **aucun
+  fichier de `src/` ne l'importe** : zéro occurrence de la chaîne dans le paquet
+  exporté. Le manifeste fusionné, lui, porte quand même `POST_NOTIFICATIONS`,
+  `RECEIVE_BOOT_COMPLETED`, un service FCM et un récepteur de démarrage, apportés
+  par le manifeste de la **bibliothèque** — donc l'APK livré déclare des
+  permissions qu'aucun code n'emploie. `expo export` ne peut pas le voir : il
+  n'exerce que du JavaScript. Le jour où un émetteur existera, il faudra les
+  trois gestes ensemble : déclarer le greffon, importer la bibliothèque, et
+  déposer la clef FCM dans Expo.
 - **Un seul salon de discussion.** Passer à des fils thématiques demande une
   colonne `thread_id` et un écran de détail.
 - **Pas de mode sombre.** `userInterfaceStyle` est fixé à `light`, avec
