@@ -1,18 +1,18 @@
 import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { AppState, Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, type ReactNode } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth, useCurrentUserId } from '@/auth/AuthProvider';
 import { TabBar, WeakPasswordNotice, type TabIcons } from '@/components';
+import { useNonLus } from '@/hooks/useNonLus';
 import { PlusStack } from '@/navigation/PlusStack';
 import type { MainTabParamList } from '@/navigation/types';
 import { AccueilScreen } from '@/screens/AccueilScreen';
 import { AgendaScreen } from '@/screens/AgendaScreen';
 import { CantineScreen } from '@/screens/CantineScreen';
 import { ContactScreen } from '@/screens/ContactScreen';
-import { compterMessagesNonLus } from '@/services/unread';
 import { colors, fontSize } from '@/theme';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -52,57 +52,6 @@ function SignOutButton() {
       <Ionicons name="log-out-outline" size={22} color={colors.textSecondary} />
     </Pressable>
   );
-}
-
-/**
- * Le nombre de messages non lus, pour la pastille de l'onglet « Plus ».
- *
- * POURQUOI CE COMPTE EST RECHARGÉ AU RETOUR AU PREMIER PLAN
- * --------------------------------------------------------
- * Un badge calculé une seule fois à l'ouverture resterait faux pendant toute la
- * session : un message arrivé entre-temps ne le ferait pas bouger, et un message
- * lu non plus. Le recalcul a donc lieu au retour au premier plan — le moment où
- * l'adhérent reprend son téléphone, et le seul où le chiffre compte.
- *
- * Aucun intervalle de rafraîchissement : une requête toutes les N secondes pour
- * un badge coûterait de la batterie et de la connexion sans rien apporter, et
- * l'écran de discussion marque les messages lus en s'ouvrant — le badge se
- * corrige donc de lui-même au retour.
- */
-function useNonLus(userId: string): number {
-  const [nonLus, setNonLus] = useState(0);
-
-  useEffect(() => {
-    let vivant = true;
-
-    const rafraichir = () => {
-      compterMessagesNonLus(userId)
-        .then((nombre) => {
-          if (vivant) {
-            setNonLus(nombre);
-          }
-        })
-        .catch(() => {
-          // Un badge ne doit pas empêcher l'application de s'ouvrir. En cas
-          // d'échec on garde le dernier compte connu, ou zéro.
-        });
-    };
-
-    rafraichir();
-
-    const abonnement = AppState.addEventListener('change', (etat) => {
-      if (etat === 'active') {
-        rafraichir();
-      }
-    });
-
-    return () => {
-      vivant = false;
-      abonnement.remove();
-    };
-  }, [userId]);
-
-  return nonLus;
 }
 
 /**

@@ -16,7 +16,7 @@
  * `@/errors` doit trouver `src/errors/index.ts`.
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const SOURCE_ROOT = fileURLToPath(new URL('../src/', import.meta.url));
@@ -40,7 +40,30 @@ const STUBS = new Map([
   ['expo-secure-store', './stubs/expo-secure-store.mjs'],
   ['react-native', './stubs/react-native.mjs'],
   ['@react-native-async-storage/async-storage', './stubs/async-storage.mjs'],
+  ['react-native-url-polyfill/auto', './stubs/react-native-url-polyfill.mjs'],
 ]);
+
+/**
+ * Un candidat n'est retenu que s'il est un **fichier**.
+ *
+ * POURQUOI CETTE PRÉCISION
+ * ------------------------
+ * `existsSync` est vrai pour un dossier. `@/errors` désigne `src/errors/`, qui
+ * contient un `index.ts` : le chargeur s'arrêtait donc sur le dossier, et Node
+ * refusait l'import (`ERR_UNSUPPORTED_DIR_IMPORT`) — alors que le module existait.
+ *
+ * Le défaut est resté invisible longtemps parce qu'aucun banc n'importait un
+ * module qui traverse un alias de dossier : `@/errors` n'est atteint que par les
+ * services, et les bancs qui les lisent le font par le **texte**, sans les
+ * importer. Il est apparu au premier banc qui a réellement chargé un service.
+ *
+ * La mesure est le `statSync`, et il n'est pas une coquetterie : sans lui, un
+ * dossier ajouté sous `src/` masquerait le module de même nom, et l'erreur
+ * désignerait Node au lieu du chargeur.
+ */
+function estFichier(chemin) {
+  return existsSync(chemin) && statSync(chemin).isFile();
+}
 
 export function resolve(specifier, context, next) {
   const stub = STUBS.get(specifier);
@@ -55,7 +78,7 @@ export function resolve(specifier, context, next) {
   const base = SOURCE_ROOT + specifier.slice(2);
 
   for (const candidate of [base, ...EXTENSIONS.map((extension) => `${base}${extension}`)]) {
-    if (existsSync(candidate)) {
+    if (estFichier(candidate)) {
       return next(pathToFileURL(candidate).href, context);
     }
   }

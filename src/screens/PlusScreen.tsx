@@ -1,14 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useCallback, useRef } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { useCallback } from 'react';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 
 import { useAuth, useCurrentUserId } from '@/auth/AuthProvider';
-import { AppText, AsyncErrorBanner, AsyncFallback, Button, Card, Screen } from '@/components';
-import { useAsyncData } from '@/hooks/useAsyncData';
+import { AppText, Button, Card, Screen } from '@/components';
+import { useNonLus } from '@/hooks/useNonLus';
 import type { PlusStackParamList } from '@/navigation/types';
-import { compterMessagesNonLus } from '@/services/unread';
 import { accents, colors, radius, spacing, type AccentName } from '@/theme';
 
 interface Entree {
@@ -88,47 +86,26 @@ const ENTREES: readonly Entree[] = [
  * La discussion, les signalements et les actualités existaient comme onglets
  * avant la refonte. Elles sont **reclassées**, pas retirées : leurs écrans, leurs
  * tables et leurs politiques sont inchangés, et on y accède par ce menu.
+ *
+ * POURQUOI CET ÉCRAN NE CHARGE PLUS RIEN LUI-MÊME
+ * -----------------------------------------------
+ * Il portait un `useAsyncData` dont la seule donnée était le nombre de non-lus,
+ * relu au retour sur l'écran pour corriger un badge périmé. C'était la troisième
+ * copie du même chiffre — et la seule des trois qui se corrigeait. Les deux
+ * autres, la pastille de l'onglet et la cloche de l'accueil, continuaient
+ * d'annoncer des messages déjà lus.
+ *
+ * Le compte est maintenant partagé, publié par `src/services/unread.ts` et lu par
+ * `useNonLus` : plus de relecture au retour, plus de drapeau de premier
+ * affichage, et plus de tirer-pour-rafraîchir sur un menu dont le contenu ne
+ * dépend pas du réseau. L'écran redevient ce qu'il est — une liste de rubriques —
+ * et il reste utilisable hors ligne, ce que la version précédente ne garantissait
+ * que par un commentaire.
  */
 export function PlusScreen({ navigation }: NativeStackScreenProps<PlusStackParamList, 'PlusHome'>) {
   const userId = useCurrentUserId();
   const { profile, signOut } = useAuth();
-
-  const loader = useCallback(() => compterMessagesNonLus(userId), [userId]);
-  const { status, data, errorMessage, refreshing, refresh, reload } = useAsyncData(loader);
-
-  const nonLus = data ?? 0;
-
-  /**
-   * Le compte est relu au **retour** sur cet écran, mais pas au premier
-   * affichage.
-   *
-   * POURQUOI CETTE RELECTURE EXISTE
-   * -------------------------------
-   * La discussion marque ses messages lus en s'ouvrant, et cet écran-ci affiche
-   * le badge correspondant. Un écran de pile n'étant pas démonté quand on en
-   * empile un autre, revenir depuis la discussion retrouverait les données
-   * d'avant : un badge qui désigne des messages **déjà lus**, donc un badge qui
-   * ment. La relecture au retour est ce qui le corrige.
-   *
-   * POURQUOI PAS AU PREMIER AFFICHAGE
-   * ---------------------------------
-   * `useAsyncData` charge déjà au montage. Laisser l'effet s'exécuter une
-   * première fois enverrait la même requête deux fois à l'ouverture de l'onglet.
-   * Le drapeau écarte ce seul passage ; il ne retient rien d'autre, et n'a donc
-   * pas à être remis à zéro.
-   */
-  const premierAffichage = useRef(true);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (premierAffichage.current) {
-        premierAffichage.current = false;
-        return;
-      }
-
-      reload();
-    }, [reload]),
-  );
+  const nonLus = useNonLus(userId);
   const role = profile?.role === 'admin' ? 'Bureau de l’association' : 'Adhérent';
 
   const renderItem = useCallback(
@@ -189,29 +166,19 @@ export function PlusScreen({ navigation }: NativeStackScreenProps<PlusStackParam
         keyExtractor={(item) => item.cle}
         renderItem={renderItem}
         contentContainerStyle={styles.liste}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />
-        }
         ListHeaderComponent={
-          <>
-            <AsyncErrorBanner status={status} hasData errorMessage={errorMessage} />
-
-            <Card elevated style={styles.identite}>
-              <AppText variant="heading">{profile?.display_name ?? 'Adhérent'}</AppText>
-              <AppText variant="caption">{role}</AppText>
-            </Card>
-          </>
+          <Card elevated style={styles.identite}>
+            <AppText variant="heading">{profile?.display_name ?? 'Adhérent'}</AppText>
+            <AppText variant="caption">{role}</AppText>
+          </Card>
         }
         ListFooterComponent={
           <View style={styles.pied}>
-            {/* L'erreur du chargement n'a pas de repli ici : la liste des
-                rubriques ne dépend pas du réseau, et remplacer le menu par un
-                écran d'erreur rendrait l'application inutilisable hors ligne.
-                Le bandeau suffit — les rubriques restent atteignables. */}
-            {status === 'error' ? (
-              <Button label="Réessayer" variant="secondary" onPress={reload} />
-            ) : null}
-
+            {/* Ni bandeau d'erreur ni bouton « Réessayer » : le seul chargement
+                de cet écran est le compte des non-lus, et il n'a pas d'échec
+                visible — voir `rafraichirNonLus`, qui ne rejette jamais. Une
+                rubrique injoignable se signale dans son propre écran, là où
+                l'adhérent la demande. */}
             <Button
               label="Se déconnecter"
               variant="secondary"
@@ -220,15 +187,6 @@ export function PlusScreen({ navigation }: NativeStackScreenProps<PlusStackParam
               }}
             />
           </View>
-        }
-        ListEmptyComponent={
-          <AsyncFallback
-            status={status}
-            hasData
-            errorMessage={errorMessage}
-            onRetry={reload}
-            emptyTitle=""
-          />
         }
       />
     </Screen>

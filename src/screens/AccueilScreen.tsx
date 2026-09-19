@@ -24,10 +24,10 @@ import {
   ShortcutCard,
 } from '@/components';
 import { useAsyncData } from '@/hooks/useAsyncData';
+import { useNonLus } from '@/hooks/useNonLus';
 import type { MainTabParamList } from '@/navigation/types';
 import { fetchAnnonces } from '@/services/annonces';
 import { fetchSondages, sondageOuvert } from '@/services/sondages';
-import { compterMessagesNonLus } from '@/services/unread';
 import { accents, colors, radius, spacing } from '@/theme';
 import type { AnnonceWithAuthor } from '@/types/models';
 
@@ -36,7 +36,6 @@ const VIDE: readonly AnnonceWithAuthor[] = [];
 /** Ce que l'accueil charge en une fois. */
 interface DonneesAccueil {
   readonly annonces: readonly AnnonceWithAuthor[];
-  readonly nonLus: number;
   readonly sondage: ReturnType<typeof sondageOuvert>;
 }
 
@@ -85,25 +84,27 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
   const userId = session?.user.id ?? '';
 
   const loader = useCallback(async (): Promise<DonneesAccueil> => {
-    // Les trois chargements partent ensemble : l'écran affiche tout d'un coup,
-    // au lieu de se remplir par morceaux. Sur une connexion mobile médiocre, un
+    // Les deux chargements partent ensemble : l'écran affiche tout d'un coup, au
+    // lieu de se remplir par morceaux. Sur une connexion mobile médiocre, un
     // enchaînement séquentiel se verrait — la salutation, puis les actualités,
-    // puis le badge, chacun après sa propre attente.
-    const [annonces, sondages, nonLus] = await Promise.all([
-      fetchAnnonces(),
-      fetchSondages(userId),
-      compterMessagesNonLus(userId),
-    ]);
+    // chacune après sa propre attente.
+    //
+    // Le nombre de non-lus n'en fait plus partie. Il est **partagé** avec la
+    // pastille de l'onglet « Plus » et la ligne « Discussion », et il vivait donc
+    // ici en double : cette copie-ci se rafraîchissait au montage et au tirer
+    // pour rafraîchir, jamais au retour d'une lecture. La cloche annonçait des
+    // messages déjà lus. Voir `src/hooks/useNonLus.ts`.
+    const [annonces, sondages] = await Promise.all([fetchAnnonces(), fetchSondages(userId)]);
 
-    return { annonces, nonLus, sondage: sondageOuvert(sondages) };
+    return { annonces, sondage: sondageOuvert(sondages) };
   }, [userId]);
 
   const { status, data, errorMessage, refreshing, refresh, reload } = useAsyncData(loader);
 
   const annonces = data?.annonces ?? VIDE;
-  const nonLus = data?.nonLus ?? 0;
   const sondage = data?.sondage ?? null;
   const prenom = profile?.display_name ?? '';
+  const nonLus = useNonLus(userId);
 
   const ouvrir = useCallback(
     (cle: (typeof RACCOURCIS)[number]['cle']) => {

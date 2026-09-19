@@ -565,7 +565,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-sdk-pins.test.mjs    les paquets installés, contre les épinglages du SDK
 │   ├── check-scripts-executables.test.mjs  les commandes que `package.json` lance, et leur existence
 │   ├── check-audit-scope.test.mjs  ce qui est livré, et ce qui est seulement construit
-│   └── check-parser-surface.test.mjs  les types de nœud que l'analyseur produit, et ce que les bancs en lisent
+│   ├── check-parser-surface.test.mjs  les types de nœud que l'analyseur produit, et ce que les bancs en lisent
+│   └── check-non-lus.test.mjs     un chiffre affiché trois fois, et sa seule source
 └── .github/workflows/             CI, build EAS, IPA non signé
 ```
 
@@ -1881,7 +1882,7 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Vingt-neuf fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Trente fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
@@ -1890,7 +1891,8 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   `check-read-bounds`, `check-workflows`, `check-paquet`, `check-eas-vocabulary`,
   `check-migration-rejouable`, `check-migration-applicable`,
   `check-rls-comportement`, `check-sdk-pins`, `check-scripts-executables`,
-  `check-markdown-listes`, `check-audit-scope` et `check-parser-surface`
+  `check-markdown-listes`, `check-audit-scope`, `check-parser-surface` et
+  `check-non-lus`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui
@@ -1902,7 +1904,10 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   l'accord du schéma SQL avec son miroir TypeScript, le câblage des issues de
   secours de chaque écran, garde de l'état vide comprise, la lisibilité de la
   palette, la durée d'un indicateur d'action, la **portée** d'une borne de
-  mot de passe, l'endroit où se place un bandeau et la forme de sa coque — les
+  mot de passe, le **partage** d'un chiffre entre ses trois afficheurs — un compte
+  calculé à un seul endroit, et publié quand il change, faute de quoi deux des trois
+  annonçaient des messages déjà lus —, l'endroit où se place un bandeau et la forme
+  de sa coque — les
   endroits où une
   erreur ne produit ni exception ni message d'erreur, seulement un comportement
   faux, un texte illisible, un bouton qui semble n'avoir rien fait ou une phrase
