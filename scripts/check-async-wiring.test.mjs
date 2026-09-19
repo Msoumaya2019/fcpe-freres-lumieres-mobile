@@ -42,15 +42,51 @@
  * qu'aucune route ne l'atteignait — alors que `App.tsx`, à la racine, le monte.
  * Le défaut n'existait pas ; la mesure était fausse. C'est le même piège que
  * celui des commentaires : une recherche dont la portée est trop étroite rend une
- * réponse fausse avec l'assurance d'une réponse vraie. Le test qui suit garde la
- * bonne portée, et il tient une propriété qu'aucun autre banc ne voyait : un
- * écran que rien ne monte passe le typage, le lint et le contrôle des contrastes,
- * et il reste mort.
+ * réponse fausse avec l'assurance d'une réponse vraie. Un écran que rien ne monte
+ * passe le typage, le lint et le contrôle des contrastes, et il reste mort.
+ *
+ * TROIS PROPRIÉTÉS, ET NON UNE — LA PREMIÈRE ÉTAIT FAUSSE
+ * ------------------------------------------------------
+ * Ce contrôle a d'abord compté les **occurrences du nom** de l'export, en
+ * exigeant au moins deux : sa déclaration, et l'endroit qui le monte. Mesuré le
+ * 2026-09-19 en retirant la seule ligne `<Stack.Screen … component={
+ * DocumentsScreen} />` de `PlusStack.tsx` — **import conservé**, ce que fait une
+ * fusion mal résolue ou un retrait qu'on croit annulé : le nom apparaît encore
+ * deux fois, et le banc restait **vert sur un écran inatteignable**. Un compte
+ * d'occurrences n'est pas une relation ; il se satisfait d'une mention.
+ *
+ * Les trois propriétés tenues aujourd'hui se lisent dans l'**arbre syntaxique**,
+ * et elles se recouvrent sans se répéter :
+ *
+ *  1. **Le module est atteint** depuis `App.tsx` ou `index.ts`, par fermeture
+ *     transitive des imports. Un écran importé seulement par un écran que rien
+ *     n'importe est orphelin à deux niveaux, et un relevé à un niveau le
+ *     déclarerait vivant.
+ *  2. **Tout écran importé par un navigateur y est monté** : la relation entre
+ *     l'import et un `<*.Screen component={…}>`. C'est le défaut que la première
+ *     propriété ne peut pas voir — un module importé est vivant pour la
+ *     fermeture, alors qu'aucune route n'y mène.
+ *  3. **Les routes déclarées et le type des routes s'accordent.** Le type est
+ *     **déduit** de l'appel qui crée le navigateur (`createBottomTabNavigator<
+ *     MainTabParamList>()`) plutôt qu'écrit dans une table : une table se
+ *     périmerait au premier navigateur ajouté. Une route présente dans le type
+ *     mais absente des écrans compile — les `navigate('…')` sont vérifiés contre
+ *     le type, et rien ne vérifie le type contre les écrans —, et le défaut
+ *     n'apparaît qu'à l'exécution, sous le doigt de l'adhérent.
+ *
+ * Éprouvé dans les deux sens, six mutations, six verdicts conformes : route
+ * retirée avec import conservé → rouge sur (2) ; route **et** import retirés →
+ * rouge sur (1) ; onglet retiré avec import conservé, dans `MainTabs` et son
+ * `<Tab.Screen>` → rouge sur (2), ce qui vérifie que le contrôle ne dépend pas du
+ * nom local du navigateur ; clé de type retirée, puis clé de type ajoutée sans
+ * écran → rouge sur (3) ; et **route simplement déplacée → vert partout**, ce qui
+ * est la seule mesure qui prouve que le rouge vient du défaut et non du fait
+ * d'avoir touché au fichier.
  */
 
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -450,60 +486,231 @@ test("le témoin : l'analyse reconnaît une garde de vacuité, même imbriquée,
 });
 
 /**
- * Toutes les sources de l'application : `src/`, plus les deux fichiers de la
- * racine qui montent le reste.
- *
- * `App.tsx` est **indispensable** ici. C'est lui qui monte `ConfigurationScreen`,
- * l'écran de secours affiché quand les clés d'API manquent — et un relevé qui
- * s'arrête à `src/` conclut à tort qu'aucune route ne l'atteint. L'erreur a été
- * commise à la main, juste avant d'écrire ce test ; `check-env-guard` avait déjà
- * la bonne portée pour la même raison.
+ * Le nom de module d'un fichier, dans la convention du dépôt : `@/` pour `src/`,
+ * un chemin relatif pour les deux fichiers de la racine.
  */
-function sourcesDeLApplication() {
-  return [
+function nomDeModule(chemin) {
+  const relatif = relative(RACINE, chemin).replace(/\\/g, '/');
+  if (relatif === 'App.tsx' || relatif === 'index.ts') {
+    return './' + relatif;
+  }
+  return '@/'.concat(relatif.replace(/^src\//, '').replace(/\.(tsx|ts)$/, ''));
+}
+
+/**
+ * Les modules de l'application, indexés par leur nom d'importation.
+ *
+ * `App.tsx` et `index.ts` sont **indispensables** ici, et pas seulement `src/`.
+ * C'est `App.tsx` qui monte `ConfigurationScreen`, l'écran de secours affiché
+ * quand les clés d'API manquent : un relevé qui s'arrête à `src/` conclut à tort
+ * qu'aucune route ne l'atteint. L'erreur a été commise à la main, deux fois — la
+ * seconde en rédigeant ce fichier —, et `check-env-guard` avait déjà la bonne
+ * portée pour la même raison.
+ */
+function modulesDeLApplication() {
+  const parNom = new Map();
+
+  for (const chemin of [
     ...fichiersSous('src', ['.ts', '.tsx']),
     join(RACINE, 'App.tsx'),
     join(RACINE, 'index.ts'),
-  ].map((chemin) => sansCommentaires(lireFichier(chemin)));
+  ]) {
+    parNom.set(nomDeModule(chemin), chemin);
+  }
+
+  return parNom;
 }
 
-test('aucun écran n’est orphelin : chacun est monté quelque part', () => {
+/** Les imports statiques d'un fichier, résolus en noms de modules connus. */
+function importsResolus(chemin, parNom) {
+  const source = ts.createSourceFile(chemin, lireFichier(chemin), ts.ScriptTarget.Latest, true);
+  const sortants = [];
+
+  for (const declaration of source.statements) {
+    if (!ts.isImportDeclaration(declaration) || !ts.isStringLiteral(declaration.moduleSpecifier)) {
+      continue;
+    }
+
+    const specificateur = declaration.moduleSpecifier.text;
+    let cible = null;
+
+    if (specificateur.startsWith('@/')) {
+      cible = specificateur;
+    } else if (specificateur.startsWith('./') || specificateur.startsWith('../')) {
+      const absolu = relative(RACINE, resolve(dirname(chemin), specificateur)).replace(/\\/g, '/');
+      cible = absolu.startsWith('src/') ? '@/' + absolu.replace(/^src\//, '') : './' + absolu;
+    }
+
+    // Un spécificateur qui ne se résout pas est laissé de côté : `tsc` le
+    // signale déjà, et l'accuser ici ajouterait un rouge sans cause nouvelle.
+    if (cible !== null && parNom.has(cible)) {
+      sortants.push(cible);
+    }
+  }
+
+  return sortants;
+}
+
+/**
+ * Les modules réellement atteints depuis le point d'entrée.
+ *
+ * Fermeture transitive, et non « importé par quelqu'un » : un écran importé
+ * seulement par un écran que rien n'importe est orphelin **à deux niveaux**, et
+ * un relevé à un niveau le déclarerait vivant.
+ */
+function modulesAtteints(parNom) {
+  const atteints = new Set();
+  const aVoir = ['./App.tsx', './index.ts'];
+
+  while (aVoir.length > 0) {
+    const nom = aVoir.pop();
+    if (atteints.has(nom) || !parNom.has(nom)) {
+      continue;
+    }
+    atteints.add(nom);
+    for (const suivant of importsResolus(parNom.get(nom), parNom)) {
+      if (!atteints.has(suivant)) {
+        aVoir.push(suivant);
+      }
+    }
+  }
+
+  return atteints;
+}
+
+/**
+ * Ce qu'un fichier de navigateur importe depuis `@/screens/`, ce qu'il monte
+ * réellement, et les routes qu'il déclare — lus dans l'arbre syntaxique.
+ *
+ * L'arbre, et non le texte : les trois propriétés ci-dessous sont des
+ * **relations** entre un nom et un emplacement, et une expression régulière les
+ * rend par des proximités. C'est exactement l'erreur qui a produit le faux
+ * positif corrigé plus haut dans ce fichier.
+ */
+function montageDUnNavigateur(chemin) {
+  const source = ts.createSourceFile(chemin, lireFichier(chemin), ts.ScriptTarget.Latest, true);
+  const importes = new Map();
+  const montes = new Set();
+  const routes = [];
+  let typeDeRoutes = null;
+
+  function visiter(noeud) {
+    if (ts.isImportDeclaration(noeud) && ts.isStringLiteral(noeud.moduleSpecifier)) {
+      const module = noeud.moduleSpecifier.text;
+      const liaisons = noeud.importClause?.namedBindings;
+
+      if (liaisons !== undefined && ts.isNamedImports(liaisons)) {
+        for (const element of liaisons.elements) {
+          importes.set(element.name.text, module);
+        }
+      }
+    }
+
+    // Le type des routes, déduit de l'appel qui crée le navigateur :
+    // `createBottomTabNavigator<MainTabParamList>()`. Le déduire plutôt que
+    // l'écrire évite une table à tenir, qui se périmerait au premier navigateur
+    // ajouté — et un navigateur sans type passerait alors sans être vu.
+    if (
+      ts.isCallExpression(noeud) &&
+      /^create\w*Navigator$/.test(noeud.expression.getText(source))
+    ) {
+      const argument = noeud.typeArguments?.[0];
+      typeDeRoutes = argument === undefined ? null : argument.getText(source);
+    }
+
+    if (ts.isJsxOpeningElement(noeud) || ts.isJsxSelfClosingElement(noeud)) {
+      if (noeud.tagName.getText(source).endsWith('.Screen')) {
+        let nom = null;
+        let composant = null;
+
+        for (const attribut of noeud.attributes.properties) {
+          if (!ts.isJsxAttribute(attribut)) {
+            continue;
+          }
+          const cle = attribut.name.getText(source);
+          const valeur = attribut.initializer;
+
+          if (cle === 'name' && valeur !== undefined && ts.isStringLiteral(valeur)) {
+            nom = valeur.text;
+          }
+          if (
+            cle === 'component' &&
+            valeur !== undefined &&
+            ts.isJsxExpression(valeur) &&
+            valeur.expression !== undefined
+          ) {
+            composant = valeur.expression.getText(source);
+          }
+        }
+
+        if (composant !== null) {
+          montes.add(composant);
+        }
+        if (nom !== null) {
+          routes.push(nom);
+        }
+      }
+    }
+
+    ts.forEachChild(noeud, visiter);
+  }
+
+  visiter(source);
+
+  return { importes, montes, routes: routes.sort(), typeDeRoutes };
+}
+
+/** Les clés d'un type de routes, lues dans `src/navigation/types.ts`. */
+function clesDuType(nom) {
+  const chemin = join(RACINE, 'src', 'navigation', 'types.ts');
+  const source = ts.createSourceFile(chemin, lireFichier(chemin), ts.ScriptTarget.Latest, true);
+  let cles = null;
+
+  function visiter(noeud) {
+    if (ts.isTypeAliasDeclaration(noeud) && noeud.name.text === nom) {
+      const membres = ts.isTypeLiteralNode(noeud.type) ? noeud.type.members : [];
+      cles = membres
+        .filter((membre) => ts.isPropertySignature(membre) && membre.name !== undefined)
+        .map((membre) => membre.name.getText(source))
+        .sort();
+    }
+    ts.forEachChild(noeud, visiter);
+  }
+
+  visiter(source);
+
+  return cles;
+}
+
+const NAVIGATEURS = fichiersSous('src/navigation', ['.tsx']);
+
+test('aucun écran n’est orphelin : le module est atteint depuis l’entrée', () => {
   // Un écran que rien ne monte passe le typage, le lint, le contrôle des
   // contrastes et tous les autres bancs — et il reste **mort**. Le cas est
   // d'autant plus traître qu'il est invisible à la relecture : le fichier
   // ressemble à tous les autres, et c'est son absence d'une ligne ailleurs qui
-  // fait le défaut. Le dossier est la source de vérité : un écran ajouté entre
-  // donc dans ce contrôle sans qu'on y pense.
+  // fait le défaut.
+  //
+  // Ce test a d'abord compté les **occurrences du nom** de l'export, en exigeant
+  // au moins deux : sa déclaration, et l'endroit qui le monte. La propriété
+  // était fausse, et sa falsification l'a montré : en retirant la seule ligne
+  // `<Stack.Screen … component={DocumentsScreen} />` de `PlusStack.tsx` — en
+  // laissant l'import, ce que fait une fusion mal résolue — le nom apparaît
+  // encore deux fois, et le banc restait **vert sur un écran inatteignable**.
+  // Il compare maintenant des **noms de modules**, qu'une mention ne peut pas
+  // satisfaire.
   assert.ok(ECRANS.length > 0, 'aucun fichier dans `src/screens` : le test ne vérifierait rien');
 
-  const sources = sourcesDeLApplication();
+  const parNom = modulesDeLApplication();
+  const atteints = modulesAtteints(parNom);
   const orphelins = [];
 
   for (const chemin of ECRANS) {
     const relatif = relative(RACINE, chemin).replace(/\\/g, '/');
-    const noms = [
-      ...sansCommentaires(lireFichier(chemin)).matchAll(
-        /export\s+(?:const|function|class)\s+([A-Za-z_$][\w$]*)/g,
-      ),
-    ].map((trouve) => trouve[1]);
+    const module = nomDeModule(chemin);
 
-    // Zéro export signifie que le motif ne correspond plus : le test deviendrait
-    // vert en ne mesurant rien, ce qui est le pire des états.
-    assert.ok(noms.length > 0, `${relatif} : aucun export de composant relevé`);
-
-    for (const nom of noms) {
-      // Le nom doit apparaître **au moins deux fois** hors commentaires : sa
-      // déclaration, et l'endroit qui le monte. Un nom cité seulement dans un
-      // commentaire ne compte pas — d'où le retrait préalable.
-      const motif = new RegExp(`\\b${nom.replace(/\$/g, '\\$')}\\b`, 'g');
-      const occurrences = sources.reduce(
-        (total, source) => total + (source.match(motif) ?? []).length,
-        0,
-      );
-
-      if (occurrences < 2) {
-        orphelins.push(`${relatif} : « ${nom} » n'apparaît qu'à sa déclaration`);
-      }
+    if (!atteints.has(module)) {
+      orphelins.push(`${relatif} : \`${module}\` n'est atteint depuis aucun point d'entrée`);
     }
   }
 
@@ -511,5 +718,80 @@ test('aucun écran n’est orphelin : chacun est monté quelque part', () => {
     orphelins,
     [],
     "un écran que rien ne monte est un écran que l'adhérent ne verra jamais",
+  );
+});
+
+test('tout écran importé par un navigateur y est monté', () => {
+  // Le défaut que le test précédent ne peut pas voir : un écran **atteint**
+  // — son module est importé — mais qu'aucune route ne monte. L'import suffit à
+  // le rendre vivant pour la fermeture ci-dessus, alors que l'adhérent ne peut
+  // toujours pas y arriver. C'est la relation entre l'import et la route qui
+  // fait la différence, et elle se lit dans l'arbre.
+  assert.ok(NAVIGATEURS.length > 0, 'aucun navigateur relevé : le test ne vérifierait rien');
+
+  const fautifs = [];
+
+  for (const chemin of NAVIGATEURS) {
+    const { importes, montes } = montageDUnNavigateur(chemin);
+
+    for (const [local, module] of importes) {
+      if (!module.startsWith('@/screens/') || montes.has(local)) {
+        continue;
+      }
+      fautifs.push(
+        `${relative(RACINE, chemin).replace(/\\/g, '/')} importe \`${local}\` (${module}) ` +
+          'sans le monter dans aucun `<*.Screen component={…}>`',
+      );
+    }
+  }
+
+  assert.deepEqual(
+    fautifs,
+    [],
+    "un écran importé par un navigateur mais monté par aucune route reste hors d'atteinte",
+  );
+});
+
+test('les routes déclarées et le type des routes s’accordent', () => {
+  // Une route présente dans le type mais absente des écrans compile : les
+  // appels `navigate('Rubrique')` sont vérifiés contre le type, et rien ne
+  // vérifie le type contre les écrans. Le défaut n'apparaît donc qu'à
+  // l'exécution, sur le geste de l'adhérent, et sous la forme d'une erreur de
+  // navigation — le plus tard possible, et au pire endroit.
+  assert.ok(NAVIGATEURS.length > 0, 'aucun navigateur relevé : le test ne vérifierait rien');
+
+  const desaccords = [];
+  let accords = 0;
+
+  for (const chemin of NAVIGATEURS) {
+    const relatif = relative(RACINE, chemin).replace(/\\/g, '/');
+    const { routes, typeDeRoutes } = montageDUnNavigateur(chemin);
+
+    assert.notStrictEqual(
+      typeDeRoutes,
+      null,
+      `${relatif} doit passer son type de routes en argument : sans lui, ce contrôle ne mesure rien`,
+    );
+
+    const cles = clesDuType(typeDeRoutes);
+    assert.notStrictEqual(cles, null, `\`${typeDeRoutes}\` est introuvable dans types.ts`);
+
+    const seulementDansLeType = cles.filter((cle) => !routes.includes(cle));
+    const seulementDansLesEcrans = routes.filter((route) => !cles.includes(route));
+
+    if (seulementDansLeType.length === 0 && seulementDansLesEcrans.length === 0) {
+      accords += 1;
+    } else {
+      desaccords.push(
+        `${relatif} (${typeDeRoutes}) — dans le type seulement : ${seulementDansLeType.join(', ') || 'aucune'}` +
+          ` ; dans les écrans seulement : ${seulementDansLesEcrans.join(', ') || 'aucune'}`,
+      );
+    }
+  }
+
+  assert.deepEqual(desaccords, [], `routes et types en désaccord :\n  ${desaccords.join('\n  ')}`);
+  assert.ok(
+    accords > 0,
+    'aucun accord constaté : le contrôle n’a rien comparé, ce qui est le pire des états',
   );
 });
