@@ -181,6 +181,201 @@ export type Database = {
         };
         Relationships: [];
       };
+      agenda_events: {
+        Row: {
+          id: string;
+          title: string;
+          description: string | null;
+          start_at: string;
+          end_at: string | null;
+          location: string | null;
+          all_day: boolean;
+          author_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          description?: string | null;
+          start_at: string;
+          end_at?: string | null;
+          location?: string | null;
+          all_day?: boolean;
+          author_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          description?: string | null;
+          start_at?: string;
+          end_at?: string | null;
+          location?: string | null;
+          all_day?: boolean;
+          author_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      documents: {
+        Row: {
+          id: string;
+          title: string;
+          description: string | null;
+          category: Database['public']['Enums']['document_category'];
+          storage_path: string;
+          size_bytes: number | null;
+          published_at: string;
+          author_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          description?: string | null;
+          category?: Database['public']['Enums']['document_category'];
+          storage_path: string;
+          size_bytes?: number | null;
+          published_at?: string;
+          author_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          description?: string | null;
+          category?: Database['public']['Enums']['document_category'];
+          storage_path?: string;
+          size_bytes?: number | null;
+          published_at?: string;
+          author_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      sondages: {
+        Row: {
+          id: string;
+          question: string;
+          details: string | null;
+          is_open: boolean;
+          closed_at: string | null;
+          author_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          question: string;
+          details?: string | null;
+          is_open?: boolean;
+          closed_at?: string | null;
+          author_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          question?: string;
+          details?: string | null;
+          is_open?: boolean;
+          closed_at?: string | null;
+          author_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      sondage_choices: {
+        Row: {
+          id: string;
+          sondage_id: string;
+          label: string;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          sondage_id: string;
+          label: string;
+          position?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          sondage_id?: string;
+          label?: string;
+          position?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      sondage_votes: {
+        Row: {
+          id: string;
+          sondage_id: string;
+          choice_id: string;
+          voter_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          sondage_id: string;
+          choice_id: string;
+          voter_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          sondage_id?: string;
+          choice_id?: string;
+          voter_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      messages: {
+        Row: {
+          id: string;
+          subject: string;
+          body: string;
+          category: Database['public']['Enums']['message_category'];
+          reply_to: string | null;
+          author_id: string;
+          handled: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          subject: string;
+          body: string;
+          category?: Database['public']['Enums']['message_category'];
+          reply_to?: string | null;
+          author_id: string;
+          handled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          subject?: string;
+          body?: string;
+          category?: Database['public']['Enums']['message_category'];
+          reply_to?: string | null;
+          author_id?: string;
+          handled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -192,6 +387,8 @@ export type Database = {
       member_role: 'membre' | 'admin';
       signalement_category: 'cantine' | 'transport' | 'vie_scolaire' | 'autre';
       signalement_status: 'nouveau' | 'en_cours' | 'traite';
+      document_category: 'administratif' | 'scolarite' | 'cantine' | 'activites' | 'autre';
+      message_category: 'cantine' | 'transport' | 'vie_scolaire' | 'activites' | 'autre';
     };
     CompositeTypes: {
       [_ in never]: never;

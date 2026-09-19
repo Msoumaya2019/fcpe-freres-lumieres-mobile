@@ -103,7 +103,7 @@ const DOSSIER = fileURLToPath(new URL('../supabase/migrations', import.meta.url)
  * Liste **fermée** : voir l'en-tête. Une migration ajoutée doit être déclarée
  * ici — c'est le moment de vérifier qu'elle est, elle aussi, rejouable.
  */
-const MIGRATIONS_ATTENDUES = ['20260916120000_init.sql'];
+const MIGRATIONS_ATTENDUES = ['20260916120000_init.sql', '20260919120000_rubriques.sql'];
 
 /** Les noms des fichiers de migration, dans un ordre stable. */
 function nomsDeMigrations() {

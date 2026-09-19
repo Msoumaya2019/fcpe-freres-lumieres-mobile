@@ -36,13 +36,13 @@
  */
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const RACINE = fileURLToPath(new URL('../', import.meta.url));
-const MIGRATION = join(RACINE, 'supabase', 'migrations', '20260916120000_init.sql');
+const MIGRATIONS = join(RACINE, 'supabase', 'migrations');
 const TYPES = join(RACINE, 'src', 'types', 'database.ts');
 
 function lireFichier(chemin) {
@@ -58,18 +58,88 @@ function sansCommentairesSql(source) {
   return source.replace(/--[^\n]*/g, '');
 }
 
+/**
+ * Le SQL de **toutes** les migrations, concaténé.
+ *
+ * POURQUOI TOUTES, ET NON LA PREMIÈRE
+ * -----------------------------------
+ * Ce fichier lisait `20260916120000_init.sql` **par son nom**. Tant qu'il n'y
+ * avait qu'une migration, la différence était nulle — et donc invisible. À la
+ * seconde, elle est devenue un trou : les six tables ajoutées par
+ * `20260919120000_rubriques.sql` n'étaient comparées à rien, et ce banc
+ * répondait « rien à signaler » sur ce qu'il ne regardait pas. C'est exactement
+ * le défaut qu'il est écrit pour traquer ailleurs, et il l'a porté lui-même.
+ *
+ * Un nom de fichier en dur aurait aussi fait tomber le banc le jour d'un
+ * renommage — en silence, pour la même raison.
+ *
+ * L'ordre de lecture est celui du nom, qui porte la date : deux migrations ne
+ * peuvent pas déclarer la même table sans que la seconde échoue à s'appliquer,
+ * et `check-migration-applicable` s'en charge. Ici, seule compte la réunion.
+ */
+function sqlDesMigrations() {
+  const noms = readdirSync(MIGRATIONS)
+    .filter((nom) => nom.endsWith('.sql'))
+    .sort();
+
+  return noms.map((nom) => sansCommentairesSql(lireFichier(join(MIGRATIONS, nom)))).join('\n');
+}
+
 /* -------------------------------------------------------------------------- *
  * Côté SQL — la référence
  * -------------------------------------------------------------------------- */
+
+/** Nombre d'occurrences d'un caractère, pour suivre la profondeur des parenthèses. */
+function occurrences(texte, caractere) {
+  return [...texte].filter((lettre) => lettre === caractere).length;
+}
+
+/**
+ * Retire du corps d'une table les blocs `constraint …`.
+ *
+ * POURQUOI PAS UN SIMPLE FILTRE DE LIGNE
+ * --------------------------------------
+ * Le relevé écartait les lignes commençant par `constraint`, et cela suffisait
+ * tant que **chaque contrainte tenait sur une seule ligne** — ce qui était le
+ * cas de la première migration, et de toutes ses contraintes.
+ *
+ * Dès qu'une contrainte s'écrit sur plusieurs lignes, la suite n'est plus une
+ * déclaration de contrainte : elle commence par `or`, ou par une expression
+ * quelconque, et le filtre la prend pour une colonne. Mesuré exactement ainsi :
+ * la contrainte de format d'adresse de `messages` a produit
+ * `messages.or absente de Row`, et deux tests sont tombés sur du SQL juste.
+ *
+ * La propriété cherchée est **structurelle** — une contrainte est un bloc
+ * équilibré — et l'outil devait l'être aussi. On compte donc les parenthèses, au
+ * lieu de regarder le premier mot de chaque ligne. C'est la même correction
+ * qu'`check-async-wiring`, passé du texte à l'arbre syntaxique pour la même
+ * raison : un motif qui approche une propriété produit des faux positifs, et un
+ * banc qui tombe sur du code juste est un défaut du banc.
+ */
+function sansContraintes(corps) {
+  const gardees = [];
+  let profondeur = 0;
+
+  for (const ligne of corps.split('\n')) {
+    if (profondeur === 0 && !/^\s*constraint\b/i.test(ligne)) {
+      gardees.push(ligne);
+      continue;
+    }
+
+    profondeur += occurrences(ligne, '(') - occurrences(ligne, ')');
+  }
+
+  return gardees.join('\n');
+}
 
 /** Colonnes d'un corps de `create table`, avec ce qui décide de leur caractère obligatoire. */
 function colonnesSql(corps) {
   const colonnes = [];
 
-  for (const brute of corps.split('\n')) {
+  for (const brute of sansContraintes(corps).split('\n')) {
     const ligne = brute.trim().replace(/,$/, '');
 
-    if (ligne === '' || ligne.startsWith('constraint')) {
+    if (ligne === '') {
       continue;
     }
 
@@ -95,7 +165,7 @@ function colonnesSql(corps) {
 }
 
 function tablesSql() {
-  const sql = sansCommentairesSql(lireFichier(MIGRATION));
+  const sql = sqlDesMigrations();
   const motif = /create table (?:if not exists )?public\.(\w+)\s*\(([\s\S]*?)\n\);/g;
   const tables = new Map();
 
@@ -108,7 +178,7 @@ function tablesSql() {
 }
 
 function enumsSql() {
-  const sql = sansCommentairesSql(lireFichier(MIGRATION));
+  const sql = sqlDesMigrations();
   const motif = /create type public\.(\w+) as enum\s*\(([^)]*)\)/g;
   const enums = new Map();
 
