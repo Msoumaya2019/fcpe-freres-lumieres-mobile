@@ -48,16 +48,36 @@
  * prose, les adresses restant nommées ailleurs, et le banc reste vert. Mesuré
  * comme tel — c'est une limite, pas un oubli.
  *
+ * ET LA LISTE ELLE-MÊME AVAIT UN TROU
+ * -----------------------------------
+ * Le paragraphe ci-dessus décrit une limite de **finesse**. Il y en avait une de
+ * **portée**, et elle n'était pas nommée : la liste des documents contrôlés
+ * portait `README.md` et `supabase/README.md`, mais pas `MISE-EN-SERVICE.md` —
+ * mesuré le 2026-09-19, alors que ces trois documents sont exactement ceux qui
+ * nomment une adresse de retour. Or c'est le guide que l'opérateur suit geste par
+ * geste, et c'est lui qui affirme, à l'étape 6, qu'« un test vérifie qu'elles
+ * restent d'accord » : la phrase était fausse dans le seul document où elle était
+ * écrite.
+ *
+ * Une limite de finesse se constate ; une limite de portée se **corrige**. Le
+ * guide est entré dans la liste, et le contrôle de fermeture — plus bas — exige
+ * désormais que tout document nommant une adresse y figure. Un quatrième document
+ * est donc vu, et s'il doit sortir de la liste, il faut l'écrire : une décision,
+ * pas un silence.
+ *
  * Sans dépendance : `node:test` est intégré, et le *type stripping* de Node 22
  * permet d'importer directement le fichier TypeScript.
  */
 
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const MODULE = new URL('../src/auth/recoveryLink.ts', import.meta.url).href;
+
+const RACINE = fileURLToPath(new URL('../', import.meta.url));
 
 /** Contenu d'un fichier du projet, tel quel — pour ce qui n'est pas du code. */
 function lireFichier(cheminRelatif) {
@@ -521,9 +541,24 @@ test('le message d’un lien est effacé par la connexion réussie', () => {
 // est refusée par Supabase **sans erreur visible pour l'adhérent**, qui attend un
 // e-mail dont le lien ne le ramènera pas dans l'application. Le contrôle va donc
 // dans les deux sens — aucune adresse périmée, et aucune adresse oubliée.
+//
+// CETTE LISTE AVAIT OUBLIÉ LE DOCUMENT QUI COMPTE
+// -----------------------------------------------
+// Elle portait `README.md` et `supabase/README.md`, et pas
+// `MISE-EN-SERVICE.md` — mesuré le 2026-09-19, alors que ces trois documents sont
+// exactement ceux qui nomment une adresse de retour. Or c'est le guide que
+// l'opérateur suit geste par geste, et c'est lui qui affirme, à l'étape 6, qu'« un
+// test vérifie qu'elles restent d'accord » : l'affirmation était fausse pour le
+// seul document où elle était écrite.
+//
+// L'oubli coûtait cher et sans bruit : un schéma changé, ou une troisième adresse
+// ajoutée au module, aurait laissé le guide faire enregistrer une liste périmée
+// dans Supabase — refus de redirection, aucun lien ne revient dans l'application,
+// et **rien ne le signale à l'adhérent**. Le test de fermeture, plus bas, empêche
+// désormais l'oubli de se reproduire.
 
 const APP_CONFIG = 'app.json';
-const DOCUMENTS_QUI_ENREGISTRENT = ['README.md', 'supabase/README.md'];
+const DOCUMENTS_QUI_ENREGISTRENT = ['MISE-EN-SERVICE.md', 'README.md', 'supabase/README.md'];
 
 /** Schéma déclaré dans `app.json`. */
 function schemaDeclare() {
@@ -603,6 +638,41 @@ test("les documents qui font enregistrer les adresses de retour nomment celles d
       );
     }
   }
+});
+
+test('aucun document qui nomme une adresse de retour n’échappe à la liste', () => {
+  // La liste ci-dessus est une **décision**, et une décision s'oublie : c'est
+  // exactement ce qui s'était produit. Le contrôle qui suit rend l'oubli
+  // impossible — tout document qui nomme une adresse doit y figurer, et s'il doit
+  // légitimement en sortir, il faut l'écrire. Une décision, pas un silence.
+  //
+  // La portée est volontairement étroite : les documents de la racine, et ceux de
+  // `supabase/`. C'est là que vivent les textes qui font enregistrer quelque
+  // chose ; un commentaire de code qui citerait une adresse n'a pas à entrer dans
+  // ce contrôle, et l'y forcer produirait des faux positifs.
+  const aExaminer = [
+    ...readdirSync(RACINE).filter((nom) => nom.endsWith('.md')),
+    ...readdirSync(join(RACINE, 'supabase'))
+      .filter((nom) => nom.endsWith('.md'))
+      .map((nom) => `supabase/${nom}`),
+  ];
+
+  const nomment = aExaminer.filter((document) => adressesNommees(lireFichier(document)).length > 0);
+
+  // Zéro ou un seul document rendrait le contrôle partiel en ne le disant pas.
+  assert.ok(
+    nomment.length >= 2,
+    `moins de deux documents nomment une adresse de retour : le contrôle serait ` +
+      `partiel sans le dire (${nomment.length} trouvés parmi ${aExaminer.length} lus)`,
+  );
+
+  const oublies = nomment.filter((document) => !DOCUMENTS_QUI_ENREGISTRENT.includes(document));
+  assert.deepEqual(
+    oublies,
+    [],
+    `${oublies.join(', ')} — nomme une adresse de retour sans être contrôlé. ` +
+      'Ajoutez-le à `DOCUMENTS_QUI_ENREGISTRENT`, ou dites pourquoi il en sort',
+  );
 });
 
 test('la liste des adresses à enregistrer est close', () => {
