@@ -48,6 +48,7 @@ export type Database = {
           id: string;
           title: string;
           body: string;
+          category: Database['public']['Enums']['annonce_category'];
           author_id: string | null;
           published_at: string;
           created_at: string;
@@ -57,6 +58,7 @@ export type Database = {
           id?: string;
           title: string;
           body: string;
+          category?: Database['public']['Enums']['annonce_category'];
           author_id?: string | null;
           published_at?: string;
           created_at?: string;
@@ -66,6 +68,7 @@ export type Database = {
           id?: string;
           title?: string;
           body?: string;
+          category?: Database['public']['Enums']['annonce_category'];
           author_id?: string | null;
           published_at?: string;
           created_at?: string;
@@ -387,6 +390,7 @@ export type Database = {
       member_role: 'membre' | 'admin';
       signalement_category: 'cantine' | 'transport' | 'vie_scolaire' | 'autre';
       signalement_status: 'nouveau' | 'en_cours' | 'traite';
+      annonce_category: 'information' | 'important' | 'cantine' | 'evenement' | 'reunion';
       document_category: 'administratif' | 'scolarite' | 'cantine' | 'activites' | 'autre';
       message_category: 'cantine' | 'transport' | 'vie_scolaire' | 'activites' | 'autre';
     };

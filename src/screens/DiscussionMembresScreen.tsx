@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -25,6 +25,7 @@ import {
 } from '@/components';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { fetchDiscussionMessages, postDiscussionMessage } from '@/services/discussion';
+import { marquerDiscussionLue } from '@/services/unread';
 import { colors, fontSize, radius, spacing } from '@/theme';
 import type { DiscussionMessageWithAuthor } from '@/types/models';
 import { formatDateTime } from '@/utils/date';
@@ -62,6 +63,32 @@ export function DiscussionMembresScreen() {
   const { status, data, errorMessage, refreshing, refresh, reload } = useAsyncData(loader);
 
   const messages = data ?? EMPTY;
+
+  /**
+   * La discussion est marquée lue dès que la liste est affichée.
+   *
+   * POURQUOI LA MARQUE SUIT LA LISTE AFFICHÉE, ET NON L'OUVERTURE DE L'ÉCRAN
+   * ----------------------------------------------------------------------
+   * C'est `messages[0]` qui décide, et non l'heure de l'appareil : la marque est
+   * le `created_at` du message le plus récent **réellement chargé**. Un message
+   * arrivé pendant le chargement ne peut donc pas être marqué lu par erreur — il
+   * n'est pas dans la liste, donc il n'est pas dans la marque.
+   *
+   * La liste arrive du plus récent au plus ancien : c'est l'ordre qu'exige la
+   * liste inversée qui l'affiche, et c'est aussi celui de l'index zéro.
+   *
+   * `status === 'ready'` est nécessaire : pendant un chargement, `data` vaut
+   * `null`, donc `messages` est vide, et marquer une liste vide effacerait la
+   * marque précédente. `marquerDiscussionLue` refuse d'ailleurs `null` pour la
+   * même raison.
+   */
+  useEffect(() => {
+    if (status !== 'ready') {
+      return;
+    }
+
+    void marquerDiscussionLue(userId, messages[0]?.created_at ?? null);
+  }, [messages, status, userId]);
 
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);

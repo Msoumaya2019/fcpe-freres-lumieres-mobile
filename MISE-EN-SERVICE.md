@@ -39,10 +39,14 @@ sur un téléphone.
 
 ## Étape 1 — Supabase (~10 min) ✅
 
-> **Faite, et vérifiée de l'extérieur le 18 septembre 2026.** Le projet que vous avez  
-> créé répond, et les **six tables existent et refusent la clé publique**  
-> (`permission denied`). C'est exactement ce que la migration doit produire : une  
-> table qui existe et qui est fermée. Vous pouvez passer à l'étape 2.
+> **Faite, et vérifiée de l'extérieur le 18 septembre 2026** — pour les six tables de  
+> la première migration. Le projet que vous avez créé répond, et ces six tables  
+> **existent et refusent la clé publique** (`permission denied`). C'est exactement ce  
+> que la migration doit produire : une table qui existe et qui est fermée.
+>
+> **Restent à faire depuis ce guide : le deuxième fichier SQL (§1.3) et le  
+> compartiment des documents (§1.4).** Les étapes 2 et suivantes n'en dépendent pas :  
+> vous pouvez continuer sans attendre.
 
 Supabase, c'est la base de données et le service d'authentification. Le forfait  
 gratuit suffit.
@@ -83,11 +87,11 @@ gratuit suffit.
 > il est **irrécupérable**, et c'est le seul moyen de secours si un jour il faut  
 > accéder à la base directement.
 
-### 1.3 Créer les six tables
+### 1.3 Créer les douze tables
 
 Dans le menu de gauche, cliquez **SQL Editor**, puis **New query**.
 
-Vous allez coller **deux fichiers**, l'un après l'autre, dans cet ordre.
+Vous allez coller **trois fichiers**, l'un après l'autre, dans cet ordre.
 
 **Premier collage** — ouvrez ce fichier du projet et copiez tout son contenu :
 
@@ -98,7 +102,18 @@ supabase/migrations/20260916120000_init.sql
 Collez-le dans l'éditeur, puis cliquez **Run** (ou `Ctrl`+`Entrée`).  
 **Attendu : `Success. No rows returned`.**
 
-**Deuxième collage** — même chose avec :
+**Deuxième collage** — les six tables des rubriques (agenda, documents,
+sondages, messages au bureau) :
+
+```
+supabase/migrations/20260919120000_rubriques.sql
+```
+
+Même geste, même message attendu. Ce fichier est **indépendant du premier** :
+il ne le modifie pas, et si vous l'aviez déjà collé, le recoller ne crée pas de
+doublon.
+
+**Troisième collage** — même chose avec :
 
 ```
 supabase/seed.sql
@@ -107,37 +122,64 @@ supabase/seed.sql
 **Attendu : `Success. No rows returned`** — un `insert` ne renvoie pas de lignes,  
 donc le message est le même. C'est normal.
 
-> **Les deux fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
+> **Les trois fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
 > ce qu'il signale et relancez **le même fichier** : il ne créera pas de doublon, et  
 > il n'y a pas besoin de repartir de zéro.
 
-> **Le second est facultatif.** C'est un jeu d'essai : des annonces et des menus  
-> fictifs, pour que l'application ne s'ouvre pas sur des écrans vides. Ne  
-> l'appliquez pas en production — les menus fictifs seraient pris pour de vrais  
-> menus.
+> **Le troisième est facultatif.** C'est un jeu d'essai : des annonces, des menus  
+> et des messages fictifs, pour que l'application ne s'ouvre pas sur des écrans  
+> vides. Ne l'appliquez pas en production — les menus fictifs seraient pris pour  
+> de vrais menus. Il ne remplit que les tables du premier fichier.
 
-### 1.4 Vérifier que les six tables sont là
+### 1.4 Créer le compartiment des documents
+
+C'est la **seule étape que le SQL ne peut pas faire à votre place**, et elle est
+nécessaire pour que l'écran « Documents importants » fonctionne.
+
+Le schéma `storage` est géré par Supabase et n'existe pas dans nos migrations :
+une instruction le concernant empêcherait les fichiers ci-dessus d'être rejouables.
+Le compartiment se crée donc à la main, une fois.
+
+1. Menu de gauche → **Storage** → **New bucket**.
+2. Nom : `documents` — exactement, en minuscules.
+3. **Public bucket : laissez décoché.** L'application ne sert jamais un fichier
+   directement : elle demande une **adresse signée**, valable une heure. Un
+   compartiment public rendrait tous les documents lisibles par quiconque
+   possède l'adresse.
+4. Créez, puis ouvrez **Policies** sur ce compartiment et autorisez la lecture aux
+   utilisateurs connectés. Les politiques d'un compartiment ne s'écrivent pas en
+   SQL dans ce dépôt : aucun test ne peut les lire, et c'est pourquoi le banc
+   `check-rls-guards` exige que tout appel au stockage soit déclaré nommément.
+
+Tant que le compartiment n'existe pas, l'écran Documents affiche une erreur de
+chargement — les autres écrans ne sont pas affectés.
+
+### 1.5 Vérifier que les douze tables sont là
 
 C'est la vraie vérification : le message `Success` ne dit pas que les tables  
 existent, il dit que le SQL n'a pas échoué.
 
-**Je l'ai déjà faite pour vous**, depuis l'extérieur, avec la clé que vous m'avez  
-envoyée : les six tables répondent, et chacune refuse la lecture avec  
-`permission denied for table …`. Les deux moitiés comptent — une table absente  
-répondrait `404`, une table ouverte aurait laissé passer la lecture. Les étapes  
-ci-dessous ne sont donc plus à faire ; elles restent pour que vous puissiez voir  
-l'écran de vos propres yeux si vous le souhaitez.
+**Les six premières ont déjà été vérifiées pour vous**, depuis l'extérieur, avec
+la clé que vous m'avez envoyée : elles répondent, et chacune refuse la lecture
+avec `permission denied for table …`. Les deux moitiés comptent — une table
+absente répondrait `404`, une table ouverte aurait laissé passer la lecture.
+
+**Les six nouvelles, non** : elles n'existent pas encore tant que le deuxième
+fichier n'a pas été collé. Après l'avoir collé, la même vérification s'applique,
+et je la referai si vous me le demandez.
 
 1. Dans le menu de gauche, cliquez **Table Editor**.
-2. Vous devez voir, dans la liste : `annonces`, `cantine_menus`,  
-   `cantine_reservations`, `discussion_messages`, `profiles`, `signalements`.
+2. Vous devez voir les douze tables : `agenda_events`, `annonces`,
+   `cantine_menus`, `cantine_reservations`, `discussion_messages`, `documents`,
+   `messages`, `profiles`, `signalements`, `sondage_choices`, `sondage_votes`,
+   `sondages`.
 3. Cliquez sur **annonces** : vous devez voir **2 lignes**.
 4. Cliquez sur **cantine_menus** : vous devez voir **8 lignes**.
 
 Si les tables sont là mais vides, c'est que `seed.sql` n'a pas été exécuté — ce  
 n'est pas grave, relancez-le.
 
-### 1.5 Récupérer les deux valeurs
+### 1.6 Récupérer les deux valeurs
 
 Il vous faut **deux** valeurs, et surtout pas une troisième.
 
@@ -161,7 +203,7 @@ exactement la même chose, prenez-la.
 > accès complet à la base. `src/config/env.ts` la refuse de toute façon, mais autant  
 > ne pas la copier.
 
-### 1.6 Me les transmettre
+### 1.7 Me les transmettre
 
 **Collez simplement les deux valeurs dans la conversation.** Elles ressemblent à ceci :
 
@@ -178,7 +220,7 @@ cette valeur.
 
 La règle à retenir : **la clé `sb_secret_…`, jamais. La clé `sb_publishable_…`, oui.**
 
-### 1.7 Ce que je fais ensuite, sans vous
+### 1.8 Ce que je fais ensuite, sans vous
 
 - j'écris les deux valeurs aux **lignes 40 et 44** de `.env.local`, un fichier que  
   Git ignore ;
@@ -443,7 +485,10 @@ lien utilisable. Les deux adresses sont recopiées du fichier
 - [x] Projet créé — il répond à l'adresse que vous m'avez envoyée
 - [ ] La **région** est européenne — je ne peux pas la lire sans vos identifiants
 - [ ] Mot de passe de la base noté
-- [x] `20260916120000_init.sql` collé et exécuté → les six tables existent
+- [x] `20260916120000_init.sql` collé et exécuté → les six premières tables existent
+- [ ] `20260919120000_rubriques.sql` collé et exécuté → les six tables des rubriques
+- [ ] Compartiment `documents` créé dans Storage, **privé** _(sans lui, l'écran  
+      Documents affiche une erreur de chargement)_
 - [ ] `seed.sql` collé et exécuté → à confirmer : je ne peux pas compter les lignes  
       depuis l'extérieur, les tables étant fermées à la clé publique
 - [ ] Table Editor : `annonces` a 2 lignes
@@ -467,8 +512,8 @@ pas.
 
 ## Ce qui est déjà fait
 
-Pour que vous sachiez ce que vous n'avez pas à faire : les cinq écrans et leur  
-navigation, l'authentification et la réinitialisation de mot de passe, les six tables  
+Pour que vous sachiez ce que vous n'avez pas à faire : les treize écrans et leur  
+navigation, l'authentification et la réinitialisation de mot de passe, les douze tables  
 et leurs politiques de sécurité, les contrôles de schéma et de politiques, la chaîne  
 de vérification complète (`npm run verify`, **29 fichiers de test**), les  
 trois flux GitHub Actions, le dépôt public sans aucun secret, les deux binaires  

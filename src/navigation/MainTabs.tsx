@@ -1,36 +1,37 @@
 import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useCallback, type ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { AppState, Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useAuth } from '@/auth/AuthProvider';
-import { WeakPasswordNotice } from '@/components';
+import { useAuth, useCurrentUserId } from '@/auth/AuthProvider';
+import { TabBar, WeakPasswordNotice, type TabIcons } from '@/components';
+import { PlusStack } from '@/navigation/PlusStack';
 import type { MainTabParamList } from '@/navigation/types';
+import { AccueilScreen } from '@/screens/AccueilScreen';
+import { AgendaScreen } from '@/screens/AgendaScreen';
 import { CantineScreen } from '@/screens/CantineScreen';
-import { DiscussionMembresScreen } from '@/screens/DiscussionMembresScreen';
-import { InformationsScreen } from '@/screens/InformationsScreen';
-import { MesSignalementsScreen } from '@/screens/MesSignalementsScreen';
-import { colors, fontSize, spacing } from '@/theme';
+import { ContactScreen } from '@/screens/ContactScreen';
+import { compterMessagesNonLus } from '@/services/unread';
+import { colors, fontSize } from '@/theme';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
-
-interface TabIcons {
-  readonly active: keyof typeof Ionicons.glyphMap;
-  readonly inactive: keyof typeof Ionicons.glyphMap;
-}
 
 /**
  * Une icône pleine pour l'onglet actif, une icône au trait pour les autres.
  *
  * Le contraste de forme, et pas seulement de couleur, rend l'onglet courant
  * identifiable sans distinguer les couleurs — utile pour les daltonismes, et
- * lisible en plein soleil.
+ * lisible en plein soleil. C'est le seul signal qui subsiste quand la couleur
+ * disparaît, et c'est pourquoi il est porté par la table des icônes plutôt que
+ * par le fond de la pastille.
  */
-const TAB_ICONS: Readonly<Record<keyof MainTabParamList, TabIcons>> = {
-  Informations: { active: 'information-circle', inactive: 'information-circle-outline' },
+const TAB_ICONS: TabIcons = {
+  Accueil: { active: 'home', inactive: 'home-outline' },
   Cantine: { active: 'restaurant', inactive: 'restaurant-outline' },
-  MesSignalements: { active: 'alert-circle', inactive: 'alert-circle-outline' },
-  DiscussionMembres: { active: 'chatbubbles', inactive: 'chatbubbles-outline' },
+  Agenda: { active: 'calendar', inactive: 'calendar-outline' },
+  Contact: { active: 'chatbubble-ellipses', inactive: 'chatbubble-ellipses-outline' },
+  Plus: { active: 'ellipsis-horizontal', inactive: 'ellipsis-horizontal-outline' },
 };
 
 function SignOutButton() {
@@ -54,8 +55,59 @@ function SignOutButton() {
 }
 
 /**
+ * Le nombre de messages non lus, pour la pastille de l'onglet « Plus ».
+ *
+ * POURQUOI CE COMPTE EST RECHARGÉ AU RETOUR AU PREMIER PLAN
+ * --------------------------------------------------------
+ * Un badge calculé une seule fois à l'ouverture resterait faux pendant toute la
+ * session : un message arrivé entre-temps ne le ferait pas bouger, et un message
+ * lu non plus. Le recalcul a donc lieu au retour au premier plan — le moment où
+ * l'adhérent reprend son téléphone, et le seul où le chiffre compte.
+ *
+ * Aucun intervalle de rafraîchissement : une requête toutes les N secondes pour
+ * un badge coûterait de la batterie et de la connexion sans rien apporter, et
+ * l'écran de discussion marque les messages lus en s'ouvrant — le badge se
+ * corrige donc de lui-même au retour.
+ */
+function useNonLus(userId: string): number {
+  const [nonLus, setNonLus] = useState(0);
+
+  useEffect(() => {
+    let vivant = true;
+
+    const rafraichir = () => {
+      compterMessagesNonLus(userId)
+        .then((nombre) => {
+          if (vivant) {
+            setNonLus(nombre);
+          }
+        })
+        .catch(() => {
+          // Un badge ne doit pas empêcher l'application de s'ouvrir. En cas
+          // d'échec on garde le dernier compte connu, ou zéro.
+        });
+    };
+
+    rafraichir();
+
+    const abonnement = AppState.addEventListener('change', (etat) => {
+      if (etat === 'active') {
+        rafraichir();
+      }
+    });
+
+    return () => {
+      vivant = false;
+      abonnement.remove();
+    };
+  }, [userId]);
+
+  return nonLus;
+}
+
+/**
  * Le bandeau de mot de passe faible, **sous** l'en-tête, une seule fois pour les
- * quatre onglets.
+ * cinq onglets.
  *
  * POURQUOI `screenLayout`
  * -----------------------
@@ -73,10 +125,35 @@ function SignOutButton() {
  * Une instance par onglet, mais un seul état : les raisons vivent dans
  * `AuthProvider`, donc refermer le bandeau sur un onglet le referme partout.
  * C'est ce qui rend le choix de `screenLayout` supportable — un état local par
- * onglet aurait produit quatre bandeaux indépendants.
+ * onglet aurait produit cinq bandeaux indépendants.
  */
-function WeakPasswordGate({ children }: { readonly children: ReactNode }) {
+function WeakPasswordGate({
+  children,
+  sansEnTete = false,
+}: {
+  readonly children: ReactNode;
+  /**
+   * Vrai quand l'onglet n'affiche pas d'en-tête de navigation.
+   *
+   * POURQUOI CE DRAPEAU EXISTE, ET POURQUOI IL EST MESURÉ ET NON SUPPOSÉ
+   * --------------------------------------------------------------------
+   * L'encoche n'est protégée que par l'**en-tête** : dans
+   * `@react-navigation/elements` (`Screen.tsx`), `useSafeAreaInsets()` sert à
+   * calculer `headerStatusBarHeight`, et la scène — donc ce que cette coque
+   * enveloppe — n'est jamais décalée. Un onglet sans en-tête commence donc à
+   * `y = 0`, sous la barre d'état.
+   *
+   * Le bandeau est rendu **au-dessus** de la scène : sur un onglet sans en-tête,
+   * il se retrouverait sous la barre d'état, à moitié illisible. Il reçoit donc
+   * lui-même l'encoche dans ce cas précis — et **lui seul**, jamais la scène :
+   * l'onglet « Plus » empile une pile dont l'en-tête ajoute déjà l'encoche de
+   * son côté (`headerStatusBarHeight = isParentHeaderShown ? 0 : insets.top`).
+   * Décaler la scène entière l'aurait décalée deux fois.
+   */
+  readonly sansEnTete?: boolean;
+}) {
   const { weakPasswordReasons, dismissWeakPassword } = useAuth();
+  const insets = useSafeAreaInsets();
 
   // La coque est rendue **dans tous les cas**, et c'est elle qui décide
   // d'afficher le bandeau — jamais l'inverse.
@@ -90,54 +167,105 @@ function WeakPasswordGate({ children }: { readonly children: ReactNode }) {
   // bandeau puis une fois avec, donc deux chargements pour la même arrivée.
   //
   // Le retour est donc unique et la forme fixe : seule la place du bandeau varie.
+  // L'emplacement du bandeau est une View **dans tous les cas**, même vide : sa
+  // condition ne change que le style, jamais le type.
   return (
     <View style={styles.shell}>
-      {weakPasswordReasons === null ? null : (
-        <WeakPasswordNotice reasons={weakPasswordReasons} onDismiss={dismissWeakPassword} />
-      )}
+      <View style={sansEnTete ? { paddingTop: insets.top } : undefined}>
+        {weakPasswordReasons === null ? null : (
+          <WeakPasswordNotice reasons={weakPasswordReasons} onDismiss={dismissWeakPassword} />
+        )}
+      </View>
       <View style={styles.shellContent}>{children}</View>
     </View>
   );
 }
 
+/**
+ * La barre à cinq onglets — Accueil, Cantine, Agenda, Contact, Plus.
+ *
+ * POURQUOI `tabBar` ET NON LES OPTIONS DE LA BIBLIOTHÈQUE
+ * ------------------------------------------------------
+ * La pastille derrière l'icône de l'onglet actif n'est atteignable par aucune des
+ * deux options prévues : `tabBarIcon` rend l'icône deux fois superposées, et
+ * `tabBarActiveBackgroundColor` reçoit un rayon de bord **calculé par la
+ * bibliothèque**, qui vaut `0` pour une barre en bas d'écran. Les deux échouent
+ * silencieusement. Le raisonnement complet et les mesures sont dans
+ * `src/components/TabBar.tsx`.
+ *
+ * LES TROIS OPTIONS DE BARRE ONT DISPARU, ET C'EST VOULU
+ * -----------------------------------------------------
+ * `tabBarStyle`, `tabBarActiveTintColor` et `tabBarInactiveTintColor` ne sont
+ * lues que par la barre **par défaut**. Les laisser ici les rendrait inertes :
+ * présentes, elles donneraient l'illusion de régler l'apparence, et la première
+ * retouche de couleur serait faite au mauvais endroit. Les couleurs de la barre
+ * vivent maintenant dans `TabBar`.
+ *
+ * L'EN-TÊTE DE L'ACCUEIL PORTE LE NOM DE L'ÉCOLE
+ * ----------------------------------------------
+ * La maquette place « École Frères Lumières » en haut de l'écran d'accueil, et
+ * la barre de titre dirait la même chose juste au-dessus. Le titre de l'onglet
+ * **est** donc le nom de l'école : la coque reste celle qui existe — en-tête
+ * visible, encoche gérée, bandeau de mot de passe faible sous l'en-tête —, et
+ * rien n'est écrit deux fois.
+ *
+ * SEUL L'ONGLET « PLUS » MASQUE SON EN-TÊTE
+ * -----------------------------------------
+ * Il empile ses propres écrans, dont les en-têtes portent le titre et le retour
+ * arrière : garder celui de l'onglet donnerait deux barres empilées. Les quatre
+ * autres le gardent, et c'est ce qui évite d'avoir à déplacer l'encoche.
+ */
 export function MainTabs() {
+  const userId = useCurrentUserId();
+  const nonLus = useNonLus(userId);
+
   return (
     <Tab.Navigator
-      // Le bandeau est une pièce de la coquille, identique sur les quatre
+      // Le bandeau est une pièce de la coquille, identique sur les cinq
       // onglets : le mot de passe concerne le compte, pas une rubrique.
       screenLayout={({ children }) => <WeakPasswordGate>{children}</WeakPasswordGate>}
-      screenOptions={({ route }) => ({
+      tabBar={(props) => <TabBar {...props} icons={TAB_ICONS} />}
+      screenOptions={{
         headerStyle: { backgroundColor: colors.surface },
         headerTitleStyle: { color: colors.textPrimary, fontSize: fontSize.heading },
         headerTintColor: colors.primary,
         headerRight: () => <SignOutButton />,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSecondary,
-        tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
-        tabBarIcon: ({ focused, color, size }) => {
-          const icons = TAB_ICONS[route.name];
-          return (
-            <Ionicons name={focused ? icons.active : icons.inactive} size={size} color={color} />
-          );
-        },
-      })}
+      }}
     >
       <Tab.Screen
-        name="Informations"
-        component={InformationsScreen}
-        options={{ title: 'Informations' }}
+        name="Accueil"
+        component={AccueilScreen}
+        options={{ title: 'École Frères Lumières' }}
       />
       <Tab.Screen name="Cantine" component={CantineScreen} options={{ title: 'Cantine' }} />
-      <Tab.Screen
-        name="MesSignalements"
-        component={MesSignalementsScreen}
-        options={{ title: 'Mes signalements' }}
-      />
-      <Tab.Screen
-        name="DiscussionMembres"
-        component={DiscussionMembresScreen}
-        options={{ title: 'Discussion' }}
-      />
+      <Tab.Screen name="Agenda" component={AgendaScreen} options={{ title: 'Agenda' }} />
+      <Tab.Screen name="Contact" component={ContactScreen} options={{ title: 'Contact' }} />
+
+      {/*
+        Un groupe pour un seul écran, et ce n'est pas une coquetterie : c'est la
+        seule manière de donner à « Plus » une coquille différente de celle des
+        quatre autres. `screenLayout` déclaré sur un groupe **surcharge** celui
+        du navigateur — écrit dans les types du cœur de React Navigation
+        (`RouteGroupConfig.screenLayout`) —, et c'est exactement ce qu'il faut
+        ici : cet onglet est le seul sans en-tête, donc le seul dont le bandeau
+        doit se protéger lui-même de l'encoche.
+      */}
+      <Tab.Group
+        screenLayout={({ children }) => <WeakPasswordGate sansEnTete>{children}</WeakPasswordGate>}
+      >
+        <Tab.Screen
+          name="Plus"
+          component={PlusStack}
+          options={{
+            // Le libellé reste « Plus » même quand la pile ouvre un autre écran :
+            // sans `tabBarLabel`, il suivrait le titre de l'écran affiché et la
+            // barre changerait de mots en naviguant.
+            title: 'Plus',
+            headerShown: false,
+            tabBarBadge: nonLus === 0 ? undefined : nonLus > 9 ? '9+' : nonLus,
+          }}
+        />
+      </Tab.Group>
     </Tab.Navigator>
   );
 }
@@ -150,8 +278,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   signOut: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   signOutPressed: {
     opacity: 0.6,

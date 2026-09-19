@@ -5,9 +5,10 @@
  * -------------------
  * Appliquée à la main — dans l'éditeur SQL du tableau de bord, ou par l'API
  * Management — une migration n'a **aucun historique**. Un échec à mi-parcours ne
- * dit pas où reprendre, et l'outil s'arrête à la première erreur. Sur un fichier
- * de trente kilo-octets qui crée six tables, dix-neuf politiques et sept
- * déclencheurs, la seule issue praticable est de pouvoir **rejouer le tout**.
+ * dit pas où reprendre, et l'outil s'arrête à la première erreur. Sur les deux
+ * fichiers du dossier, dont le premier pèse trente-quatre kilo-octets et crée six
+ * tables, dix-neuf politiques et sept déclencheurs, la seule issue praticable est
+ * de pouvoir **rejouer le tout**.
  *
  * Or ce fichier ne l'était pas : mesuré avant correction, six `create table`
  * sans `if not exists`, dix-neuf `create policy` sans `drop policy if exists`,

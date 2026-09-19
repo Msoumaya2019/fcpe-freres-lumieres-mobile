@@ -8,7 +8,8 @@ sont les politiques Row Level Security écrites ici.
 ```
 supabase/
 ├── migrations/
-│   └── 20260916120000_init.sql   Schéma, déclencheurs, RLS
+│   ├── 20260916120000_init.sql       Schéma, déclencheurs, RLS
+│   └── 20260919120000_rubriques.sql  Agenda, documents, sondages, messages
 ├── seed.sql                      Jeu d'essai — développement uniquement
 └── README.md
 ```
@@ -30,8 +31,8 @@ doit porter un horodatage plus grand.
 
 ### Sans CLI
 
-Coller le contenu de `migrations/20260916120000_init.sql` dans l'éditeur SQL du
-tableau de bord Supabase, puis exécuter. Une seule fois.
+Coller le contenu de chaque fichier de `migrations/` dans l'éditeur SQL du tableau
+de bord Supabase, **dans l'ordre des noms**, puis exécuter. Une seule fois chacun.
 
 ## Après l'installation
 
@@ -99,6 +100,16 @@ cette liste de réglages n'existe qu'à un seul endroit.
 | `cantine_reservations` | la sienne, ou toutes si administrateur | la sienne uniquement |
 | `signalements` | les siens, ou tous si administrateur | les siens ; le `status` est réservé aux administrateurs |
 | `discussion_messages` | tout membre connecté | publier en son nom ; supprimer le sien, ou n'importe lequel si administrateur |
+| `agenda_events` | tout membre connecté | administrateurs |
+| `documents` | tout membre connecté | administrateurs |
+| `sondages` | tout membre connecté | administrateurs |
+| `sondage_choices` | tout membre connecté | administrateurs |
+| `sondage_votes` | le sien, ou tous si administrateur | le sien uniquement |
+| `messages` | les siens, ou tous si administrateur | les siens ; seul un administrateur peut les modifier |
+
+Le **compartiment de stockage** `documents` n'apparaît pas dans ce tableau : ses
+politiques se règlent dans le tableau de bord (Storage > Policies), pas en SQL ici.
+La marche à suivre est au [`README.md`](../README.md) principal, §4.
 
 Trois points méritent d'être connus avant de modifier ce fichier :
 
@@ -122,29 +133,30 @@ la fonctionnalité casse visiblement, au lieu de fuir silencieusement.
 
 ## Vérifier la syntaxe sans base de données
 
-Le fichier SQL peut être analysé par le véritable analyseur PostgreSQL, sans
+Les fichiers SQL sont analysés par le véritable analyseur PostgreSQL, sans
 instance locale :
 
 ```bash
-npm install --no-save libpg-query
-node -e "
-  const { parse } = require('libpg-query');
-  const sql = require('node:fs').readFileSync('supabase/migrations/20260916120000_init.sql', 'utf8');
-  parse(sql).then((t) => console.log('OK —', t.stmts.length, 'instructions'));
-"
+npm run sql:check
 ```
 
-Cet analyseur vérifie la syntaxe, pas la sémantique : il ne dira pas si une
-colonne référencée existe. La vérification complète passe par
-`npx supabase db reset`, qui exige Docker.
+`scripts/check-sql.mjs` passe **chaque** fichier `.sql` du dossier des migrations,
+dans l'ordre des noms, puis `seed.sql`. Cet analyseur vérifie la syntaxe, pas la
+sémantique : il ne dira pas si une colonne référencée existe. C'est ce que font
+`scripts/check-schema-refs.test.mjs`, qui lit l'arbre des instructions, et
+`scripts/check-migration-applicable.test.mjs`, qui exécute la migration contre un
+vrai PostgreSQL. `npx supabase db reset` reste la vérification de bout en bout,
+et elle exige Docker.
 
 ## RGPD
 
-`profiles.id` référence `auth.users` avec `on delete cascade` : supprimer un
-compte supprime son profil, ses réservations, ses signalements et ses messages.
-C'est le comportement attendu pour une demande d'effacement — et il est
-volontairement automatique, pour qu'aucune suppression manuelle ne soit
-nécessaire.
+L'effacement en cascade est le mécanisme RGPD du projet : supprimer un compte
+efface les données personnelles de l'adhérent, sans intervention manuelle table
+par table. **La liste exacte des tables concernées, et celle des quatre tables de
+contenu collectif qui y échappent, sont énoncées dans
+[`SECURITY.md`](../SECURITY.md)** — à un seul endroit, parce que c'est une
+promesse faite aux adhérents et qu'un banc la vérifie mot pour mot contre le
+schéma. La recopier ici en ferait une seconde copie que rien ne relirait.
 
 Les signalements peuvent contenir des éléments concernant un enfant nommément :
 ils ne sont lisibles que par leur auteur et par le bureau, jamais par l'ensemble

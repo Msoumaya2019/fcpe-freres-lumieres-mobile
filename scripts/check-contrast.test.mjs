@@ -184,6 +184,59 @@ const TEXTES = [
   ['statut « en cours » sur carte', 'primary', 'surface', TAILLES.caption, true],
   ['statut « traité » sur carte', 'success', 'surface', TAILLES.caption, true],
   ['note de cantine sur carte', 'warning', 'surface', TAILLES.caption, false],
+
+  //  Les badges d'actualité et les raccourcis de l'accueil. Chaque accent paraît
+  //  sur son propre fond pâle, et jamais ailleurs : c'est ce couple-là qui est
+  //  mesuré, pas la couleur seule.
+  ['badge « cantine » sur son fond pâle', 'success', 'successSoft', TAILLES.caption, true],
+  ['badge « important » sur son fond pâle', 'danger', 'dangerSoft', TAILLES.caption, true],
+  ['badge « événement » sur son fond pâle', 'warning', 'warningSoft', TAILLES.caption, true],
+  ['badge « agenda » sur son fond pâle', 'pink', 'pinkSoft', TAILLES.caption, true],
+  ['badge « sondage » sur son fond pâle', 'violet', 'violetSoft', TAILLES.caption, true],
+  ['titre d’un raccourci, sur fond vert', 'textPrimary', 'successSoft', TAILLES.caption, true],
+  ['titre d’un raccourci, sur fond rose', 'textPrimary', 'pinkSoft', TAILLES.caption, true],
+  ['titre d’un raccourci, sur fond violet', 'textPrimary', 'violetSoft', TAILLES.caption, true],
+  ['titre d’un raccourci, sur fond bleu', 'textPrimary', 'primarySoft', TAILLES.caption, true],
+  //  Le sous-titre d'un raccourci est gris, et il est posé sur le **même** pastel
+  //  que le titre — donc mesuré, et pas supposé identique au titre. Il est écrit
+  //  à 10 px dans le composant ; `caption` (13 px) donne le même seuil, 4,5:1,
+  //  parce que les deux tailles restent sous les 18,66 px du « grand texte ».
+  [
+    'sous-titre d’un raccourci, sur fond vert',
+    'textSecondary',
+    'successSoft',
+    TAILLES.caption,
+    false,
+  ],
+  ['sous-titre d’un raccourci, sur fond rose', 'textSecondary', 'pinkSoft', TAILLES.caption, false],
+  [
+    'sous-titre d’un raccourci, sur fond violet',
+    'textSecondary',
+    'violetSoft',
+    TAILLES.caption,
+    false,
+  ],
+  [
+    'sous-titre d’un raccourci, sur fond bleu',
+    'textSecondary',
+    'primarySoft',
+    TAILLES.caption,
+    false,
+  ],
+  //  Le libellé de l'onglet actif est du **texte**, et il est mesuré comme tel :
+  //  4,5:1 à 14 px, et non les 3:1 d'un élément non textuel. Le placer dans
+  //  l'autre liste l'aurait laissé passer à 3,5:1, ce qui ne se lit pas.
+  [
+    'libellé de l’onglet actif, sur sa pastille',
+    'primary',
+    'primarySoft',
+    TAILLES.caption + 1,
+    true,
+  ],
+  //  Le chiffre de la pastille de comptage est du texte, et il est mesuré comme
+  //  tel : 10 px en gras, donc 4,5:1. Le placer parmi les éléments non textuels
+  //  l'aurait laissé passer à 3:1, ce qui ne se lit pas sur un chiffre.
+  ['chiffre de la pastille de comptage', 'textOnPrimary', 'danger', 10, true],
 ];
 
 /**
@@ -192,10 +245,39 @@ const TEXTES = [
  * `border` n'y figure pas, et c'est une décision : il ne sert qu'à séparer —
  * cartes, listes, barre d'onglets — jamais à désigner quelque chose qu'on
  * manipule. C'est précisément ce qui a fait naître `borderInteractive`.
+ *
+ * LE FOND DE LA PASTILLE D'ONGLET N'Y FIGURE PAS NON PLUS
+ * ------------------------------------------------------
+ * Mesuré : `primarySoft` sur `surface` vaut 1,16:1, très en dessous des 3:1
+ * qu'exigerait cette liste. Il n'y est pas parce qu'il est **décoratif**, et
+ * l'affirmation est vérifiable ailleurs : l'onglet actif est identifié par la
+ * **forme** de son icône — pleine contre au trait — et par la couleur de son
+ * libellé, qui sont tous deux dans cette liste. Retirer le fond ne rendrait pas
+ * l'onglet courant ambigu, ce qui est exactement la définition d'un élément
+ * décoratif. Une pastille qui porterait seule l'information devrait, elle,
+ * atteindre 3:1.
  */
 const NON_TEXTUELS = [
   ['bordure d’un champ', 'borderInteractive', 'surface'],
   ['bordure d’un bouton secondaire', 'primary', 'surface'],
+  //  L'icône d'un raccourci est posée sur le carré `tint`, et **non** sur le fond
+  //  `soft` de la carte : le carré est un ton plus soutenu que la carte, et
+  //  mesurer l'icône contre `soft` aurait décrit un écran qui n'existe pas. Le
+  //  couple `soft`/`tint` n'est donc pas un détail de dessin — c'est lui qui
+  //  décide de quel fond on parle.
+  ['icône d’un raccourci vert', 'success', 'successTint'],
+  ['icône d’un raccourci rose', 'pink', 'pinkTint'],
+  ['icône d’un raccourci violet', 'violet', 'violetTint'],
+  ['icône d’un raccourci bleu', 'primary', 'primaryTint'],
+  //  L'icône d'un badge, elle, est bien posée sur `soft`, le fond qui porte
+  //  aussi son libellé. Elle est donc **dominée** par la paire textuelle du
+  //  même badge, plus stricte — 4,5:1 contre 3:1. La mesurer une seconde fois
+  //  n'ajouterait rien, et l'omettre ne laisse aucun trou.
+  ['icône de l’onglet actif, sur sa pastille', 'primary', 'primarySoft'],
+  //  La pastille de comptage de la barre d'onglets. Son chiffre est du **texte**
+  //  et figure donc dans l'autre liste, au seuil de 4,5:1 ; ici c'est le fond
+  //  de la pastille, qui doit se détacher de la barre.
+  ['pastille de comptage, sur la barre', 'danger', 'surface'],
 ];
 
 /* -------------------------------------------------------------------------- *
@@ -338,15 +420,40 @@ test("l'apparence du bouton ne dépend pas de `loading`", () => {
   );
 });
 
-/** Fichiers de l'application, thème exclu — c'est lui qui déclare les jetons. */
+/**
+ * Fichiers de l'application — **thème compris**.
+ *
+ * POURQUOI LE THÈME N'EST PLUS ÉCARTÉ EN BLOC
+ * ------------------------------------------
+ * La version précédente retirait tout `src/theme/`, au motif que c'est lui qui
+ * déclare les jetons : déclarer n'est pas employer. C'était une approximation
+ * **de fichier** pour une propriété qui est **de bloc**, et elle a fini par se
+ * voir. `tints` ne déclare rien : c'est une table d'emploi, qui dit quel jeton
+ * porte le carré d'icône de quel accent. Écarté avec le reste du thème, il
+ * faisait passer `successTint` pour mort alors qu'il est employé — et mesuré,
+ * deux tests plus haut.
+ *
+ * C'est donc le bloc `colors` qui est retiré, **lui seul** : c'est la seule
+ * partie du thème qui déclare sans employer.
+ */
 function fichiersApplication() {
   const base = join(RACINE, 'src');
   const dedans = readdirSync(base, { recursive: true })
     .filter((nom) => typeof nom === 'string' && /\.tsx?$/.test(nom))
-    .filter((nom) => !nom.replace(/\\/g, '/').startsWith('theme/'))
     .map((nom) => join(base, nom));
 
   return [...dedans, join(RACINE, 'App.tsx')];
+}
+
+/** La source employeuse d'un fichier : commentaires retirés, déclarations ôtées. */
+function sourceEmployeuse(chemin) {
+  const source = sansCommentaires(lire(chemin));
+
+  if (!chemin.replace(/\\/g, '/').endsWith('theme/index.ts')) {
+    return source;
+  }
+
+  return source.replace(/export const colors = \{[\s\S]*?\} as const;/, '');
 }
 
 test('aucun jeton de la palette n’est mort', () => {
@@ -357,7 +464,7 @@ test('aucun jeton de la palette n’est mort', () => {
   // Les commentaires sont retirés : un jeton seulement **nommé** dans une
   // explication n'est pas un jeton employé, et le compter comme tel laisserait
   // passer exactement ce que ce test cherche.
-  const sources = fichiersApplication().map((chemin) => sansCommentaires(lire(chemin)));
+  const sources = fichiersApplication().map(sourceEmployeuse);
 
   assert.ok(sources.length >= 20, `fichiers lus : ${sources.length}`);
 

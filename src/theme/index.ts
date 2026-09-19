@@ -24,7 +24,8 @@
 
 export const colors = {
   primary: '#2554D6',
-  primarySoft: '#E8EEFB',
+  primarySoft: '#E6F0FD',
+  primaryTint: '#C3DFF9',
 
   background: '#F6F7FB',
   surface: '#FFFFFF',
@@ -41,8 +42,33 @@ export const colors = {
   danger: '#C62828',
   dangerSoft: '#FDECEC',
   success: '#1A7B49',
-  successSoft: '#E7F5EE',
+  successSoft: '#E3F9EC',
+  successTint: '#B0E7C5',
   warning: '#9D5D00',
+  warningSoft: '#FDEEE5',
+
+  /**
+   * Accents de catégorie, pris sur la maquette.
+   *
+   * POURQUOI DES COUPLES ET NON DES COULEURS ISOLÉES
+   * -----------------------------------------------
+   * Chaque accent paraît toujours sur son propre fond pâle — une pastille de
+   * raccourci, un badge d'actualité — et jamais sur un autre. Les deux valeurs
+   * forment donc un couple inséparable, mesuré ensemble : `pink` sur `pinkSoft`
+   * vaut 5,82:1, `violet` sur `violetSoft` 6,98:1, `warning` sur `warningSoft`
+   * 4,63:1. Les séparer laisserait croire qu'on peut poser `pink` ailleurs.
+   *
+   * `success` et `danger` servent déjà de couples avec leurs fonds pâles : les
+   * accents vert et rouge de la maquette sont ceux-là, et non de nouveaux
+   * jetons. Deux verts légèrement différents dans la même palette se
+   * confondraient à l'écran sans que personne ne sache lequel employer.
+   */
+  pink: '#B0164A',
+  pinkSoft: '#FDE8EF',
+  pinkTint: '#FACAD5',
+  violet: '#5B34A8',
+  violetSoft: '#F0EDFC',
+  violetTint: '#DCD2F7',
 } as const;
 
 export const spacing = {
@@ -67,3 +93,80 @@ export const fontSize = {
   body: 15,
   caption: 13,
 } as const;
+
+/**
+ * Ombre douce des cartes.
+ *
+ * Deux mécanismes pour une même intention, et il faut les deux : iOS lit
+ * `shadowColor` et ses compagnons, Android ignore ces propriétés et ne connaît
+ * que `elevation`. Poser l'un sans l'autre donne une carte plate sur la moitié
+ * des téléphones — et cela ne se voit que sur l'appareil, jamais au simulateur.
+ *
+ * Les valeurs sont volontairement discrètes. Une ombre marquée sépare les cartes
+ * du fond, ce qui est l'effet cherché, mais elle assombrit aussi le texte posé
+ * dessus : une ombre ne doit jamais coûter de la lisibilité.
+ */
+export const shadow = {
+  color: '#0B1220',
+  opacity: 0.07,
+  radius: 12,
+  offsetY: 4,
+  elevation: 2,
+} as const;
+
+/**
+ * Accents de catégorie : une encre et son fond pâle, inséparables.
+ *
+ * Un accent n'est jamais employé seul. Une carte de raccourci, un badge, une
+ * pastille prennent toujours **le couple** — sinon la mesure de contraste porte
+ * sur une couleur posée sur un fond qui n'est pas le sien, et le rapport obtenu
+ * ne veut rien dire.
+ *
+ * Le nom dit la couleur, pas l'usage. Nommer un accent `cantine` obligerait à en
+ * créer un second le jour où l'agenda veut du vert, alors que la palette est
+ * déjà mesurée pour ce fond-là.
+ */
+export const accents = {
+  bleu: { ink: colors.primary, soft: colors.primarySoft },
+  vert: { ink: colors.success, soft: colors.successSoft },
+  rose: { ink: colors.pink, soft: colors.pinkSoft },
+  violet: { ink: colors.violet, soft: colors.violetSoft },
+  ambre: { ink: colors.warning, soft: colors.warningSoft },
+  rouge: { ink: colors.danger, soft: colors.dangerSoft },
+} as const;
+
+export type AccentName = keyof typeof accents;
+
+/**
+ * Le second ton d'un accent : le carré qui porte une **icône seule**.
+ *
+ * POURQUOI DEUX TONS, ET POURQUOI ILS NE SE CONFONDENT PAS
+ * --------------------------------------------------------
+ * La maquette relève deux tons par accent, et la mesure le confirme : le fond
+ * de la carte de raccourci « Cantine » vaut `#E3F9EC` tandis que le carré de son
+ * icône vaut `#B0E7C5` — même teinte, deux valeurs. Relever les deux au pixel
+ * plutôt que de les supposer a évité de peindre les deux au même ton.
+ *
+ * La distinction n'est pas décorative, elle **décide du seuil**. Un fond qui
+ * porte du texte doit laisser ce texte à 4,5:1 ; un fond qui ne porte qu'une
+ * icône n'en exige que 3:1. `success` sur `successSoft` vaut 4,79:1 et passe
+ * comme fond de badge ; le même `success` sur `successTint` vaut 3,79:1 — assez
+ * pour une icône, **pas** pour un libellé. Confondre les deux listes reviendrait
+ * à peindre un badge sur `tint`, où son texte tomberait sous le seuil sans que
+ * rien ne le signale.
+ *
+ * QUATRE ACCENTS, PAS SIX
+ * -----------------------
+ * Seuls les quatre raccourcis de l'accueil posent une icône sur un carré. Les
+ * accents ambre et rouge n'en ont pas : leur ajouter un ton serait déclarer une
+ * couleur que personne n'emploie, et le contrôle de contraste la refuserait à
+ * juste titre. Le jour où l'agenda voudra un carré ambre, il ajoutera la ligne.
+ */
+export const tints = {
+  bleu: colors.primaryTint,
+  vert: colors.successTint,
+  rose: colors.pinkTint,
+  violet: colors.violetTint,
+} as const;
+
+export type TintedAccent = keyof typeof tints;

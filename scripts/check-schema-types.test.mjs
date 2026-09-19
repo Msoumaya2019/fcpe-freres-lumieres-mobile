@@ -164,6 +164,47 @@ function colonnesSql(corps) {
   return colonnes;
 }
 
+/**
+ * Les colonnes ajoutées après coup, par `alter table … add column`.
+ *
+ * POURQUOI CE RELEVÉ EXISTE
+ * -------------------------
+ * Le relevé principal ne lit que les corps de `create table`. Une colonne
+ * ajoutée par `alter table` — ce qui est la **seule** façon correcte de faire
+ * évoluer une table déjà déployée, la première migration étant déjà appliquée
+ * sur la base — lui était donc invisible.
+ *
+ * Conséquence mesurée : le miroir déclarait `annonces.category`, la migration
+ * aussi, et le banc accusait le miroir d'avoir « déclaré une colonne sans
+ * qu'elle existe en base ». Le défaut était dans le relevé, pas dans le code.
+ *
+ * Les deux formes sont reconnues : `alter table public.x add column …` et sa
+ * variante `add column if not exists …`, qui est celle qu'on écrit quand la
+ * migration doit être rejouable.
+ */
+function colonnesAjouteesSql() {
+  const sql = sqlDesMigrations();
+  const motif =
+    /alter table (?:only )?public\.(\w+)\s+add column (?:if not exists )?(\w+)\s+([^;]*);/g;
+  const ajouts = new Map();
+
+  let ajout;
+  while ((ajout = motif.exec(sql)) !== null) {
+    const [, table, nom, definition] = ajout;
+    const liste = ajouts.get(table) ?? [];
+
+    liste.push({
+      nom,
+      nonNulle: /\bnot null\b/.test(definition),
+      parDefaut: /\bdefault\b/.test(definition),
+    });
+
+    ajouts.set(table, liste);
+  }
+
+  return ajouts;
+}
+
 function tablesSql() {
   const sql = sqlDesMigrations();
   const motif = /create table (?:if not exists )?public\.(\w+)\s*\(([\s\S]*?)\n\);/g;
@@ -172,6 +213,23 @@ function tablesSql() {
   let table;
   while ((table = motif.exec(sql)) !== null) {
     tables.set(table[1], colonnesSql(table[2]));
+  }
+
+  //  Les colonnes ajoutées ensuite sont **ajoutées** à la liste, jamais
+  //  substituées : une colonne déclarée dans le `create table` puis modifiée
+  //  par un `alter` garde sa place, et le relevé doit voir les deux.
+  for (const [nom, colonnes] of colonnesAjouteesSql()) {
+    const existantes = tables.get(nom);
+
+    if (existantes === undefined) {
+      continue;
+    }
+
+    for (const colonne of colonnes) {
+      if (!existantes.some((candidate) => candidate.nom === colonne.nom)) {
+        existantes.push(colonne);
+      }
+    }
   }
 
   return tables;

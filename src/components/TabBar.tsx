@@ -30,24 +30,27 @@ const ICON_SIZE = 20;
 const ICON_SIZE_ACTIVE = 22;
 
 /**
- * Hauteur de la boîte qui porte l'icône, et hauteur de ligne du libellé.
+ * Largeur et hauteur de la pastille, et hauteur de ligne du libellé.
  *
- * POURQUOI ELLES SONT FIXES ALORS QUE L'ONGLET ACTIF EST AGRANDI
- * -------------------------------------------------------------
- * Les deux sont liées, et c'est la seule raison. L'onglet actif demande une
- * icône plus grande (22 au lieu de 20) et un libellé plus grand (14 au lieu de
- * 13) ; sans boîte fixe, la pastille **changerait de hauteur en changeant
- * d'onglet**, et toute la barre sauterait d'un pixel ou deux à chaque appui.
- * Une boîte de 22 points et une hauteur de ligne de 18 points réservent la place
- * du plus grand des deux états : c'est le plus grand qui décide, et le plus petit
- * se centre dedans.
+ * POURQUOI LA PASTILLE A DES DIMENSIONS FIXES ALORS QUE L'ICÔNE CHANGE
+ * --------------------------------------------------------------------
+ * L'onglet actif demande une icône plus grande (22 au lieu de 20) ; sans
+ * dimensions fixes, la pastille **changerait de taille en changeant d'onglet**,
+ * et toute la barre sauterait à chaque appui. Les deux valeurs réservent donc la
+ * place du plus grand des deux états : c'est le plus grand qui décide, et le
+ * plus petit se centre dedans.
+ *
+ * La largeur est un **minimum**, pas une largeur : c'est ce qui permet à la
+ * pastille de s'élargir si la taille de police du téléphone agrandit la
+ * pastille de comptage posée dessus.
  *
  * Elles ne dépendent pas de la taille de police du téléphone, et c'est
  * volontaire : ce sont des **réservations de place**, pas des tailles de texte.
  * Ce qui doit grandir avec la police, c'est le libellé lui-même, et il grandit —
  * voir `MAX_LABEL_SCALE`.
  */
-const ICON_BOX = 22;
+const PILL_WIDTH = 56;
+const PILL_HEIGHT = 30;
 const LABEL_LINE_HEIGHT = 18;
 
 /**
@@ -167,6 +170,7 @@ export function TabBar({ state, descriptors, navigation, insets, icons }: TabBar
         };
 
         const tint = selected ? colors.primary : colors.textSecondary;
+        const badge = options?.tabBarBadge;
 
         return (
           <Pressable
@@ -184,33 +188,58 @@ export function TabBar({ state, descriptors, navigation, insets, icons }: TabBar
             }
             style={styles.tab}
           >
-            <View
-              style={[
-                styles.pill,
-                {
-                  backgroundColor: selected ? colors.primarySoft : 'transparent',
-                  borderRadius: radius.pill,
-                },
-              ]}
-            >
-              <View style={styles.iconBox}>
-                <Ionicons
-                  name={selected ? icon.active : icon.inactive}
-                  size={selected ? ICON_SIZE_ACTIVE : ICON_SIZE}
-                  color={tint}
-                />
-              </View>
-              <AppText
-                variant="caption"
-                numberOfLines={1}
-                maxFontSizeMultiplier={MAX_LABEL_SCALE}
-                bold={selected}
+            {/*
+              La pastille porte l'icône **seule**, le libellé reste dessous.
+              C'est ce que montre la maquette, relevé au pixel, et ce n'est pas
+              un détail de dessin : une pastille qui engloberait le libellé
+              changerait de largeur avec la longueur du mot, et « Mes
+              signalements » déborderait de son onglet.
+            */}
+            <View style={[styles.pill, selected ? { backgroundColor: colors.primarySoft } : null]}>
+              <Ionicons
+                name={selected ? icon.active : icon.inactive}
+                size={selected ? ICON_SIZE_ACTIVE : ICON_SIZE}
                 color={tint}
-                style={[styles.label, selected && styles.labelActive]}
-              >
-                {label}
-              </AppText>
+              />
+              {/*
+                La pastille de comptage est posée **dans** la boîte de l'icône,
+                pas à côté : elle se place par rapport à l'icône et suit donc
+                l'onglet actif, dont l'icône est plus grande.
+              */}
+              {badge === undefined || badge === null ? null : (
+                <View
+                  style={[
+                    styles.badge,
+                    {
+                      backgroundColor: colors.danger,
+                      borderColor: colors.surface,
+                    },
+                  ]}
+                >
+                  <AppText
+                    variant="caption"
+                    bold
+                    color={colors.textOnPrimary}
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={1}
+                    style={styles.badgeText}
+                  >
+                    {String(badge)}
+                  </AppText>
+                </View>
+              )}
             </View>
+
+            <AppText
+              variant="caption"
+              numberOfLines={1}
+              maxFontSizeMultiplier={MAX_LABEL_SCALE}
+              bold={selected}
+              color={tint}
+              style={[styles.label, selected && styles.labelActive]}
+            >
+              {label}
+            </AppText>
           </Pressable>
         );
       })}
@@ -231,23 +260,41 @@ const styles = StyleSheet.create({
     // Les cinq onglets se partagent la largeur à parts égales. Aucune largeur
     // fixe : elle serait fausse sur l'un des formats d'iPhone.
     flex: 1,
-    justifyContent: 'center',
-  },
-  pill: {
     alignItems: 'center',
     justifyContent: 'center',
-    // La pastille occupe presque toute la largeur de l'onglet, comme sur la
-    // maquette, mais garde un écart avec sa voisine : deux pastilles jointives
-    // se liraient comme un seul bloc.
-    marginHorizontal: spacing.xs,
-    paddingVertical: spacing.xs,
     gap: 2,
   },
-  iconBox: {
-    width: ICON_BOX,
-    height: ICON_BOX,
+  pill: {
+    minWidth: PILL_WIDTH,
+    height: PILL_HEIGHT,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  /**
+   * La pastille de comptage.
+   *
+   * Elle est posée en absolu **dans** la pastille de l'onglet, qui est son
+   * repère : elle suit donc l'icône, y compris quand celle-ci grandit sur
+   * l'onglet actif. La bordure est de la couleur de la barre, ce qui la détache
+   * de l'icône qu'elle recouvre partiellement — sans elle, le chiffre se lirait
+   * posé sur l'icône et non sur une pastille.
+   */
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: radius.pill,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    fontSize: 10,
+    lineHeight: 12,
   },
   label: {
     fontSize: fontSize.caption,

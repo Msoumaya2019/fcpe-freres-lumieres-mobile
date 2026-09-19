@@ -176,24 +176,41 @@ marche à suivre.
 
 ## Ce que la relecture des politiques a établi
 
-Les onze requêtes de `src/services/` ont été croisées une par une avec les
-politiques de la migration initiale. Sept lectures, quatre écritures — et
-**aucune modification** : le relevé ci-dessous est celui de
+Les dix-neuf appels de `src/services/` ont été croisés un par un avec les
+politiques des deux migrations. Treize lectures, six écritures — et **aucune
+modification** : le relevé ci-dessous est celui de
 `grep -rn "\.update(\|\.upsert(\|\.insert(\|\.delete(" src/`.
 
-| Requête                        | Table                  | Opération | Politique                                  |
-| ------------------------------ | ---------------------- | --------- | ------------------------------------------ |
-| `fetchAnnonces`                | `annonces`             | select    | `annonces_select_authenticated`            |
-| `fetchUpcomingMenus`           | `cantine_menus`        | select    | `cantine_menus_select_authenticated`       |
-| `fetchReservedMenuIds`         | `cantine_reservations` | select    | `cantine_reservations_select_own_or_admin` |
-| `fetchDiscussionMessages`      | `discussion_messages`  | select    | `discussion_messages_select_authenticated` |
-| `fetchMySignalements`          | `signalements`         | select    | `signalements_select_own_or_admin`         |
-| `fetchProfile`                 | `profiles`             | select    | `profiles_select_authenticated`            |
-| `fetchAuthorNames`             | `profiles`             | select    | `profiles_select_authenticated`            |
-| `postDiscussionMessage`        | `discussion_messages`  | insert    | `discussion_messages_insert_own`           |
-| `createSignalement`            | `signalements`         | insert    | `signalements_insert_own`                  |
-| `setReservation` (réservation) | `cantine_reservations` | insert    | `cantine_reservations_insert_own`          |
-| `setReservation` (retrait)     | `cantine_reservations` | delete    | `cantine_reservations_delete_own_or_admin` |
+| Requête                        | Table                  | Opération         | Politique                                  |
+| ------------------------------ | ---------------------- | ----------------- | ------------------------------------------ |
+| `fetchAgendaEvents`            | `agenda_events`        | select            | `agenda_events_select_authenticated`       |
+| `fetchAnnonces`                | `annonces`             | select            | `annonces_select_authenticated`            |
+| `fetchUpcomingMenus`           | `cantine_menus`        | select            | `cantine_menus_select_authenticated`       |
+| `fetchReservedMenuIds`         | `cantine_reservations` | select            | `cantine_reservations_select_own_or_admin` |
+| `setReservation` (réservation) | `cantine_reservations` | insert            | `cantine_reservations_insert_own`          |
+| `setReservation` (retrait)     | `cantine_reservations` | delete            | `cantine_reservations_delete_own_or_admin` |
+| `fetchDiscussionMessages`      | `discussion_messages`  | select            | `discussion_messages_select_authenticated` |
+| `postDiscussionMessage`        | `discussion_messages`  | insert            | `discussion_messages_insert_own`           |
+| `fetchDocuments`               | `documents`            | select            | `documents_select_authenticated`           |
+| `documentUrl`                  | _(bucket `documents`)_ | `createSignedUrl` | _(politique du tableau de bord)_           |
+| `fetchMyMessages`              | `messages`             | select            | `messages_select_own_or_admin`             |
+| `createMessage`                | `messages`             | insert            | `messages_insert_own`                      |
+| `fetchProfile`                 | `profiles`             | select            | `profiles_select_authenticated`            |
+| `fetchAuthorNames`             | `profiles`             | select            | `profiles_select_authenticated`            |
+| `fetchMySignalements`          | `signalements`         | select            | `signalements_select_own_or_admin`         |
+| `createSignalement`            | `signalements`         | insert            | `signalements_insert_own`                  |
+| `fetchSondages` (sondages)     | `sondages`             | select            | `sondages_select_authenticated`            |
+| `fetchSondages` (choix)        | `sondage_choices`      | select            | `sondage_choices_select_authenticated`     |
+| `fetchSondages` (votes)        | `sondage_votes`        | select            | `sondage_votes_select_own_or_admin`        |
+| `castVote`                     | `sondage_votes`        | insert            | `sondage_votes_insert_own`                 |
+
+La ligne du bucket est la seule de ce tableau qui ne soit pas une table. Les
+documents sont rangés dans un compartiment **privé**, et l'application n'en
+obtient qu'une adresse signée, valable une heure. Les politiques d'un compartiment
+se règlent dans le tableau de bord et **aucun test du dépôt ne peut les lire** :
+c'est pourquoi `scripts/check-rls-guards.test.mjs` exige que tout appel à Storage
+soit déclaré nommément, avec sa raison, plutôt que de laisser croire qu'il est
+couvert par ce tableau.
 
 **Chacune est couverte par une politique qui l'autorise.** Le contrôle porte
 aussi sur l'inverse — une politique plus large que ce que l'application demande
@@ -349,19 +366,31 @@ est une donnée **publiée aux autres adhérents**, ce qui n'est pas la même ch
 au regard de l'information des personnes.
 
 `profiles.id` référence `auth.users` avec `on delete cascade` : supprimer un
-compte efface en cascade le profil, les réservations, les signalements et les
-messages. Une demande d'effacement se traite donc en supprimant le compte, sans
-intervention manuelle table par table.
+compte efface en cascade le profil, les réservations, les signalements, les
+messages de discussion, les messages adressés à l’association et les votes. Une
+demande d'effacement se traite donc en supprimant le compte, sans intervention
+manuelle table par table.
 
 Cette phrase est une promesse faite aux adhérents, pas un commentaire :
 `scripts/check-rls-guards.test.mjs` vérifie que les tables qu'elle nomme sont
-**exactement** celles que la cascade efface, et qu'aucune autre ne l'est. Une
-seule table échappe à la règle, et c'est délibéré : `annonces.author_id` est
-nullable et suit `on delete set null`, parce qu'une annonce publiée reste utile
-après le départ de son auteur — l'effacer retirerait de l'information collective
-au motif qu'un compte a été fermé. Cette colonne doit rester nullable :
-`not null` avec `set null` rendrait la suppression du compte impossible, la base
-refusant d'écrire `NULL` dans la colonne.
+**exactement** celles que la cascade efface, et qu'aucune autre ne l'est. Quatre
+tables échappent à la règle, et c'est délibéré : `annonces`, `agenda_events`,
+`documents` et `sondages` suivent `on delete set null`, parce qu'une annonce, une
+date du calendrier, un document partagé et une question posée à tous restent
+utiles après le départ de leur auteur — les effacer retirerait de l'information
+collective au motif qu'un compte a été fermé. Ces quatre colonnes doivent rester
+nullables : `not null` avec `set null` rendrait la suppression du compte
+impossible, la base refusant d'écrire `NULL` dans la colonne.
+
+La règle qui distingue les deux listes se dit en une phrase, et c'est elle que le
+test interroge plutôt que des noms de tables : **ce qui est adressé à tout le
+monde survit à son auteur ; ce qui est adressé par une personne, ou privé, est
+effacé.** Un vote est rattaché à son votant, un message au bureau est écrit par
+son auteur : tous deux partent avec le compte. L'analyse part de `auth.users` —
+la table des comptes, qui est la racine de l'effacement — et non de `profiles`,
+et elle suit les arêtes `cascade` jusqu'à fermeture : `cantine_reservations`
+n'atteint le compte qu'à travers le profil, et une jointure d'un seul saut l'aurait
+manqué.
 
 Le corollaire vaut d'être dit, parce qu'il a failli être pris à l'envers :
 `src/services/discussion.ts` porte un libellé de repli pour un message « sans

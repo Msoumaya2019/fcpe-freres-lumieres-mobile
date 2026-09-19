@@ -68,6 +68,32 @@ exception
 end
 $$;
 
+--  La catégorie d'une actualité, qui porte le badge affiché sur sa carte.
+--
+--  POURQUOI UNE COLONNE, ET NON UNE DÉDUCTION DU TITRE
+--  --------------------------------------------------
+--  La maquette affiche « Important », « Cantine », « Événement » sur les cartes
+--  d'actualité. Ces mots ne se devinent pas du texte : « Réunion du bureau » est
+--  un événement, « Fermeture de la cantine » est important, et les deux se
+--  ressemblent. Chercher un mot dans le titre produirait un badge faux au
+--  premier titre inattendu, et personne ne saurait pourquoi.
+--
+--  La valeur par défaut est `information`, ce qui donne un badge correct aux
+--  annonces déjà publiées sans avoir à les reprendre une par une.
+do $$
+begin
+  create type public.annonce_category as enum ('information', 'important', 'cantine', 'evenement', 'reunion');
+exception
+  when duplicate_object then null;
+end
+$$;
+
+--  `add column if not exists` plutôt qu'une réécriture de la première
+--  migration : celle-ci est **déjà appliquée** sur la base de production, et la
+--  modifier obligerait à la recoller entièrement. Ce fichier-ci s'ajoute.
+alter table public.annonces
+  add column if not exists category public.annonce_category not null default 'information';
+
 
 -- =============================================================================
 --  2. Tables

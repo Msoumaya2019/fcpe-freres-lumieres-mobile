@@ -196,9 +196,32 @@ npx supabase link --project-ref <référence>
 npx supabase db push
 ```
 
-Six tables — `profiles`, `annonces`, `cantine_menus`, `cantine_reservations`,
-`signalements`, `discussion_messages` — toutes protégées par Row Level Security,
-avec un déclencheur qui crée le profil à l'inscription.
+Douze tables, toutes protégées par Row Level Security, avec un déclencheur qui
+crée le profil à l'inscription :
+
+- **les six de la première migration** — `profiles`, `annonces`, `cantine_menus`,
+  `cantine_reservations`, `signalements`, `discussion_messages` ;
+- **les six de la seconde**, `20260919120000_rubriques.sql` — `agenda_events`,
+  `documents`, `sondages`, `sondage_choices`, `sondage_votes` et `messages`.
+
+Les deux migrations sont **rejouables** : chacune peut être appliquée en entier
+sur une base qui la porte déjà, sans échouer à mi-parcours. C'est ce que vérifie
+`scripts/check-migration-rejouable.test.mjs`.
+
+### Le compartiment `documents` se crée à la main
+
+La seconde migration déclare la table `documents`, mais **pas le compartiment de
+stockage** qui porte les fichiers. C'est volontaire : le schéma `storage` est géré
+par Supabase et absent de l'essai Postgres local, si bien qu'une instruction le
+concernant rendrait la migration non rejouable hors du tableau de bord.
+
+Créez donc un compartiment **privé** nommé `documents`, puis posez ses politiques
+dans le tableau de bord (Storage > Policies). L'application n'ouvre jamais un
+fichier directement : elle demande une **adresse signée** valable une heure, par
+`documentUrl`. Aucun test du dépôt ne peut lire ces politiques — elles vivent dans
+le tableau de bord —, et c'est pourquoi `scripts/check-rls-guards.test.mjs` exige
+que tout appel à Storage soit déclaré nommément, avec sa raison, plutôt que de
+laisser croire qu'il est couvert par les politiques du schéma.
 
 Après la première inscription, promouvez votre compte :
 
@@ -483,7 +506,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── config/
 │   │   ├── env.ts                 ★ lecture et validation des clés d'API
 │   │   ├── supabase.ts            ★ construction du client
-│   │   └── storage.ts             session dans le Keychain / Keystore
+│   │   ├── storage.ts             session dans le Keychain / Keystore
+│   │   └── preferences.ts         ce que l'application garde sur l'appareil
 │   ├── auth/
 │   │   ├── AuthProvider.tsx       état de session, connexion, inscription,
 │   │   │                          réinitialisation, écoute des liens entrants
@@ -492,13 +516,14 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── navigation/
 │   │   ├── types.ts               paramètres de routes typés
 │   │   ├── RootNavigator.tsx      connexion ⇄ application
-│   │   └── MainTabs.tsx           les quatre onglets
-│   ├── screens/                   les cinq écrans, et celui des clés absentes
+│   │   ├── MainTabs.tsx           les cinq onglets, et la barre écrite à la main
+│   │   └── PlusStack.tsx          les sept écrans rangés sous « Plus »
+│   ├── screens/                   les treize écrans, et celui des clés absentes
 │   ├── services/                  accès aux données, une fonction par requête
 │   ├── components/                bibliothèque d'interface
 │   ├── hooks/useAsyncData.ts      chargement avec états explicites
 │   ├── errors/                    traduction des erreurs en français
-│   ├── theme/                     jetons visuels
+│   ├── theme/                     jetons visuels, et styles par catégorie
 │   ├── types/                     types de la base et du domaine
 │   ├── utils/date.ts              formatage des dates
 │   └── utils/pendingAction.ts     quand une action est encore en cours

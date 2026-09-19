@@ -35,7 +35,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const RACINE = fileURLToPath(new URL('../', import.meta.url));
-const MIGRATION = join(RACINE, 'supabase', 'migrations', '20260916120000_init.sql');
+const MIGRATIONS = join(RACINE, 'supabase', 'migrations');
 
 /** Retire les commentaires de ligne et de bloc en TypeScript, `--` en SQL. */
 function sansCommentaires(source) {
@@ -60,31 +60,112 @@ function fichiersSource() {
 }
 
 /**
- * Les contraintes de longueur **avec borne haute**, lues dans la migration.
+ * Le SQL de **toutes** les migrations, dans l'ordre des noms.
+ *
+ * POURQUOI TOUTES, ET NON LA PREMIÈRE
+ * -----------------------------------
+ * La version précédente lisait un seul fichier, désigné par son nom. Tant qu'il
+ * n'y en avait qu'un, la différence était invisible ; à la deuxième migration,
+ * ce banc a répondu « rien à signaler » sur des tables qu'il n'avait jamais
+ * ouvertes. Une borne ajoutée dans une migration ultérieure aurait donc été
+ * invisible, et l'adhérent aurait retrouvé le message générique que ce fichier
+ * existe pour éviter.
+ *
+ * C'est la même famille de défaut que `check-schema-types`, corrigé de la même
+ * manière le même jour : un contrôle qui lit **un** fichier par son nom mesure
+ * ce fichier-là, pas la propriété qu'il annonce.
+ */
+function sqlDesMigrations() {
+  return readdirSync(MIGRATIONS)
+    .filter((nom) => nom.endsWith('.sql'))
+    .sort()
+    .map((nom) => sansCommentairesSql(lireFichier(join(MIGRATIONS, nom))))
+    .join('\n');
+}
+
+/**
+ * Le contenu d'une parenthèse, parenthèses comptées.
+ *
+ * POURQUOI ON COMPTE, ET POURQUOI CE N'EST PAS UN DÉTAIL
+ * ------------------------------------------------------
+ * Un filtre par ligne — « la contrainte tient sur une ligne » — suffit tant que
+ * toutes les contraintes tiennent sur une ligne. `messages_reply_format` s'écrit
+ * sur trois lignes, et la version précédente de `check-schema-types` a produit à
+ * cause de cela une colonne imaginaire nommée `or`. La propriété cherchée est
+ * **structurelle** — « à l'intérieur de cette contrainte » —, et une structure
+ * se lit en comptant les parenthèses, jamais en découpant des lignes.
+ *
+ * `null` quand la parenthèse n'est jamais refermée : un fichier tronqué rend
+ * `null`, et l'appelant l'ignore au lieu de lire la fin du fichier comme si elle
+ * appartenait à la contrainte.
+ */
+function corpsParenthese(source, indexOuvrante) {
+  let profondeur = 0;
+
+  for (let i = indexOuvrante; i < source.length; i += 1) {
+    if (source[i] === '(') {
+      profondeur += 1;
+    } else if (source[i] === ')') {
+      profondeur -= 1;
+
+      if (profondeur === 0) {
+        return source.slice(indexOuvrante + 1, i);
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Les contraintes de longueur **avec borne haute**, lues dans les migrations.
  *
  * Les bornes basses ne sont pas relevées : elles sont déjà tenues par la
  * validation des formulaires, qui refuse un champ vide, et un `maxLength` ne
  * saurait les exprimer.
+ *
+ * La borne est cherchée **dans le corps de chaque contrainte**, et non sur la
+ * ligne qui la déclare : `messages_reply_length` s'écrit
+ * `check (reply_to is null or char_length(reply_to) <= 254)`, où `char_length`
+ * ne suit pas immédiatement `check (`. Un motif qui l'exigeait laissait cette
+ * borne invisible — et `reply_to` est saisie par l'écran de contact.
  */
 function contraintesBornees() {
-  const sql = sansCommentairesSql(lireFichier(MIGRATION));
-  const tables = /create table (?:if not exists )?public\.(\w+)\s*\(([\s\S]*?)\n\);/g;
+  const sql = sqlDesMigrations();
+  const tables = /create table (?:if not exists )?public\.(\w+)\s*\(/g;
   const relevees = [];
 
   let table;
   while ((table = tables.exec(sql)) !== null) {
-    const [, nomTable, corps] = table;
-    const motif =
-      /constraint\s+(\w+)\s+check\s*\(\s*char_length\(\s*(?:btrim\(\s*(\w+)\s*\)|(\w+))\s*\)\s*(?:<=\s*(\d+)|between\s+\d+\s+and\s+(\d+))\s*\)/g;
+    const corpsTable = corpsParenthese(sql, table.index + table[0].length - 1);
+
+    if (corpsTable === null) {
+      continue;
+    }
+
+    const nomTable = table[1];
+    const contraintes = /constraint\s+(\w+)\s+check\s*\(/g;
 
     let contrainte;
-    while ((contrainte = motif.exec(corps)) !== null) {
-      relevees.push({
-        contrainte: contrainte[1],
-        table: nomTable,
-        colonne: contrainte[2] ?? contrainte[3],
-        borne: Number.parseInt(contrainte[4] ?? contrainte[5], 10),
-      });
+    while ((contrainte = contraintes.exec(corpsTable)) !== null) {
+      const expression = corpsParenthese(corpsTable, contrainte.index + contrainte[0].length - 1);
+
+      if (expression === null) {
+        continue;
+      }
+
+      const bornes = expression.matchAll(
+        /char_length\(\s*(?:btrim\(\s*(\w+)\s*\)|(\w+))\s*\)\s*(?:<=\s*(\d+)|between\s+\d+\s+and\s+(\d+))/g,
+      );
+
+      for (const borne of bornes) {
+        relevees.push({
+          contrainte: contrainte[1],
+          table: nomTable,
+          colonne: borne[1] ?? borne[2],
+          borne: Number.parseInt(borne[3] ?? borne[4], 10),
+        });
+      }
     }
   }
 
@@ -114,6 +195,26 @@ const SAISIES = [
     ecran: 'src/screens/DiscussionMembresScreen.tsx',
     constante: 'MAX_MESSAGE_LENGTH',
   },
+  //  Les trois colonnes saisies par l'écran de contact. Elles n'étaient pas
+  //  visibles tant que ce banc ne lisait que la première migration.
+  {
+    table: 'messages',
+    colonne: 'subject',
+    ecran: 'src/screens/ContactScreen.tsx',
+    constante: 'MAX_SUBJECT_LENGTH',
+  },
+  {
+    table: 'messages',
+    colonne: 'body',
+    ecran: 'src/screens/ContactScreen.tsx',
+    constante: 'MAX_BODY_LENGTH',
+  },
+  {
+    table: 'messages',
+    colonne: 'reply_to',
+    ecran: 'src/screens/ContactScreen.tsx',
+    constante: 'MAX_EMAIL_LENGTH',
+  },
 ];
 
 /**
@@ -126,6 +227,36 @@ const NON_SAISIES = [
     colonne: 'title',
     raison:
       "le bureau publie les annonces hors de l'application ; aucun écran ni service n'écrit dans cette table",
+  },
+  //  Les rubriques ajoutées par la seconde migration sont, elles aussi, publiées
+  //  depuis le tableau de bord. Le test plus bas le **vérifie** au lieu de le
+  //  supposer : le jour où un écran publiera un événement ou un sondage, il lui
+  //  faudra aussi borner son titre.
+  {
+    table: 'agenda_events',
+    colonne: 'title',
+    raison: 'les événements sont publiés par le bureau ; aucun écran ne les écrit',
+  },
+  {
+    table: 'documents',
+    colonne: 'title',
+    raison: 'les documents sont déposés par le bureau ; aucun écran ne les écrit',
+  },
+  {
+    table: 'documents',
+    colonne: 'storage_path',
+    raison:
+      'le chemin vient du nom du fichier déposé, jamais d’une saisie : il n’y a pas de champ à borner côté client',
+  },
+  {
+    table: 'sondages',
+    colonne: 'question',
+    raison: 'les sondages sont rédigés par le bureau ; aucun écran ne les écrit',
+  },
+  {
+    table: 'sondage_choices',
+    colonne: 'label',
+    raison: 'les réponses possibles sont rédigées par le bureau ; aucun écran ne les écrit',
   },
 ];
 
@@ -178,10 +309,18 @@ test('l’extraction lit bien la migration et les écrans', () => {
   assert.deepEqual(
     BORNEES.map((c) => c.contrainte).sort(),
     [
+      'agenda_events_title_length',
       'annonces_title_not_blank',
       'discussion_messages_body_not_blank',
+      'documents_path_length',
+      'documents_title_length',
+      'messages_body_length',
+      'messages_reply_length',
+      'messages_subject_length',
       'profiles_display_name_length',
       'signalements_subject_not_blank',
+      'sondage_choices_label_length',
+      'sondages_question_length',
     ],
     'la migration a changé : relire les contraintes de longueur',
   );

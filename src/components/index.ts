@@ -1,3 +1,4 @@
+export { AnnonceCard, type AnnonceCardProps } from '@/components/AnnonceCard';
 export { AppText, type AppTextProps } from '@/components/AppText';
 export {
   AsyncErrorBanner,
@@ -5,12 +6,15 @@ export {
   type AsyncErrorBannerProps,
   type AsyncFallbackProps,
 } from '@/components/AsyncFallback';
+export { Badge, type BadgeProps } from '@/components/Badge';
 export { Button, type ButtonProps } from '@/components/Button';
 export { Card, type CardProps } from '@/components/Card';
 export { EmptyState, type EmptyStateProps } from '@/components/EmptyState';
 export { ErrorNotice, type ErrorNoticeProps } from '@/components/ErrorNotice';
 export { LoadingView, type LoadingViewProps } from '@/components/LoadingView';
 export { Screen, type ScreenProps } from '@/components/Screen';
+export { SectionHeader, type SectionHeaderProps } from '@/components/SectionHeader';
+export { ShortcutCard, type ShortcutCardProps } from '@/components/ShortcutCard';
 export { TabBar, type TabBarProps, type TabIcon, type TabIcons } from '@/components/TabBar';
 export { TextField, type TextFieldProps } from '@/components/TextField';
 export { WeakPasswordNotice, type WeakPasswordNoticeProps } from '@/components/WeakPasswordNotice';

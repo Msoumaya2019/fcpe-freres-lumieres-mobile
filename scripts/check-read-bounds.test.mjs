@@ -147,12 +147,18 @@ test('l’extraction lit bien les services, et rien d’autre', () => {
   // L'ancre est la **liste des tables lues**, pas un décompte : une lecture
   // ajoutée sur une nouvelle table doit obliger à venir relire ce fichier.
   assert.deepEqual(tablesLues(), [
+    'agenda_events',
     'annonces',
     'cantine_menus',
     'cantine_reservations',
     'discussion_messages',
+    'documents',
+    'messages',
     'profiles',
     'signalements',
+    'sondage_choices',
+    'sondage_votes',
+    'sondages',
   ]);
 
   const lectures = fichiersSource().flatMap((chemin) =>

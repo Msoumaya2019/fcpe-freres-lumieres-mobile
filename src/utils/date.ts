@@ -120,3 +120,83 @@ export function formatDateTime(value: string): string {
 
   return `${day}/${month}/${date.getFullYear()} à ${hours}:${minutes}`;
 }
+
+/** « 16/09/2026 », à partir d'un horodatage ISO ou d'une date civile. */
+export function formatShortDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  const day = `${date.getDate()}`.padStart(2, '0');
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+
+  return `${day}/${month}/${date.getFullYear()}`;
+}
+
+/**
+ * « aujourd'hui », « hier », « il y a 3 jours », puis la date courte.
+ *
+ * POURQUOI PAS UNE DURÉE EN HEURES
+ * --------------------------------
+ * « il y a 26 heures » se lit mal et ne répond pas à la question qu'on se pose
+ * devant une actualité — « c'est d'aujourd'hui, ou de la semaine dernière ? ».
+ * Le calcul porte donc sur des **jours civils**, en repartant de minuit, et non
+ * sur un écart de millisecondes : un message publié hier à 23 h 50 est « hier »,
+ * pas « il y a 2 heures ».
+ *
+ * Le seuil de sept jours n'est pas arbitraire : au-delà, « il y a 9 jours » se
+ * convertit mentalement en date, ce qui coûte plus qu'il ne rapporte. On donne
+ * alors la date.
+ *
+ * Une date **future** rend la date courte : une actualité publiée demain n'est
+ * pas « aujourd'hui », et un `Math.abs` aurait fait disparaître la distinction.
+ */
+export function formatRelativeDay(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  const dayDifference = Math.round((startOfDay(new Date()) - startOfDay(date)) / 86_400_000);
+
+  if (dayDifference === 0) {
+    return "aujourd'hui";
+  }
+  if (dayDifference === 1) {
+    return 'hier';
+  }
+  if (dayDifference > 1 && dayDifference < 7) {
+    return `il y a ${dayDifference} jours`;
+  }
+
+  return formatShortDate(value);
+}
+
+/** « jeudi 24 septembre » — le jour d'un événement, sans l'année. */
+export function formatLongDay(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return capitalize(formatDayAndMonth(date));
+}
+
+/**
+ * « 18 h 30 » à partir d'un horodatage ISO.
+ *
+ * L'espace autour du `h` est une convention française, et pas une coquetterie :
+ * « 18h30 » se lit mal à petite taille, et « 18:30 » est un format anglophone.
+ */
+export function formatTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  const hours = date.getHours();
+  const minutes = `${date.getMinutes()}`.padStart(2, '0');
+
+  return `${hours} h ${minutes}`;
+}

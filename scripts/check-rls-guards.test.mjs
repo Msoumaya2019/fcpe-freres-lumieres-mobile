@@ -10,7 +10,8 @@
  *     aucun autre outil de la chaîne ne le signale.
  *  3. **Ce qui survit à la fermeture d'un compte est exactement ce que
  *     `SECURITY.md` documente.** La cascade est le mécanisme d'effacement RGPD
- *     du projet, et une seule table y échappe — nommément, avec sa raison.
+ *     du projet, et seules les tables de contenu collectif y échappent —
+ *     nommément, avec leur raison.
  *  4. **Chaque requête de `src/services/` est autorisée par une politique, et
  *     aucune politique n'ouvre ce que le code n'exerce pas.** Les familles 1 à 3
  *     regardent le schéma ; celle-ci le confronte au code.
@@ -57,16 +58,31 @@
 
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-const MIGRATION = fileURLToPath(
-  new URL('../supabase/migrations/20260916120000_init.sql', import.meta.url),
-);
+const MIGRATIONS = fileURLToPath(new URL('../supabase/migrations', import.meta.url));
 
-/** Migration sans ses commentaires `--`, qui citent les colonnes surveillées. */
+/**
+ * Le SQL de **toutes** les migrations, dans l'ordre des noms, sans commentaires.
+ *
+ * POURQUOI TOUTES, ET NON LA PREMIÈRE
+ * -----------------------------------
+ * Ce banc lisait un seul fichier, désigné par son nom. Tant qu'il n'y en avait
+ * qu'un, la différence ne se voyait pas ; à la deuxième migration, il a continué
+ * d'affirmer « six tables » sans que rien ne tombe, et il a réclamé une politique
+ * RLS pour des tables qu'il n'avait jamais lues. Le défaut est le même que dans
+ * `check-input-limits` et `check-schema-types`, corrigés le même jour : **un
+ * contrôle qui lit un fichier par son nom mesure ce fichier-là, pas la propriété
+ * qu'il annonce.**
+ */
 function lireMigration() {
-  return readFileSync(MIGRATION, 'utf8').replace(/^[^\S\n]*--.*$/gm, '');
+  return readdirSync(MIGRATIONS)
+    .filter((nom) => nom.endsWith('.sql'))
+    .sort()
+    .map((nom) => readFileSync(join(MIGRATIONS, nom), 'utf8').replace(/^[^\S\n]*--.*$/gm, ''))
+    .join('\n');
 }
 
 /**
@@ -110,14 +126,52 @@ function tablesGardees(sql) {
   return tables;
 }
 
+/**
+ * Le contenu d'une parenthèse, parenthèses comptées.
+ *
+ * POURQUOI ON COMPTE, ET CE QUE CELA A CORRIGÉ
+ * --------------------------------------------
+ * La condition d'insertion des votes de sondage contient un
+ * `exists (select 1 from public.sondages …)`, donc des parenthèses imbriquées. Un
+ * `[\s\S]*?\);` non gourmand s'arrête à la **première** `);` rencontrée — celle
+ * du sous-select — et rend une condition **tronquée**. Aucun test ne lisait ce
+ * corps, donc rien ne le signalait : l'extraction répondait, avec l'assurance
+ * d'une réponse juste, un texte coupé au milieu.
+ *
+ * C'est la troisième fois dans ce projet qu'une propriété **structurelle** est
+ * lue par un filtre textuel. Une structure se lit en comptant, jamais en
+ * découpant.
+ */
+function corpsParenthese(source, indexOuvrante) {
+  let profondeur = 0;
+
+  for (let i = indexOuvrante; i < source.length; i += 1) {
+    if (source[i] === '(') {
+      profondeur += 1;
+    } else if (source[i] === ')') {
+      profondeur -= 1;
+
+      if (profondeur === 0) {
+        return source.slice(indexOuvrante + 1, i);
+      }
+    }
+  }
+
+  return null;
+}
+
 /** Condition d'insertion de chaque table : table → texte du `with check`. */
 function conditionsDInsertion(sql) {
   const conditions = new Map();
   const politiques =
-    /create policy \w+\s+on public\.(\w+) for insert\s+to authenticated\s+with check \(([\s\S]*?)\);/g;
+    /create policy \w+\s+on public\.(\w+) for insert\s+to authenticated\s+with check \(/g;
 
-  for (const [, table, condition] of sql.matchAll(politiques)) {
-    conditions.set(table, condition);
+  for (const politique of sql.matchAll(politiques)) {
+    const corps = corpsParenthese(sql, politique.index + politique[0].length - 1);
+
+    if (corps !== null) {
+      conditions.set(politique[1], corps);
+    }
   }
 
   return conditions;
@@ -186,18 +240,27 @@ test('la condition d’insertion des signalements laisse le bureau décider du s
 });
 
 test('aucune politique d’insertion n’est perdue à la lecture', () => {
-  // Quatre tables sont insérables par un membre : profiles, cantine_reservations,
-  // signalements et discussion_messages. Les deux autres (annonces,
-  // cantine_menus) le sont par le bureau. Toutes ont une politique d'insertion,
-  // donc l'analyse doit en trouver six — sinon une expression régulière trop
-  // stricte aurait laissé passer une table, et l'invariant avec elle.
+  // Douze tables ont une politique d'insertion, et elles se partagent en deux
+  // familles égales. Six sont insérables par un **membre** — `profiles`,
+  // `cantine_reservations`, `signalements`, `discussion_messages`,
+  // `sondage_votes`, `messages` — et six par le **bureau** — `annonces`,
+  // `cantine_menus`, `agenda_events`, `documents`, `sondages`,
+  // `sondage_choices`. L'analyse doit donc en trouver douze : sinon une
+  // expression régulière trop stricte aurait laissé passer une table, et
+  // l'invariant avec elle.
   assert.deepEqual([...INSERTIONS.keys()].sort(), [
+    'agenda_events',
     'annonces',
     'cantine_menus',
     'cantine_reservations',
     'discussion_messages',
+    'documents',
+    'messages',
     'profiles',
     'signalements',
+    'sondage_choices',
+    'sondage_votes',
+    'sondages',
   ]);
 });
 
@@ -256,9 +319,12 @@ const PROMOTION = [
   'README.md',
 ];
 
-test('la migration déclare les six tables attendues', () => {
+test('les migrations déclarent les douze tables attendues', () => {
   // Contrôle : sans lui, une analyse qui ne lirait rien ferait passer les trois
-  // invariants suivants sur zéro table.
+  // invariants suivants sur zéro table. La liste est **close** : une table
+  // ajoutée sans être déclarée ici fait tomber le test, et l'ajouter est une
+  // décision — elle doit venir avec ses politiques, sa fermeture à `anon` et sa
+  // place dans SECURITY.md.
   assert.deepEqual(DECLAREES, [
     'profiles',
     'annonces',
@@ -266,6 +332,12 @@ test('la migration déclare les six tables attendues', () => {
     'cantine_reservations',
     'signalements',
     'discussion_messages',
+    'agenda_events',
+    'documents',
+    'sondages',
+    'sondage_choices',
+    'sondage_votes',
+    'messages',
   ]);
 });
 
@@ -347,10 +419,30 @@ test('la promotion est documentée partout où elle est écrite', () => {
 // cascade est ce qui la tient. Les deux vivent dans des fichiers différents, donc
 // rien ne les relie à la lecture — d'où ce croisement.
 //
-// Une seule table échappe à la règle, et c'est délibéré : `annonces`, dont
-// l'auteur est nullable et suit `on delete set null`. Une annonce publiée reste
-// utile après le départ de son auteur ; l'effacer en cascade retirerait de
-// l'information collective au motif qu'un compte a été fermé.
+// LA RACINE EST LE COMPTE, PAS LE PROFIL
+// -------------------------------------
+// La première version de cette famille cherchait les clés étrangères pointant
+// vers `public.profiles`, et elle exigeait le préfixe `public.`. Les deux
+// hypothèses étaient vraies de la migration initiale, et fausses de la seconde :
+// `messages`, `sondage_votes`, `agenda_events`, `documents` et `sondages`
+// écrivent `references auth.users (id)` — sans préfixe, et vers la table des
+// comptes plutôt que vers le profil. **Les cinq colonnes étaient donc invisibles
+// au contrôle**, qui continuait d'affirmer que la prose et le schéma s'accordent
+// sur une liste à laquelle il manquait deux tables effacées.
+//
+// L'analyse part donc de `auth.users` et suit les arêtes `cascade` jusqu'à
+// fermeture. Une jointure d'un seul saut ne suffirait pas : `cantine_reservations`
+// n'atteint le compte qu'**à travers** `profiles`. Et c'est la seule formulation
+// qui reste juste si une table se rattache un jour à une autre table effacée.
+//
+// Quatre tables échappent à la règle, et c'est délibéré : `annonces`,
+// `agenda_events`, `documents` et `sondages` suivent `on delete set null`. Ce
+// sont les quatre tables de **contenu collectif** — une annonce, une date, un
+// document, une question posée à tous. Elles restent utiles après le départ de
+// leur auteur, et les effacer retirerait de l'information collective au motif
+// qu'un compte a été fermé. La règle se dit donc en une phrase : **ce qui est
+// adressé à tout le monde survit à son auteur ; ce qui est adressé par une
+// personne, ou privé, est effacé.**
 //
 // Le piège que ce croisement surveille est asymétrique, et c'est pour cela qu'il
 // faut le nommer : `src/services/discussion.ts` porte un libellé de repli pour un
@@ -366,27 +458,73 @@ function blocsDeTable(sql) {
 }
 
 /**
- * Clés étrangères pointant vers une table : qui, sur quelle colonne, avec
- * quelle obligation et quelle règle d'effacement.
+ * Toutes les clés étrangères du schéma : qui, sur quelle colonne, vers quelle
+ * table, avec quelle obligation et quelle règle d'effacement.
+ *
+ * Deux détails du motif sont des corrections, pas des commodités. Le préfixe de
+ * schéma est **facultatif** — la seconde migration écrit `references auth.users`
+ * là où la première écrit `references public.profiles`, et l'exiger rendait cinq
+ * colonnes invisibles. Et les qualificatifs entre `uuid` et `references` sont
+ * admis, sans quoi `id uuid primary key references …` — la clé de `profiles` —
+ * échappait aussi. La cible garde son schéma : `auth.users` et un hypothétique
+ * `public.users` ne sont pas la même table.
  */
-function referencesVers(sql, cible) {
+function clesEtrangeres(sql) {
   const cle =
-    /(\w+)\s+uuid\s+(not null\s+)?references\s+public\.(\w+)\s*\(\w+\)\s+on delete (cascade|set null|restrict|no action)/g;
-  const references = [];
+    /(\w+)\s+uuid\s+((?:not null\s+|primary key\s+)*)references\s+(?:(public|auth)\.)?(\w+)\s*\(\w+\)\s+on delete (cascade|set null|restrict|no action)/g;
+  const cles = [];
 
   for (const { table, corps } of blocsDeTable(sql)) {
-    for (const [, colonne, obligatoire, tableCible, regle] of corps.matchAll(cle)) {
-      if (tableCible === cible) {
-        references.push({ table, colonne, obligatoire: obligatoire !== undefined, regle });
+    for (const [, colonne, qualificatifs, schema, nom, regle] of corps.matchAll(cle)) {
+      cles.push({
+        table,
+        colonne,
+        cible: schema === 'auth' ? `auth.${nom}` : nom,
+        obligatoire: qualificatifs.includes('not null') || qualificatifs.includes('primary key'),
+        regle,
+      });
+    }
+  }
+
+  return cles;
+}
+
+/**
+ * Fermeture transitive des arêtes `cascade` à partir d'une table : tout ce qui
+ * disparaît avec elle, la racine exceptée.
+ */
+function effaceesParCascade(cles, racine) {
+  const effacees = new Set([racine]);
+  let progression = true;
+
+  while (progression) {
+    progression = false;
+
+    for (const { table, cible, regle } of cles) {
+      if (regle === 'cascade' && effacees.has(cible) && !effacees.has(table)) {
+        effacees.add(table);
+        progression = true;
       }
     }
   }
 
-  return references;
+  effacees.delete(racine);
+
+  return [...effacees].sort();
 }
 
 const BLOCS = blocsDeTable(SQL);
-const VERS_PROFILS = referencesVers(SQL, 'profiles');
+const CLES = clesEtrangeres(SQL);
+
+/** La table des comptes : supprimer un compte est l'événement que la prose décrit. */
+const RACINE_DU_COMPTE = 'auth.users';
+
+/** Colonnes rattachées au compte, directement ou par le profil. */
+const VERS_LE_COMPTE = CLES.filter(
+  ({ cible }) => cible === RACINE_DU_COMPTE || cible === 'profiles',
+);
+
+const EFFACEES = effaceesParCascade(CLES, RACINE_DU_COMPTE);
 
 /**
  * Formules par lesquelles `SECURITY.md` désigne les tables effacées. La table
@@ -397,10 +535,12 @@ const EFFACEMENT_DOCUMENTE = new Map([
   ['profiles', 'le profil'],
   ['cantine_reservations', 'les réservations'],
   ['signalements', 'les signalements'],
-  ['discussion_messages', 'les messages'],
+  ['discussion_messages', 'les messages de discussion'],
+  ['messages', 'les messages adressés à l’association'],
+  ['sondage_votes', 'les votes'],
 ]);
 
-test('le découpage par blocs voit les six tables déclarées', () => {
+test('le découpage par blocs voit les douze tables déclarées', () => {
   // Contrôle du contrôle, et non redondance : `tablesDeclarees` lit les en-têtes,
   // ce découpage lit les corps. S'ils divergent, l'analyse des clés étrangères
   // porterait sur un schéma partiel sans que rien ne le dise.
@@ -410,52 +550,102 @@ test('le découpage par blocs voit les six tables déclarées', () => {
   );
 });
 
-test('les quatre références à profiles sont reconnues', () => {
-  // Cette égalité stricte sert aussi de contrôle : une analyse qui ne trouverait
-  // rien ferait passer les deux invariants suivants sur zéro cas. Une seule
-  // colonne manquante est un échec, pas un silence.
-  assert.deepEqual(VERS_PROFILS.map(({ table, colonne }) => `${table}.${colonne}`).sort(), [
+test('l’analyse voit les quatorze clés étrangères du schéma', () => {
+  // Contrôle du contrôle, et il porte tout le reste de la famille : la fermeture
+  // transitive ne vaut que par les arêtes qu'on lui donne. Une arête perdue
+  // rétrécit la liste des tables effacées, et les tests suivants s'accorderaient
+  // alors sur une liste incomplète — verts, et faux.
+  //
+  // La liste est écrite en toutes lettres plutôt que comptée : un décompte
+  // laisserait passer une arête perdue compensée par une arête inventée.
+  assert.deepEqual(
+    CLES.map(
+      ({ table, colonne, cible, regle }) => `${table}.${colonne} → ${cible} ${regle}`,
+    ).sort(),
+    [
+      'agenda_events.author_id → auth.users set null',
+      'annonces.author_id → profiles set null',
+      'cantine_reservations.menu_id → cantine_menus cascade',
+      'cantine_reservations.user_id → profiles cascade',
+      'discussion_messages.author_id → profiles cascade',
+      'documents.author_id → auth.users set null',
+      'messages.author_id → auth.users cascade',
+      'profiles.id → auth.users cascade',
+      'signalements.author_id → profiles cascade',
+      'sondage_choices.sondage_id → sondages cascade',
+      'sondage_votes.choice_id → sondage_choices cascade',
+      'sondage_votes.sondage_id → sondages cascade',
+      'sondage_votes.voter_id → auth.users cascade',
+      'sondages.author_id → auth.users set null',
+    ],
+  );
+});
+
+test('les dix colonnes rattachées au compte sont reconnues', () => {
+  // La fermeture part de `auth.users`, mais la moitié des colonnes y arrivent
+  // par `profiles`. Les deux chemins sont donc réunis ici, et nommés.
+  assert.deepEqual(VERS_LE_COMPTE.map(({ table, colonne }) => `${table}.${colonne}`).sort(), [
+    'agenda_events.author_id',
     'annonces.author_id',
     'cantine_reservations.user_id',
     'discussion_messages.author_id',
+    'documents.author_id',
+    'messages.author_id',
+    'profiles.id',
     'signalements.author_id',
+    'sondage_votes.voter_id',
+    'sondages.author_id',
   ]);
 });
 
-test('une annonce survit à la fermeture du compte de son auteur', () => {
-  const annonce = VERS_PROFILS.find(({ table }) => table === 'annonces');
-
-  assert.notEqual(annonce, undefined, 'annonces doit référencer profiles');
-  assert.equal(
-    annonce.regle,
-    'set null',
-    "une annonce effacée en cascade retirerait de l'information collective au motif qu'un compte a été fermé",
-  );
-  assert.equal(
-    annonce.obligatoire,
-    false,
-    'annonces.author_id doit rester nullable : `not null` avec `set null` rendrait la ' +
-      'suppression du compte impossible, la base refusant d’écrire NULL dans la colonne',
-  );
+test('la fermeture d’un compte efface exactement six tables', () => {
+  // L'invariant, énoncé une fois : la liste est **calculée** à partir des arêtes
+  // `cascade`, puis figée. Ajouter une table rattachée au compte sans toucher à
+  // `SECURITY.md` fait donc tomber le test de la prose, pas celui-ci.
+  assert.deepEqual(EFFACEES, [
+    'cantine_reservations',
+    'discussion_messages',
+    'messages',
+    'profiles',
+    'signalements',
+    'sondage_votes',
+  ]);
 });
 
-test('toute autre référence à profiles efface en cascade', () => {
+test('seul le contenu collectif survit à son auteur', () => {
   // L'exception est déduite de la **règle**, jamais du nom de la table. Filtrer
   // sur `annonces` aurait rendu l'assertion incapable de tomber : elle aurait
   // décrit la liste qu'elle venait de construire. Mesuré en passant `annonces` à
   // `cascade` — la version filtrée par nom restait verte.
-  const nonCascade = VERS_PROFILS.filter(({ regle }) => regle !== 'cascade').map(
-    ({ table, colonne, regle }) => `${table}.${colonne} → ${regle}`,
-  );
+  //
+  // Les quatre survivantes sont les quatre tables de contenu collectif : une
+  // annonce, une date du calendrier, un document partagé, une question posée à
+  // tous. Elles restent utiles après le départ de leur auteur, et les effacer
+  // retirerait de l'information collective au motif qu'un compte a été fermé.
+  const survivantes = VERS_LE_COMPTE.filter(({ regle }) => regle === 'set null');
 
   assert.deepEqual(
-    nonCascade,
-    ['annonces.author_id → set null'],
-    "une seule exception à la cascade est admise : `annonces`, dont l'annonce doit " +
-      'survivre à son auteur. Toute autre colonne passée à `set null` ferait survivre la ' +
-      "ligne à la fermeture du compte, et l'effacement décrit dans SECURITY.md cesserait " +
-      'de la couvrir, sans qu’aucun autre outil ne le signale',
+    survivantes.map(({ table, colonne, regle }) => `${table}.${colonne} → ${regle}`).sort(),
+    [
+      'agenda_events.author_id → set null',
+      'annonces.author_id → set null',
+      'documents.author_id → set null',
+      'sondages.author_id → set null',
+    ],
+    'seul le contenu collectif survit à son auteur. Toute autre colonne passée à ' +
+      '`set null` ferait survivre la ligne à la fermeture du compte, et l’effacement ' +
+      'décrit dans SECURITY.md cesserait de la couvrir, sans qu’aucun autre outil ne le ' +
+      'signale',
   );
+
+  for (const { table, colonne, obligatoire } of survivantes) {
+    assert.equal(
+      obligatoire,
+      false,
+      `${table}.${colonne} doit rester nullable : \`not null\` avec \`set null\` rendrait ` +
+        'la suppression du compte impossible, la base refusant d’écrire NULL dans la colonne',
+    );
+  }
 });
 
 test('SECURITY.md nomme exactement les tables que la cascade efface', () => {
@@ -469,13 +659,10 @@ test('SECURITY.md nomme exactement les tables que la cascade efface', () => {
   assert.notEqual(phrase, null, "SECURITY.md doit énoncer l'effacement en cascade");
   const liste = phrase[1].replace(/\s+/g, ' ');
 
-  const effacees = [
-    'profiles',
-    ...VERS_PROFILS.filter(({ regle }) => regle === 'cascade').map(({ table }) => table),
-  ];
+  const effacees = [...EFFACEES];
   assert.deepEqual(
     [...EFFACEMENT_DOCUMENTE.keys()].sort(),
-    [...new Set(effacees)].sort(),
+    effacees.sort(),
     'chaque table effacée en cascade doit avoir sa formule, et aucune autre',
   );
 
@@ -497,8 +684,8 @@ test('SECURITY.md nomme exactement les tables que la cascade efface', () => {
 // écran d'erreur. Seulement un écran « aucune donnée », que personne ne
 // distinguera d'une table réellement vide.
 //
-// C'est le contrôle que `SECURITY.md` décrit en prose — « les onze requêtes de
-// `src/services/` ont été croisées une par une » — et une prose ne se relit pas
+// C'est le contrôle que `SECURITY.md` décrit en prose — « les dix-neuf appels de
+// `src/services/` ont été croisés un par un » — et une prose ne se relit pas
 // toute seule. Ici, la phrase est vérifiée à chaque exécution.
 //
 // La quatrième question, elle, ne se lit nulle part : **une politique qui
@@ -535,21 +722,42 @@ const METHODES = new Map([
  * Les fichiers sont lus depuis le disque plutôt que listés à la main : un
  * service ajouté plus tard entre dans l'analyse sans qu'on ait à y penser — et
  * c'est ce qu'on veut, puisque c'est la requête non couverte qu'on cherche.
+ *
+ * POURQUOI STORAGE EST SÉPARÉ DES TABLES
+ * --------------------------------------
+ * `supabase.from('documents').select(…)` et
+ * `supabase.storage.from('documents').createSignedUrl(…)` portent tous deux un
+ * `.from('documents')`, et le premier jet de ce banc les confondait : il
+ * réclamait une politique RLS pour un **bucket**. Or un bucket ne se protège pas
+ * par RLS mais par les politiques de Storage, qui vivent dans le tableau de bord
+ * Supabase — aucun test du dépôt ne peut les lire.
+ *
+ * La différence est structurelle : c'est le `.storage` **devant** le `from`. On
+ * le capture dans le motif au lieu de le perdre. Filtrer sur le nom du bucket
+ * aurait décrit la liste qu'on venait de construire, et aurait laissé passer le
+ * prochain bucket ajouté.
  */
-function requetesDeLApplication() {
+function appelsDeLApplication() {
   const dossier = fileURLToPath(new URL('../src/services', import.meta.url));
   const requetes = [];
-  const appel = /\.from\('(\w+)'\)\s*\.(\w+)\(/g;
+  const stockages = [];
+  const appel = /(\.storage)?\s*\.from\('(\w+)'\)\s*\.(\w+)\(/g;
 
   for (const fichier of readdirSync(dossier)
     .filter((nom) => nom.endsWith('.ts'))
     .sort()) {
-    for (const [, table, methode] of lireFichier(`src/services/${fichier}`).matchAll(appel)) {
-      requetes.push({ fichier, table, methode });
+    for (const [, stockage, cible, methode] of lireFichier(`src/services/${fichier}`).matchAll(
+      appel,
+    )) {
+      if (stockage === undefined) {
+        requetes.push({ fichier, table: cible, methode });
+      } else {
+        stockages.push({ fichier, bucket: cible, methode });
+      }
     }
   }
 
-  return requetes;
+  return { requetes, stockages };
 }
 
 /** Politiques écrites : clé « table.operation » → nom, rôle et corps. */
@@ -564,7 +772,7 @@ function politiquesEcrites(sql) {
   return politiques;
 }
 
-const REQUETES = requetesDeLApplication();
+const { requetes: REQUETES, stockages: STOCKAGES } = appelsDeLApplication();
 const POLITIQUES = politiquesEcrites(SQL);
 const CLES_REQUETES = [
   ...new Set(REQUETES.map(({ table, methode }) => `${table}.${methode}`)),
@@ -584,12 +792,18 @@ const ALLOWANCES = new Map([
   ],
 ]);
 
-test('l’analyse des requêtes trouve les onze appels attendus', () => {
+test('l’analyse des requêtes trouve les dix-neuf appels attendus', () => {
   // Contrôle, et invariant en même temps : le nombre est celui que SECURITY.md
   // annonce. Une expression régulière trop stricte qui ne trouverait rien ferait
   // passer les quatre tests suivants sur zéro cas.
-  assert.equal(REQUETES.length, 11);
+  //
+  // Dix-neuf **appels** pour dix-huit clés distinctes : un même couple
+  // table/méthode est écrit deux fois. Le décompte porte sur les appels parce que
+  // c'est ce que l'analyse parcourt ; la liste, elle, porte sur les clés, parce
+  // qu'une politique se réclame par couple et non par appel.
+  assert.equal(REQUETES.length, 19);
   assert.deepEqual(CLES_REQUETES, [
+    'agenda_events.select',
     'annonces.select',
     'cantine_menus.select',
     'cantine_reservations.delete',
@@ -597,10 +811,43 @@ test('l’analyse des requêtes trouve les onze appels attendus', () => {
     'cantine_reservations.select',
     'discussion_messages.insert',
     'discussion_messages.select',
+    'documents.select',
+    'messages.insert',
+    'messages.select',
     'profiles.select',
     'signalements.insert',
     'signalements.select',
+    'sondage_choices.select',
+    'sondage_votes.insert',
+    'sondage_votes.select',
+    'sondages.select',
   ]);
+});
+
+/**
+ * Buckets employés par l'application, avec la raison pour laquelle leur
+ * politique n'est pas vérifiable ici.
+ *
+ * Un bucket ne se protège pas par RLS : ses politiques vivent dans le tableau de
+ * bord Supabase, et le dépôt ne les contient pas. Les déclarer nommément est le
+ * seul moyen qu'un bucket ajouté plus tard ne passe pas inaperçu — sans quoi il
+ * serait le seul objet du projet dont la protection n'est écrite nulle part.
+ */
+const STOCKAGE_DOCUMENTE = new Map([
+  [
+    'documents.createSignedUrl',
+    'le bucket `documents` est **privé** ; sa politique de lecture est créée dans ' +
+      'le tableau de bord (voir MISE-EN-SERVICE.md), et aucun test du dépôt ne peut la lire',
+  ],
+]);
+
+test('tout appel à Storage est déclaré, avec sa raison', () => {
+  assert.deepEqual(
+    [...new Set(STOCKAGES.map(({ bucket, methode }) => `${bucket}.${methode}`))].sort(),
+    [...STOCKAGE_DOCUMENTE.keys()].sort(),
+    'un bucket n’a pas de politique RLS : la sienne vit dans le tableau de bord, ' +
+      'donc hors de portée de ce banc — la déclarer ici est la seule trace possible',
+  );
 });
 
 test('chaque requête de l’application est couverte par une politique', () => {
@@ -638,6 +885,9 @@ test('toute politique non exercée par l’application est nommée', () => {
   assert.deepEqual(
     NON_EXERCEES,
     [
+      'agenda_events.delete',
+      'agenda_events.insert',
+      'agenda_events.update',
       'annonces.delete',
       'annonces.insert',
       'annonces.update',
@@ -645,8 +895,20 @@ test('toute politique non exercée par l’application est nommée', () => {
       'cantine_menus.insert',
       'cantine_menus.update',
       'discussion_messages.delete',
+      'documents.delete',
+      'documents.insert',
+      'documents.update',
+      'messages.delete',
+      'messages.update',
       'profiles.insert',
       'signalements.update',
+      'sondage_choices.delete',
+      'sondage_choices.insert',
+      'sondage_choices.update',
+      'sondage_votes.delete',
+      'sondages.delete',
+      'sondages.insert',
+      'sondages.update',
     ],
     'ajouter une politique que rien n’exerce est une décision : elle doit être écrite ici',
   );

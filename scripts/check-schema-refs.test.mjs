@@ -85,7 +85,7 @@ const RACINE = fileURLToPath(new URL('../', import.meta.url));
 const MIGRATIONS = join(RACINE, 'supabase/migrations');
 const SEED = join(RACINE, 'supabase/seed.sql');
 
-/** Les six tables que le schéma doit déclarer. */
+/** Les douze tables que le schéma doit déclarer. */
 const TABLES_ATTENDUES = [
   'profiles',
   'annonces',
@@ -93,6 +93,12 @@ const TABLES_ATTENDUES = [
   'cantine_reservations',
   'signalements',
   'discussion_messages',
+  'agenda_events',
+  'documents',
+  'sondages',
+  'sondage_choices',
+  'sondage_votes',
+  'messages',
 ];
 
 /**
@@ -767,7 +773,7 @@ function liensTriggerFonction() {
   }));
 }
 
-test('le schéma se lit, et les six tables attendues y sont', () => {
+test('le schéma se lit, et les douze tables attendues y sont', () => {
   // Mesure de la prémisse : un contrôle qui lit un arbre peut être vert en
   // n'ayant rien lu. Les planchers portent sur ce que le schéma contient
   // aujourd'hui, et sur les noms — pas sur des nombres, qui bougeraient à chaque
