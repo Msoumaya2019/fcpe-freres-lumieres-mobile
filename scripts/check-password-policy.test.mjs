@@ -5,9 +5,18 @@
  * ------------------
  * `MIN_PASSWORD_LENGTH` est la seule borne de mot de passe recopiée côté client,
  * et elle recopie un réglage qui ne vit **pas** dans ce dépôt
- * (`Authentication > Providers > Email > Minimum password length`). Aucun test ne
- * peut donc tenir son accord avec le tableau de bord — d'où l'importance de tenir
- * au moins **sa portée**, qui, elle, est vérifiable.
+ * (`Authentication > Providers > Email > Minimum password length`).
+ *
+ * L'accord avec le **tableau de bord** n'est pas mesurable : il ne vit pas ici.
+ * Mais la **valeur qu'on y saisit** y est, en toutes lettres — l'étape 6 de
+ * `MISE-EN-SERVICE.md` la donne, et c'est celle-là qui finira dans le réglage.
+ * L'accord est donc tenable, et il est tenu plus bas.
+ *
+ * Cette phrase affirmait auparavant qu'« aucun test ne peut tenir son accord avec
+ * le tableau de bord ». C'était une justification par une propriété universelle —
+ * le genre d'affirmation que ce dépôt traite comme vérifiable, et celle-ci était
+ * fausse : le tableau de bord n'est pas lisible, l'instruction qui le configure
+ * l'est.
  *
  * Le défaut mesuré : le fichier affirmait la règle **deux fois, dans deux portées
  * différentes**. L'indication affichée sous le champ de connexion était déjà
@@ -161,6 +170,43 @@ test("l'ensemble des emplois de la borne est fermé", () => {
     emplois.length,
     2,
     `un troisième emploi de la borne doit être examiné (${emplois.length} trouvés)`,
+  );
+});
+
+test('la borne du client et la valeur du guide s’accordent', () => {
+  // Le nombre vit à deux endroits qui ne peuvent pas se lire : la constante du
+  // client, et la valeur que l'étape 6 du guide fait saisir dans le tableau de
+  // bord. L'écran affiche « Au moins 6 caractères. » à l'adhérent, et c'est le
+  // serveur qui applique le réglage.
+  //
+  // S'ils divergent, l'adhérent lit une phrase que le serveur contredit : il
+  // compose un mot de passe que l'application vient de déclarer acceptable, et
+  // se le voit refuser. Rien, aujourd'hui, ne relie les deux nombres.
+  //
+  // Le `README.md` §4 ne participe pas à cet accord, et c'est délibéré : il
+  // nomme le réglage et le message du serveur, mais écrit `N` à la place de la
+  // valeur. La valeur n'y est donc pas recopiée — et il n'y a rien à y tenir.
+  const constante = /const MIN_PASSWORD_LENGTH = (\d+);/.exec(SOURCE);
+  assert.notStrictEqual(
+    constante,
+    null,
+    'la constante est introuvable : le contrôle ne mesurerait rien',
+  );
+
+  const guide = readFileSync(`${RACINE}MISE-EN-SERVICE.md`, 'utf8');
+  const instruction = /_Minimum password length_\s*=\s*\*\*(\d+)\*\*/.exec(guide);
+  assert.notStrictEqual(
+    instruction,
+    null,
+    'l’étape 6 ne donne plus la valeur à saisir : le contrôle ne mesurerait rien',
+  );
+
+  assert.strictEqual(
+    instruction[1],
+    constante[1],
+    `l’écran annonce « Au moins ${constante[1]} caractères. » et le guide fait ` +
+      `saisir ${instruction[1]} dans le tableau de bord : le serveur refuserait ` +
+      'alors un mot de passe que l’application déclare acceptable',
   );
 });
 
