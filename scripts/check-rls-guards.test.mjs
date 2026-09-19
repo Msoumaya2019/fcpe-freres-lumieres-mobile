@@ -14,7 +14,9 @@
  *     nommément, avec leur raison.
  *  4. **Chaque requête de `src/services/` est autorisée par une politique, et
  *     aucune politique n'ouvre ce que le code n'exerce pas.** Les familles 1 à 3
- *     regardent le schéma ; celle-ci le confronte au code.
+ *     regardent le schéma ; celle-ci le confronte au code. Elle confronte aussi
+ *     le **guide** au code, pour la seule politique qui ne peut pas vivre dans
+ *     les migrations : celle du compartiment `documents`.
  *
  * POURQUOI CE SCRIPT
  * ------------------
@@ -837,7 +839,9 @@ const STOCKAGE_DOCUMENTE = new Map([
   [
     'documents.createSignedUrl',
     'le bucket `documents` est **privé** ; sa politique de lecture est créée dans ' +
-      'le tableau de bord (voir MISE-EN-SERVICE.md), et aucun test du dépôt ne peut la lire',
+      'le tableau de bord (voir MISE-EN-SERVICE.md). Le **réglage** n’est pas lisible ' +
+      'ici, mais l’**instruction** qui le configure l’est — et le test qui suit ' +
+      'compare le compartiment que le guide protège à celui que le code demande',
   ],
 ]);
 
@@ -847,6 +851,65 @@ test('tout appel à Storage est déclaré, avec sa raison', () => {
     [...STOCKAGE_DOCUMENTE.keys()].sort(),
     'un bucket n’a pas de politique RLS : la sienne vit dans le tableau de bord, ' +
       'donc hors de portée de ce banc — la déclarer ici est la seule trace possible',
+  );
+});
+
+/**
+ * La politique de compartiment telle que le **guide** la fait coller.
+ *
+ * Elle vit hors du dépôt — le schéma `storage` n'existe pas dans nos migrations —,
+ * mais l'**instruction** qui la crée est dans le dépôt. C'est la même distinction
+ * que pour la longueur minimale du mot de passe : le tableau de bord n'est pas
+ * lisible, l'instruction qui le configure l'est. La raison ci-dessus affirmait
+ * qu'« aucun test du dépôt ne peut la lire » : c'était une justification par une
+ * propriété universelle, et elle était fausse du même défaut que celle du mot de
+ * passe — la lecture est possible, il fallait la faire.
+ */
+function compartimentDuGuide(guide) {
+  const politique =
+    /create policy (\w+)\s+on storage\.objects for (\w+)\s+to (\w+)\s+using \(bucket_id = '(\w+)'\)/.exec(
+      guide,
+    );
+
+  assert.notStrictEqual(
+    politique,
+    null,
+    'le guide ne fait plus coller de politique de compartiment : l’écran Documents ' +
+      'ne lirait plus rien, et rien ne le signalerait — un refus rend une liste vide',
+  );
+
+  const [, nom, operation, role, bucket] = politique;
+  return { nom, operation, role, bucket };
+}
+
+test('le compartiment que le guide protège est celui que le code demande', () => {
+  // Deux copies d'un même nom, dont le désaccord serait **muet**. Si le guide
+  // faisait créer la politique sur un compartiment que le code n'interroge pas —
+  // ou si le code changeait de compartiment sans que le guide suive —, la lecture
+  // serait refusée ; et un refus, ici, rend une **liste vide**, pas une erreur.
+  // L'écran Documents afficherait « aucune donnée », sans rien dire de la cause.
+  const { operation, role, bucket } = compartimentDuGuide(lireFichier('MISE-EN-SERVICE.md'));
+  const demandes = [...new Set(STOCKAGES.map(({ bucket }) => bucket))];
+
+  assert.deepEqual(
+    demandes,
+    [bucket],
+    `le code interroge ${JSON.stringify(demandes)} et le guide protège ` +
+      `${JSON.stringify(bucket)} : la lecture serait refusée sans le dire`,
+  );
+
+  assert.equal(
+    operation,
+    'select',
+    'la politique du guide n’autorise plus la lecture : l’écran Documents ne ' +
+      'recevrait aucune adresse signée',
+  );
+
+  assert.equal(
+    role,
+    'authenticated',
+    'la politique du guide n’est plus réservée aux utilisateurs connectés : elle ' +
+      'ouvrirait les documents à quiconque détient la clé publique, extraite d’un APK',
   );
 });
 

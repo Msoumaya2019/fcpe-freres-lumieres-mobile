@@ -41,14 +41,19 @@ service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 | 5   | Installer l'APK, ou signer l'IPA puis l'installer                 | ~2 min  | les vérifications sur appareil réel                             |
 | 6   | Les quatre réglages du tableau de bord                            | ~5 min  | le contrôle des quatre valeurs                                  |
 
-**Les étapes 1 à 4 sont faites, et les e-mails fonctionnent.** Les deux binaires se
-recompilent depuis le code actuel — voir l'encadré en tête de ce guide : un binaire
-antérieur à la refonte vous montrerait l'ancienne application. Il reste les quatre
-réglages du tableau de bord, puis l'installation sur un téléphone.
+**Où en est la mise en service : la « liste à cocher », plus bas, fait foi.** À ce  
+jour, les étapes 2, 3 et 4 sont faites — les e-mails fonctionnent jusqu'au clic sur le  
+lien reçu. De l'**étape 1**, il reste **deux gestes** : le second fichier SQL (§1.3) et  
+le compartiment des documents (§1.4). Ensuite viennent les quatre réglages du tableau  
+de bord, puis l'installation sur un téléphone.
+
+Les deux binaires, eux, sont à jour du code actuel : la page des versions nomme, pour  
+chacun, le commit dont il est né. Un binaire antérieur à la refonte vous montrerait  
+l'ancienne application — c'est pourquoi cette page porte cette ligne.
 
 ---
 
-## Étape 1 — Supabase (~10 min) ✅
+## Étape 1 — Supabase _(~10 min)_ — **presque faite : deux gestes restent** (§1.3, §1.4)
 
 > **Faite, et vérifiée de l'extérieur le 18 septembre 2026** — pour les six tables de  
 > la première migration. Le projet que vous avez créé répond, et ces six tables  
