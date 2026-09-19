@@ -460,6 +460,12 @@ privées viennent des familles, pas de vous : aucune des deux tables n'a de poli
 d'écriture pour le bureau, et c'est voulu. Vous y répondez **depuis l'application**,
 écran « Discussion » et écran « Messages des familles ».
 
+**Ce qui se lit ici, et nulle part ailleurs.** Les **signalements** des familles :
+l'application ne montre à un parent que les siens. Ouvrez la table `signalements` et
+filtrez sur `status = 'nouveau'` pour voir ce qui attend — c'est là que vous décidez
+du passage à `en_cours` ou à `traite`. Aucun écran de l'application ne vous les
+montre, et c'est le seul cas de ce genre.
+
 ### Si quelque chose ne marche pas
 
 | Ce que vous voyez                                          | Ce qui se passe                                                                                                                                                                                               |

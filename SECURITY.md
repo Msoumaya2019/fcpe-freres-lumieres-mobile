@@ -319,7 +319,8 @@ politique que rien n'utilise demande désormais de l'écrire.
 corrigé.** Le déclencheur ne se déclenche qu'à la modification : la condition
 d'insertion de `signalements` ne contraignait que `author_id`, si bien qu'un
 client modifié — ou un appel direct à l'API avec son propre jeton — créait un
-signalement déjà « traité », que le bureau, qui filtre sur les nouveaux, ne voyait
+signalement déjà « traité », que le bureau, qui filtre sur les nouveaux **dans le
+tableau de bord** — aucun écran de l'application ne les lui montre —, ne voyait
 jamais passer. La règle était donc contournable par la porte d'entrée. La
 condition contraint désormais `status`, avec la même branche `is_admin()` que la
 politique de modification.

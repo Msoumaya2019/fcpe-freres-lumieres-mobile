@@ -1963,6 +1963,16 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   déposer la clef FCM dans Expo.
 - **Un seul salon de discussion.** Passer à des fils thématiques demande une
   colonne `thread_id` et un écran de détail.
+- **Le bureau lit les signalements dans le tableau de bord, pas dans
+  l'application.** Les politiques sont complètes — le bureau **lit** tous les
+  signalements (`signalements_select_own_or_admin`) et **décide** de leur statut
+  (`signalements_update_own_or_admin`, le déclencheur refusant ce changement à un
+  membre) — mais aucun écran ne les lui montre : `MesSignalementsScreen` ne lit
+  que ceux de leur auteur. Le geste est donc le Table Editor de Supabase, table
+  `signalements`, où le filtre sur `status = 'nouveau'` donne le travail en
+  attente. C'est le seul endroit où une capacité de la base n'a pas d'écran ; la
+  construire demanderait un écran de plus, ce que la mission de simplicité
+  interdit tant que le tableau de bord suffit.
 - **Pas de mode sombre.** `userInterfaceStyle` est fixé à `light`, avec
   `expo-system-ui` installé pour que le réglage soit réellement appliqué — sans
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
