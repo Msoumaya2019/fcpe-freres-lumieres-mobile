@@ -328,10 +328,19 @@ jobs:
           TAG="v$VERSION"
 
           if ! gh release view "$TAG" >/dev/null 2>&1; then
+            # La création peut perdre une course avec l'autre flux, qui publie
+            # dans la même version : l'échec est alors sans conséquence. Il n'est
+            # pas ignoré pour autant — la suite du script exige que la release
+            # existe, et c'est exactement ce que vérifie le bloc suivant.
             gh release create "$TAG" \
               --title "FCPE Frères Lumières $VERSION" \
               --notes "Binaires de la version $VERSION, compilés depuis le commit $GITHUB_SHA." \
-              --target "$GITHUB_SHA"
+              --target "$GITHUB_SHA" || true
+          fi
+
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::la version $TAG n'existe pas et n'a pas pu être créée"
+            exit 1
           fi
 
           # Le nom porte la version et la mention « non signé », parce que c'est
