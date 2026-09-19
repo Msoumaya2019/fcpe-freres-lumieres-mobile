@@ -63,7 +63,7 @@ export function ReglagesScreen({
   }, []);
 
   return (
-    <Screen scrollable>
+    <Screen scrollable edges={[]}>
       <View style={styles.contenu}>
         <Card>
           <AppText variant="caption" bold>

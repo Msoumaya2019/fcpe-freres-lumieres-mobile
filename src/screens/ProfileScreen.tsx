@@ -44,7 +44,7 @@ export function ProfileScreen() {
   const estAdmin = profile?.role === 'admin';
 
   return (
-    <Screen scrollable>
+    <Screen scrollable edges={[]}>
       <View style={styles.contenu}>
         <Card elevated style={styles.identite}>
           <View style={styles.avatar}>

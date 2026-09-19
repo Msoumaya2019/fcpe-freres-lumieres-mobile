@@ -566,7 +566,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-scripts-executables.test.mjs  les commandes que `package.json` lance, et leur existence
 │   ├── check-audit-scope.test.mjs  ce qui est livré, et ce qui est seulement construit
 │   ├── check-parser-surface.test.mjs  les types de nœud que l'analyseur produit, et ce que les bancs en lisent
-│   └── check-non-lus.test.mjs     un chiffre affiché trois fois, et sa seule source
+│   ├── check-non-lus.test.mjs     un chiffre affiché trois fois, et sa seule source
+│   └── check-safe-area.test.mjs   l'encoche, selon que l'écran a un en-tête ou non
 └── .github/workflows/             CI, build EAS, IPA non signé
 ```
 
@@ -1882,7 +1883,7 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Trente fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Trente-et-un fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
@@ -1891,8 +1892,8 @@ sélectionnez le travail `Qualité`. Sans cela, la CI avertit mais ne bloque rie
   `check-read-bounds`, `check-workflows`, `check-paquet`, `check-eas-vocabulary`,
   `check-migration-rejouable`, `check-migration-applicable`,
   `check-rls-comportement`, `check-sdk-pins`, `check-scripts-executables`,
-  `check-markdown-listes`, `check-audit-scope`, `check-parser-surface` et
-  `check-non-lus`
+  `check-markdown-listes`, `check-audit-scope`, `check-parser-surface`,
+  `check-non-lus` et `check-safe-area`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui
