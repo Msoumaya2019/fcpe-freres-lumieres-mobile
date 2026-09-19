@@ -795,3 +795,131 @@ test('les routes déclarées et le type des routes s’accordent', () => {
     'aucun accord constaté : le contrôle n’a rien comparé, ce qui est le pire des états',
   );
 });
+
+/* -------------------------------------------------------------------------- *
+ *  Les écrans qui exigent une session
+ * -------------------------------------------------------------------------- */
+
+/**
+ * Les écrans que `useCurrentUserId()` sert, et qui ne se gardent pas eux-mêmes.
+ *
+ * `useCurrentUserId()` **lève** quand il n'y a pas de session : c'est sa raison
+ * d'être, et elle est bonne — il évite de parsemer les écrans de
+ * `session?.user.id ?? ''`, qui produirait des requêtes silencieusement vides si
+ * la garantie tombait. Mais un écran qui l'appelle **sans vérifier la session**
+ * plante dès qu'un chemin d'accès l'atteint sans être connecté.
+ *
+ * Le défaut a existé, et il n'était pas théorique : l'écran de discussion
+ * appelait ce hook, et la cloche de l'accueil y mène **sans condition** depuis que
+ * l'application s'ouvre aux familles sans compte. Le corriger a demandé de
+ * séparer l'aiguillage du salon, et c'est cette mesure qui manquait.
+ *
+ * Liste **fermée**, et chaque entrée porte sa raison : un écran qui appelle le
+ * hook sans se garder doit dire **pourquoi** aucun chemin ne peut l'atteindre
+ * sans session.
+ */
+const SANS_GARDE_DE_SESSION = new Map([
+  [
+    'src/screens/MesSignalementsScreen.tsx',
+    'seul « Plus » y mène, et son entrée est conditionnée à l’adhésion acceptée : ' +
+      'aucun autre écran ne navigue vers cette route, et aucune adresse ne la cible',
+  ],
+]);
+
+/**
+ * Une garde de session : une condition d'`if` qui **nomme** `session`.
+ *
+ * Nommer, et non écrire `session === null` : le contrôle doit tenir la propriété
+ * — l'écran regarde s'il y a une session — et non une orthographe. `null ===
+ * session`, `!session`, `session?.user.id === undefined` sont trois façons
+ * correctes de l'écrire, et un contrôle qui les refuserait ferait tomber le banc
+ * sur une remise en forme juste — le second sens dans lequel un banc doit
+ * s'éprouver.
+ *
+ * C'est l'**instruction** qui compte, et c'est pour cela que la lecture passe par
+ * l'arbre : voir la note de `gardesDeSession`.
+ */
+const GARDE_DE_SESSION = /\bsession\b/;
+
+/**
+ * Les gardes de session d'un écran, lues dans l'**arbre**, et non dans le texte.
+ *
+ * LA PREMIÈRE VERSION DE CE CONTRÔLE ÉTAIT FAUSSE, ET LA FALSIFICATION L'A DIT
+ * --------------------------------------------------------------------------
+ * Elle cherchait la comparaison n'importe où dans le fichier, et elle était donc
+ * satisfaite par le message affiché lui-même : `{session === null ? '…créer un
+ * compte…' : '…votre adhésion…'}`. Retirer la garde laissait le contrôle **vert**
+ * — mesuré, en remplaçant la condition par `profile?.status !== 'accepte'`.
+ *
+ * C'est le défaut que ce dépôt nomme ailleurs : un contrôle qui lit un motif
+ * peut déborder ; qui compare une valeur, non. La valeur, ici, est structurelle —
+ * une garde est une **instruction** `if`, pas une expression conditionnelle
+ * d'affichage. D'où l'arbre, comme pour les autres contrôles de ce fichier.
+ *
+ * Le motif, lui, s'est élargi à la mesure : il nomme `session`, sans exiger une
+ * orthographe. Restreint à `session === null`, il aurait refusé `!session` — une
+ * remise en forme correcte — et le banc serait tombé sur du code juste.
+ */
+function gardesDeSession(chemin) {
+  const source = ts.createSourceFile(
+    chemin,
+    lireFichier(chemin),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+
+  const gardes = [];
+
+  const visiter = (noeud) => {
+    if (ts.isIfStatement(noeud) && GARDE_DE_SESSION.test(noeud.expression.getText(source))) {
+      gardes.push(noeud.expression.getText(source));
+    }
+    ts.forEachChild(noeud, visiter);
+  };
+
+  visiter(source);
+
+  return gardes;
+}
+
+test('un écran qui exige une session se garde, ou dit pourquoi il ne le fait pas', () => {
+  // Le relevé des appelants se fait sur le source **sans commentaires** : le
+  // fichier qui explique pourquoi il n'appelle pas le hook le nomme, et le
+  // compter serait prendre une phrase pour un appel — le piège que
+  // `check-env-guard` a déjà documenté.
+  const appelants = ECRANS.filter((chemin) =>
+    sansCommentaires(lireFichier(chemin)).includes('useCurrentUserId('),
+  ).map((chemin) => relative(RACINE, chemin).replace(/\\/g, '/'));
+
+  assert.ok(
+    appelants.length > 0,
+    'aucun écran n’appelle `useCurrentUserId()` : ce contrôle ne vérifierait rien, ' +
+      'et il serait vert pour la mauvaise raison',
+  );
+
+  const fautifs = appelants.filter(
+    (relatif) =>
+      gardesDeSession(join(RACINE, relatif)).length === 0 && !SANS_GARDE_DE_SESSION.has(relatif),
+  );
+
+  assert.deepEqual(
+    fautifs,
+    [],
+    'ces écrans appellent `useCurrentUserId()`, qui lève sans session, sans ' +
+      'instruction `if` comparant `session` à `null` : ils plantent dès qu’un ' +
+      'chemin d’accès les atteint sans être connecté. Les garder, ou les ' +
+      'déclarer dans `SANS_GARDE_DE_SESSION` avec la raison qui rend le cas ' +
+      'impossible',
+  );
+
+  // Et la liste ne survit pas à sa cause : une exception dont l'écran se garde
+  // désormais est une justification périmée, et elle masquerait un futur défaut.
+  assert.deepEqual(
+    [...SANS_GARDE_DE_SESSION.keys()].filter(
+      (relatif) => gardesDeSession(join(RACINE, relatif)).length > 0,
+    ),
+    [],
+    '`SANS_GARDE_DE_SESSION` nomme un écran qui se garde : l’exception est périmée',
+  );
+});

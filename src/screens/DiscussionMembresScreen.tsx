@@ -14,11 +14,12 @@ import {
   type ListRenderItemInfo,
 } from 'react-native';
 
-import { useCurrentUserId } from '@/auth/AuthProvider';
+import { useAuth, useCurrentUserId } from '@/auth/AuthProvider';
 import {
   AppText,
   AsyncErrorBanner,
   AsyncFallback,
+  Card,
   ErrorNotice,
   LoadingView,
   Screen,
@@ -55,7 +56,17 @@ function MessageBubble({ message, isOwn }: MessageBubbleProps) {
   );
 }
 
-export function DiscussionMembresScreen() {
+/**
+ * Le salon, tel qu'un adhérent accepté le voit.
+ *
+ * Il est séparé de `DiscussionMembresScreen`, qui l'aiguille, et ce n'est pas un
+ * découpage de confort : `useCurrentUserId()` **lève** quand il n'y a pas de
+ * session, et c'est sa raison d'être — il évite de parsemer les écrans de
+ * `session?.user.id ?? ''`, qui produirait des requêtes silencieusement vides si
+ * la garantie tombait. Ce composant-ci n'est donc monté que lorsque la garantie
+ * tient, et le seul endroit qui la vérifie est l'aiguillage ci-dessous.
+ */
+function SalonMembres() {
   const userId = useCurrentUserId();
   const tabBarHeight = useBottomTabBarHeight();
 
@@ -276,6 +287,52 @@ export function DiscussionMembresScreen() {
       </KeyboardAvoidingView>
     </Screen>
   );
+}
+
+/**
+ * L'écran, et son aiguillage par l'adhésion.
+ *
+ * POURQUOI L'AIGUILLAGE EST ICI, ET NON DANS LE MENU
+ * --------------------------------------------------
+ * La politique de `discussion_messages` exige un membre **accepté** : pour tout
+ * autre, elle rend une **liste vide**, jamais une erreur. « Plus » masque bien
+ * l'entrée à qui n'est pas membre, mais l'**accueil** y mène sans condition — sa
+ * cloche appelle `navigate('Plus', { screen: 'Discussion' })`. Un parent sans
+ * compte y arrivait donc, et deux choses l'y attendaient : le composant appelait
+ * `useCurrentUserId()`, qui **lève** sans session, puis la politique aurait rendu
+ * une liste vide, affichée comme « Aucun message / Ouvrez la discussion en
+ * écrivant le premier message » — l'invitation à faire exactement ce que la base
+ * refuse, sous la même phrase pour trois situations distinctes : pas de compte,
+ * demande en attente, accès suspendu.
+ *
+ * Aiguiller ici couvre **tous** les chemins d'accès, présents et à venir, au lieu
+ * du seul que l'on connaît aujourd'hui.
+ *
+ * La phrase ne recopie pas les explications de statut de « Plus », qui en est la
+ * source : elle y renvoie, plutôt que d'entretenir une seconde copie qui
+ * divergerait à la première reformulation.
+ */
+export function DiscussionMembresScreen() {
+  const { session, profile } = useAuth();
+
+  //  `session !== null` d'abord : un profil peut survivre à une déconnexion le
+  //  temps d'un rendu, et un statut lu sans session ne prouverait rien.
+  if (session === null || profile?.status !== 'accepte') {
+    return (
+      <Screen scrollable edges={[]}>
+        <Card muted>
+          <AppText variant="heading">Réservé aux adhérents</AppText>
+          <AppText variant="caption">
+            {session === null
+              ? 'Cette discussion est ouverte aux membres de l’association. Vous pouvez créer un compte depuis « Plus », sous « Espace membres » : le bureau validera votre demande.'
+              : 'Votre adhésion n’est pas encore acceptée. Son état, et sa raison, sont indiqués dans « Plus », sous « Espace membres ».'}
+          </AppText>
+        </Card>
+      </Screen>
+    );
+  }
+
+  return <SalonMembres />;
 }
 
 const styles = StyleSheet.create({

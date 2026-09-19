@@ -886,6 +886,24 @@ laisse un commentaire qui nomme l'écran** — le test tombe quand même, ce qui
 qu'il ne lit pas la prose. Les deux derniers vérifient qu'un commentaire ajouté à
 côté d'un montage réel ne le fait pas tomber.
 
+**Un écran qui exige une session se garde, ou dit pourquoi il ne le fait pas.**
+`useCurrentUserId()` **lève** quand il n'y a pas de session, et c'est sa raison
+d'être : il évite de parsemer les écrans de `session?.user.id ?? ''`, qui
+produirait des requêtes silencieusement vides si la garantie tombait. Mais un écran
+qui l'appelle sans regarder la session **plante** dès qu'un chemin d'accès l'atteint
+sans être connecté — et le défaut n'était pas théorique : la discussion appelait ce
+hook, et la cloche de l'accueil y mène **sans condition** depuis que l'application
+s'ouvre aux familles sans compte. Le corriger a demandé de séparer l'aiguillage du
+salon ; le banc, lui, exige que chaque appelant se garde, ou figure dans une liste
+**fermée** avec la raison qui rend le cas impossible.
+
+Sa première version était fausse, et la falsification l'a dit : elle cherchait la
+comparaison n'importe où dans le fichier, et le message affiché lui-même
+(`{session === null ? … : …}`) la satisfaisait. Retirer la garde laissait le
+contrôle **vert**. Il lit donc l'**arbre** — une garde est une instruction `if` — et
+son motif **nomme** `session` sans exiger d'orthographe, pour ne pas tomber sur une
+remise en forme juste (`!session`). Éprouvé dans les deux sens.
+
 **`check-pending-action` prolonge la promesse précédente, et il est né d'une mesure.**
 « Un écran qui écrit relit sa liste » ne dit pas **combien de temps** l'indicateur
 qui annonce l'action doit rester allumé. Or `reload()` ne rend pas la main : il
