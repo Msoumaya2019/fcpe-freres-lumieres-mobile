@@ -54,6 +54,22 @@ export const MIGRATION = readFileSync(
   'utf8',
 );
 
+/**
+ * Le texte de la seconde migration — l'agenda, les documents, les sondages et
+ * le contact.
+ *
+ * Elle est **lue** par trois bancs qui n'exécutent rien : `check-migration-
+ * rejouable` lit ses gardes, `check-schema-types` compare ses colonnes,
+ * `check-input-limits` lit ses bornes. Aucun ne l'appliquait. Les 29 189 octets
+ * que l'adhérent colle **après** la première n'avaient donc jamais été exécutés
+ * — et son propre en-tête justifiait un choix de conception par « le banc qui
+ * exécute cette migration », qui n'existait pas.
+ */
+export const RUBRIQUES = readFileSync(
+  new URL('supabase/migrations/20260919120000_rubriques.sql', racine),
+  'utf8',
+);
+
 /** Le texte du jeu de données d'essai. */
 export const SEED = readFileSync(new URL('supabase/seed.sql', racine), 'utf8');
 

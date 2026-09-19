@@ -49,6 +49,13 @@
  *  Puis il l'exécute **deux fois**, et le seed deux fois : c'est la seule
  *  mesure qui porte sur ce que `check-migration-rejouable` déduit du texte.
  *
+ *  Depuis, la **seconde** migration a rejoint ce banc. Elle était lue par trois
+ *  contrôles — ses gardes `if not exists`, ses colonnes, ses bornes — et
+ *  **exécutée par aucun** : les 29 189 octets que l'adhérent colle ensuite
+ *  n'avaient jamais été joués nulle part. Son en-tête justifiait pourtant un
+ *  choix de conception par « le banc qui exécute cette migration ». Voir la
+ *  section qui la concerne, en fin de fichier.
+ *
  *  LA DOUBLURE DE LA PLATEFORME
  *  ----------------------------
  *  Supabase fournit un schéma `auth` et des rôles que PGlite n'a pas. Ils sont
@@ -56,6 +63,24 @@
  *  politiques — deux copies divergeraient. Voir son en-tête pour ce que la
  *  doublure contient, et pourquoi les **privilèges par défaut** de la plateforme
  *  en font partie.
+ *
+ *  CE QUI A ÉTÉ ÉPROUVÉ, ET COMMENT
+ *  --------------------------------
+ *  Les contrôles de la seconde migration ont été **falsifiés**, pas seulement
+ *  passés. Quatre mutations, un verdict attendu pour chacune :
+ *
+ *  | mutation                               | attendu | obtenu |
+ *  | -------------------------------------- | ------- | ------ |
+ *  | une politique retirée                  | tombe   | tombe  |
+ *  | la RLS désactivée sur une table        | tombe   | tombe  |
+ *  | une table en trop                      | tombe   | tombe  |
+ *  | un commentaire ajouté (forme correcte) | passe   | passe  |
+ *
+ *  La dernière ligne compte autant que les trois autres : elle prouve que
+ *  l'échec vient du **défaut**, et non du seul fait d'avoir touché au fichier.
+ *  Le harnais gardait les **octets** d'origine — pas une empreinte, qui détecte
+ *  une restauration ratée sans restaurer — et l'empreinte finale est identique
+ *  à l'initiale.
  *
  *  CE QUE CE BANC NE PROUVE PAS
  *  ----------------------------
@@ -74,7 +99,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { MIGRATION, SEED, appliquer, ouvrirBase } from './essai-postgres.mjs';
+import { MIGRATION, RUBRIQUES, SEED, appliquer, ouvrirBase } from './essai-postgres.mjs';
 
 /**
  * Les tables que la migration doit produire, et **aucune autre**.
@@ -249,4 +274,173 @@ test('le seed rejoué deux fois ne produit ni doublon ni échec', async () => {
   // Deux annonces et huit menus après **deux** passages : c'est l'idempotence
   // réelle, mesurée, et non celle que le texte du seed promet.
   assert.deepEqual(rows[0], { annonces: 2, menus: 8 });
+});
+
+/**
+ * =============================================================================
+ *  La seconde migration — celle que personne n'exécutait
+ * =============================================================================
+ *
+ *  Son en-tête justifiait de ne pas créer le compartiment de stockage en SQL par
+ *  cette phrase : « un `insert into storage.buckets` ferait donc tomber le banc
+ *  qui **exécute** cette migration, et ce banc est la seule chose qui prouve
+ *  qu'elle s'applique ».
+ *
+ *  Mesuré : ce banc ne lisait que `20260916120000_init.sql`. Les 29 189 octets
+ *  que l'adhérent colle **ensuite** n'avaient donc jamais été exécutés nulle
+ *  part — versionnés, formatés, analysés, et verts partout. Trois autres bancs
+ *  lisent ce fichier, et aucun n'exécute rien.
+ *
+ *  C'est la même famille que le défaut qui a fait naître ce fichier : une
+ *  affirmation vraie le jour où elle est écrite, et que rien ne re-mesure.
+ *
+ *  Base **séparée**, et c'est nécessaire : les contrôles ci-dessus portent sur
+ *  six tables, ceux-ci sur douze. Les mêler aurait rendu les deux listes fausses,
+ *  et l'échec aurait désigné un coupable qui n'existe pas.
+ */
+
+/** Les douze tables après les deux migrations, et **aucune autre**. */
+const TABLES_APRES_RUBRIQUES = [
+  'agenda_events',
+  'annonces',
+  'cantine_menus',
+  'cantine_reservations',
+  'discussion_messages',
+  'documents',
+  'messages',
+  'profiles',
+  'signalements',
+  'sondage_choices',
+  'sondage_votes',
+  'sondages',
+];
+
+/**
+ * Le nombre de politiques de chaque table, mesuré.
+ *
+ * Liste close : une politique perdue fait tomber le banc. Elle rendrait une
+ * **liste vide, pas une erreur** — l'écran resterait muet, et rien ne le dirait.
+ */
+const POLITIQUES_ATTENDUES = {
+  agenda_events: 4,
+  annonces: 4,
+  cantine_menus: 4,
+  cantine_reservations: 3,
+  discussion_messages: 3,
+  documents: 4,
+  messages: 4,
+  profiles: 2,
+  signalements: 3,
+  sondage_choices: 4,
+  sondage_votes: 3,
+  sondages: 4,
+};
+
+const dbRubriques = await ouvrirBase();
+const echecsRubriques = { init: null, rubriques: null };
+let rubriquesAppliquee = 0;
+
+for (let tour = 1; tour <= 2 && echecsRubriques.init === null; tour += 1) {
+  const echec = await appliquer(dbRubriques, MIGRATION);
+  if (echec !== null) {
+    echecsRubriques.init = `tour ${tour} : ${echec}`;
+  }
+}
+
+if (echecsRubriques.init === null) {
+  for (let tour = 1; tour <= 2 && echecsRubriques.rubriques === null; tour += 1) {
+    const echec = await appliquer(dbRubriques, RUBRIQUES);
+    if (echec === null) {
+      rubriquesAppliquee = tour;
+    } else {
+      echecsRubriques.rubriques = `tour ${tour} : ${echec}`;
+    }
+  }
+}
+
+/** Échoue avec la **bonne** cause : ici, l'échec se produirait chez l'adhérent. */
+function exigerLesRubriques() {
+  assert.equal(
+    echecsRubriques.init,
+    null,
+    'la première migration ne s’applique pas, donc celle-ci n’a même pas été ' +
+      `essayée :\n  ${echecsRubriques.init}`,
+  );
+  assert.equal(
+    echecsRubriques.rubriques,
+    null,
+    'la seconde migration ne s’applique pas — c’est le fichier que l’adhérent ' +
+      `colle juste après le premier :\n  ${echecsRubriques.rubriques}`,
+  );
+}
+
+test('la seconde migration s’applique, et se rejoue sans échouer', async () => {
+  exigerLesRubriques();
+  assert.equal(rubriquesAppliquee, 2, 'la seconde migration n’a pas été jouée deux fois');
+});
+
+test('les deux migrations produisent les douze tables, et aucune autre', async () => {
+  exigerLesRubriques();
+  const { rows } = await dbRubriques.query(
+    "select tablename from pg_tables where schemaname = 'public' order by tablename",
+  );
+  assert.deepEqual(
+    rows.map(({ tablename }) => tablename),
+    TABLES_APRES_RUBRIQUES,
+    'une table ajoutée doit être déclarée ici — et recevoir, dans le même commit, ' +
+      'sa RLS, ses politiques et ses privilèges',
+  );
+});
+
+test('aucune table des rubriques n’est laissée sans RLS', async () => {
+  exigerLesRubriques();
+  const { rows } = await dbRubriques.query(
+    "select relname from pg_class where relnamespace = 'public'::regnamespace " +
+      "and relkind = 'r' and not relrowsecurity order by relname",
+  );
+  assert.deepEqual(
+    rows.map(({ relname }) => relname),
+    [],
+  );
+});
+
+test('chaque table des rubriques porte le nombre attendu de politiques', async () => {
+  exigerLesRubriques();
+  const { rows } = await dbRubriques.query(
+    "select tablename, count(*)::int as n from pg_policies where schemaname = 'public' " +
+      'group by tablename order by tablename',
+  );
+  assert.deepEqual(
+    Object.fromEntries(rows.map(({ tablename, n }) => [tablename, n])),
+    POLITIQUES_ATTENDUES,
+  );
+});
+
+test('la fonction de vote est en PL/pgSQL, et les onze déclencheurs sont posés', async () => {
+  exigerLesRubriques();
+  const { rows } = await dbRubriques.query(
+    'select p.proname as nom, l.lanname as langage from pg_proc p ' +
+      'join pg_namespace n on n.oid = p.pronamespace ' +
+      'join pg_language l on l.oid = p.prolang ' +
+      "where n.nspname = 'public' order by p.proname",
+  );
+  assert.deepEqual(
+    Object.fromEntries(rows.map(({ nom, langage }) => [nom, langage])),
+    {
+      check_vote_choice: 'plpgsql',
+      handle_new_user: 'plpgsql',
+      is_admin: 'sql',
+      prevent_role_change: 'plpgsql',
+      prevent_status_change_by_member: 'plpgsql',
+      set_updated_at: 'plpgsql',
+    },
+    'un corps `language sql` est analysé à sa création : il ne peut pas précéder ' +
+      'les tables qu’il lit',
+  );
+
+  const { rows: declencheurs } = await dbRubriques.query(
+    'select count(*)::int as n from pg_trigger t join pg_class c on c.oid = t.tgrelid ' +
+      "where c.relnamespace = 'public'::regnamespace and not t.tgisinternal",
+  );
+  assert.equal(declencheurs[0].n, 11, 'déclencheurs sur les tables du schéma public');
 });
