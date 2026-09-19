@@ -40,8 +40,9 @@
 --  est décrite dans `MISE-EN-SERVICE.md`, comme les réglages SMTP.
 --
 --  Ce choix a un coût, et il est nommé : rien, dans le dépôt, ne vérifie que le
---  bucket existe ni qu'il est public. C'est la même famille de réglages que
---  `README.md` §4 — un réglage de tableau de bord qu'aucun test ne tient.
+--  bucket existe, ni qu'il est **privé**, ni que sa politique laisse lire un
+--  utilisateur connecté. C'est la même famille de réglages que `README.md` §4 —
+--  un réglage de tableau de bord qu'aucun test ne tient.
 -- =============================================================================
 
 
