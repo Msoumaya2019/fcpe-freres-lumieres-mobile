@@ -10,7 +10,8 @@ supabase/
 ├── migrations/
 │   ├── 20260916120000_init.sql           Schéma, déclencheurs, RLS
 │   ├── 20260919120000_rubriques.sql      Agenda, documents, sondages, messages
-│   └── 20260920120000_acces_public.sql   Familles sans compte, adhésions, notifications
+│   ├── 20260920120000_acces_public.sql   Familles sans compte, adhésions, notifications
+│   └── 20260921090000_administration.sql Brouillons, rôles, clôture d'une conversation
 ├── seed.sql                      Jeu d'essai — développement uniquement
 └── README.md
 ```

@@ -1162,16 +1162,29 @@ test('tout appel à Storage est déclaré, avec sa raison', () => {
  * propriété universelle, et elle était fausse du même défaut que celle du mot de
  * passe — la lecture est possible, il fallait la faire.
  *
- * Elles sont **deux** depuis que les familles lisent les documents sans compte :
- * une pour le rôle anonyme, bornée par la table `documents`, une pour les porteurs
- * d'un jeton. Le banc les lit donc **toutes**, et non la première venue : n'en lire
- * qu'une aurait laissé passer la seconde, quelle qu'elle soit — y compris une
- * politique qui ouvrirait le compartiment entier au rôle anonyme.
+ * Elles sont **cinq** depuis que le tableau de bord dépose des documents : deux de
+ * lecture, trois d'écriture. Le banc les lit donc **toutes**, et non la première
+ * venue : n'en lire qu'une aurait laissé passer les autres, quelle qu'elles
+ * soient — y compris une politique qui ouvrirait le compartiment entier au rôle
+ * anonyme.
+ *
+ * CE QUE LA PREMIÈRE RÉDACTION NE POUVAIT PAS VOIR
+ * ------------------------------------------------
+ * Son motif n'acceptait que la forme `using (…)`, et **aucune** des trois
+ * politiques d'écriture ne s'écrit ainsi : une insertion se borne par
+ * `with check (…)`, et un remplacement porte les deux. Le banc aurait donc
+ * relevé cinq politiques sur huit, et son commentaire aurait continué d'affirmer
+ * qu'il les lit toutes. C'est la famille du contrôle qui lit un motif : il
+ * déborde ou il manque, et il ne le dit pas.
+ *
+ * Le motif retient désormais **toutes les clauses** de l'instruction — `using`
+ * comme `with check` —, et l'opération est portée avec elles : c'est elle qui
+ * distingue une lecture d'une écriture.
  */
 function compartimentsDuGuide(guide) {
   const politiques = [
     ...guide.matchAll(
-      /create policy (\w+)\s+on storage\.objects for (\w+)\s+to (\w+)\s+using \(([\s\S]*?)\);/g,
+      /create policy (\w+)\s+on storage\.objects for (\w+)\s+to (\w+)([\s\S]*?);(?=\s*$)/gm,
     ),
   ].map(([, nom, operation, role, corps]) => ({ nom, operation, role, corps }));
 
@@ -1204,26 +1217,52 @@ test('le compartiment que le guide protège est celui que le code demande', () =
       `${JSON.stringify(proteges)} : la lecture serait refusée sans le dire`,
   );
 
-  assert.deepEqual(
-    [...new Set(politiques.map(({ operation }) => operation))],
-    ['select'],
-    'une politique du guide autorise autre chose que la lecture : aucun écran ' +
-      'n’écrit dans le compartiment, et une écriture ouverte au rôle anonyme ' +
-      'laisserait déposer n’importe quel fichier',
-  );
+  const lectures = politiques.filter(({ operation }) => operation === 'select');
+  const ecritures = politiques.filter(({ operation }) => operation !== 'select');
 
   assert.ok(
-    politiques.some(({ role }) => role === 'authenticated'),
+    lectures.some(({ role }) => role === 'authenticated'),
     'plus aucune politique du guide ne couvre les utilisateurs connectés : le ' +
       'bureau ne verrait plus ses propres documents',
   );
+
+  assert.ok(
+    ecritures.length > 0,
+    'le guide ne fait plus coller de politique d’écriture : le tableau de bord ne ' +
+      'pourrait déposer aucun document, et l’échec serait un refus de Storage — ' +
+      'donc visible, mais à la première tentative seulement',
+  );
+
+  //  Les écritures sont celles du **tableau de bord** : il dépose un fichier, le
+  //  remplace, le retire. Deux conditions, et aucune n'est décorative : un rôle
+  //  anonyme écrirait avec la seule clé publique — extraite d'un APK —, et un
+  //  porteur de jeton sans `is_admin()` est **tout compte créé**, y compris un
+  //  compte en attente, refusé ou suspendu.
+  for (const { nom, operation, role, corps } of ecritures) {
+    assert.equal(
+      role,
+      'authenticated',
+      `la politique « ${nom} » (${operation}) autorise l’écriture à « ${role} » : ` +
+        'le rôle anonyme déposerait n’importe quel fichier avec la seule clé publique',
+    );
+
+    assert.match(
+      corps,
+      /public\.is_admin\(\)/,
+      `la politique « ${nom} » (${operation}) n’est pas bornée par « is_admin() » : ` +
+        'tout porteur d’un jeton — donc tout compte créé, accepté ou non — écrirait ' +
+        'dans le compartiment',
+    );
+  }
 
   //  Le rôle anonyme n'obtient **pas** le compartiment : sa politique doit être
   //  bornée par la table `documents`, comme l'est la politique de lecture de
   //  cette table. Une politique `to anon using (bucket_id = 'documents')` — la
   //  forme la plus simple à écrire, et la plus tentante — ouvrirait tous les
   //  fichiers à quiconque détient la clé publique, extraite d'un APK.
-  for (const { nom, corps } of politiques.filter(({ role }) => role === 'anon')) {
+  for (const { nom, operation, corps } of politiques.filter(({ role }) => role === 'anon')) {
+    assert.equal(operation, 'select', `la politique « ${nom} » ouvre une écriture au rôle anonyme`);
+
     assert.match(
       corps,
       /public\.documents/,

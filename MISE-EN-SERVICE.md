@@ -41,15 +41,17 @@ service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 | 5   | Installer l'APK, ou signer l'IPA puis l'installer                                            | ~2 min  | les vérifications sur appareil réel                             |
 | 6   | Les quatre réglages du tableau de bord                                                       | ~5 min  | le contrôle des quatre valeurs                                  |
 
-**Où en est la mise en service : la « liste à cocher », plus bas, fait foi.** À ce  
-jour, les étapes 2, 3 et 4 sont faites — les e-mails fonctionnent jusqu'au clic sur le  
-lien reçu. De l'**étape 1**, il reste **trois gestes** : les deux fichiers SQL qui  
-suivent le premier (§1.3) et le compartiment des documents avec ses deux politiques  
-(§1.4). Viennent ensuite, dans cet ordre : installer l'application (§5), créer votre  
-compte, **vous promouvoir administrateur** (§1.8 — une commande à coller, qui ne peut  
-pas être la mienne), **accepter votre propre adhésion** (§1.9 — sans elle, la  
-discussion vous répond une liste vide), puis les quatre réglages du tableau de bord  
-(§6).
+**Où en est la mise en service : la « liste à cocher », plus bas, fait foi.** Les  
+étapes 2, 3 et 4 sont faites — les e-mails fonctionnent jusqu'au clic sur le lien  
+reçu. De l'**étape 1**, il reste **deux gestes** : le quatrième fichier SQL (§1.3,  
+celui de l'administration — le tableau de bord seul en dépend) et le compartiment  
+des documents avec ses **cinq** politiques (§1.4). Les trois premiers fichiers, eux,  
+sont appliqués : **mesuré depuis l'extérieur**, les six tables publiques répondent à  
+la clé publique et refusent la lecture de tout le reste. Viennent ensuite, dans cet  
+ordre : installer l'application (§5), créer votre compte, **vous promouvoir  
+administrateur** (§1.8 — une commande à coller, qui ne peut pas être la mienne),  
+**accepter votre propre adhésion** (§1.9 — sans elle, la discussion vous répond une  
+liste vide), puis les quatre réglages du tableau de bord (§6).
 
 Les deux binaires, eux, sont à jour du code actuel : la page des versions nomme, pour  
 chacun, le commit dont il est né. Un binaire antérieur à la refonte vous montrerait  
@@ -64,8 +66,8 @@ l'ancienne application — c'est pourquoi cette page porte cette ligne.
 > **existent et refusent la clé publique** (`permission denied`). C'est exactement ce  
 > que la migration doit produire : une table qui existe et qui est fermée.
 >
-> **Restent à faire depuis ce guide : les deux fichiers SQL suivants (§1.3) et le  
-> compartiment des documents avec ses deux politiques de lecture (§1.4).** Les étapes  
+> **Restent à faire depuis ce guide : le quatrième fichier SQL (§1.3) et le  
+> compartiment des documents avec ses cinq politiques (§1.4).** Les étapes  
 > 2 et suivantes n'en dépendent pas : vous pouvez continuer sans attendre.
 
 Supabase, c'est la base de données et le service d'authentification. Le forfait  
@@ -111,7 +113,7 @@ gratuit suffit.
 
 Dans le menu de gauche, cliquez **SQL Editor**, puis **New query**.
 
-Vous allez coller **quatre fichiers**, l'un après l'autre, dans cet ordre.
+Vous allez coller **cinq fichiers**, l'un après l'autre, dans cet ordre.
 
 **Premier collage** — ouvrez ce fichier du projet et copiez tout son contenu :
 
@@ -152,7 +154,22 @@ l'application pour un parent **qui n'a pas de compte**. Il ajoute trois tables
 lecture. Il s'applique après les deux autres : collé en premier, il s'arrêterait
 sur une table inexistante.
 
-**Quatrième collage** — même chose avec :
+**Quatrième collage** — l'administration : le brouillon d'actualité, le
+changement de rôle, la clôture d'une conversation :
+
+```
+supabase/migrations/20260921090000_administration.sql
+```
+
+Même geste, même message attendu. Ce fichier ne crée **aucune table** : il ajoute
+une colonne à `annonces` et deux fonctions au bureau. Il n'est nécessaire que
+pour le **tableau de bord** (voir `ADMINISTRATION.md`) — l'application mobile
+fonctionne sans lui, sauf que le bureau ne peut alors ni promouvoir un
+administrateur, ni clore une conversation depuis le tableau de bord. Il s'applique
+en dernier, et se recolle sans doublon. **Il n'est pas encore appliqué** — c'est
+mesuré, et la mesure est dans la liste à cocher.
+
+**Cinquième collage** — même chose avec :
 
 ```
 supabase/seed.sql
@@ -161,7 +178,7 @@ supabase/seed.sql
 **Attendu : `Success. No rows returned`** — un `insert` ne renvoie pas de lignes,  
 donc le message est le même. C'est normal.
 
-> **Les quatre fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
+> **Les cinq fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
 > ce qu'il signale et relancez **le même fichier** : il ne créera pas de doublon, et  
 > il n'y a pas besoin de repartir de zéro.
 
@@ -190,9 +207,10 @@ Le compartiment se crée donc à la main, une fois.
    le SQL. L'application ne sert jamais un fichier directement : elle demande une
    **adresse signée**, valable une heure. Un compartiment public rendrait tous les
    documents lisibles par quiconque possède l'adresse.
-4. Ouvrez **Policies** sur ce compartiment, et collez-y **deux** politiques de
-   lecture dans l'éditeur SQL, comme les fichiers ci-dessus — le tableau de bord
-   les crée à l'identique, mais par des cases à cocher qu'on peut mal remplir :
+4. Ouvrez **Policies** sur ce compartiment, et collez-y **cinq** politiques dans
+   l'éditeur SQL, comme les fichiers ci-dessus — le tableau de bord les crée à
+   l'identique, mais par des cases à cocher qu'on peut mal remplir. Les deux
+   premières font **lire**, les trois suivantes font **déposer** :
 
    ```sql
    --  Les documents destinés aux familles : lisibles par un parent sans compte.
@@ -213,9 +231,28 @@ Le compartiment se crée donc à la main, une fois.
    create policy storage_documents_select_bureau
    on storage.objects for select to authenticated
    using (bucket_id = 'documents');
+
+   --  Déposer un document : réservé au bureau.
+   drop policy if exists storage_documents_insert_bureau on storage.objects;
+   create policy storage_documents_insert_bureau
+   on storage.objects for insert to authenticated
+   with check (bucket_id = 'documents' and public.is_admin());
+
+   --  Le remplacer : même réserve, sur les deux chemins.
+   drop policy if exists storage_documents_update_bureau on storage.objects;
+   create policy storage_documents_update_bureau
+   on storage.objects for update to authenticated
+   using (bucket_id = 'documents' and public.is_admin())
+   with check (bucket_id = 'documents' and public.is_admin());
+
+   --  Le retirer : même réserve.
+   drop policy if exists storage_documents_delete_bureau on storage.objects;
+   create policy storage_documents_delete_bureau
+   on storage.objects for delete to authenticated
+   using (bucket_id = 'documents' and public.is_admin());
    ```
 
-   Les deux `drop policy if exists` ne sont pas décoratifs : **sans eux, coller ce
+   Les cinq `drop policy if exists` ne sont pas décoratifs : **sans eux, coller ce
    bloc une seconde fois échoue** sur « policy … already exists ». Avec eux, le
    bloc se rejoue, comme les fichiers de migration — et si vous ne savez plus si
    vous les avez déjà collées, collez-le : le résultat est le même.
@@ -232,8 +269,10 @@ Le compartiment se crée donc à la main, une fois.
     order by policyname;
    ```
 
-   Vous devez y lire **nos deux lignes** : `storage_documents_select_familles`
-   pour `{anon}`, et `storage_documents_select_bureau` pour `{authenticated}`.
+   Vous devez y lire **nos cinq lignes** : `storage_documents_select_familles`
+   pour `{anon}`, puis `storage_documents_select_bureau`,
+   `storage_documents_insert_bureau`, `storage_documents_update_bureau` et
+   `storage_documents_delete_bureau` pour `{authenticated}`.
    **Toute autre ligne sur ce compartiment est à supprimer** : les cases à cocher
    du tableau de bord en créent d'autres, plus larges — une « public read » rend
    le compartiment public sans que son réglage change, et tous les documents du
@@ -243,10 +282,24 @@ Le compartiment se crée donc à la main, une fois.
    drop policy if exists "nom exact lu ci-dessus" on storage.objects;
    ```
 
-   **Les deux sont nécessaires, et pour deux raisons opposées.** Sans la
-   première, un parent sans compte voit la liste des documents et l'ouverture
-   échoue ; sans la seconde, l'adhérent connecté ne verrait plus les documents du
-   bureau.
+   **Les cinq sont nécessaires.** Sans la première, un parent sans compte voit la
+   liste des documents et l'ouverture échoue ; sans la seconde, l'adhérent
+   connecté ne verrait plus les documents du bureau ; sans les trois dernières,
+   le tableau d'administration ne pourrait **rien déposer** — et l'échec serait un
+   refus de Storage, donc visible, mais seulement à la première tentative.
+
+   Les trois d'écriture sont réservées au **bureau**, et la borne est
+   `public.is_admin()`, pas `authenticated` : ce dernier est **tout compte créé**,
+   y compris une adhésion encore en attente, refusée ou suspendue. Sans cette
+   borne, n'importe qui s'inscrivant déposerait un fichier dans le compartiment
+   des documents de l'école. La fonction `is_admin()` est celle du schéma, et elle
+   exige un statut `accepte` : elle est donc à la fois la condition d'écriture et
+   la condition d'accès au tableau de bord.
+
+   Le `update` porte **deux** conditions, et ce n'est pas une redondance : `using`
+   désigne la ligne qu'on remplace, `with check` la ligne qui en résulte. Une
+   seule des deux laisserait remplacer un fichier du compartiment par un autre, ou
+   déplacer un fichier hors du compartiment.
 
    Et la première **n'ouvre pas le compartiment** : elle exige que le fichier
    demandé ait, dans la table `documents`, une ligne marquée `familles`. Un
@@ -262,8 +315,9 @@ Le compartiment se crée donc à la main, une fois.
    n'existe pas dans la doublure des tests, et une instruction le concernant
    empêcherait les fichiers ci-dessus d'être rejouables. C'est pourquoi le banc
    `check-rls-guards` lit **ce guide** : il vérifie que le compartiment protégé
-   est celui que le code interroge, que rien n'y autorise l'écriture, et que la
-   politique ouverte au rôle anonyme est bien bornée par la table `documents`.
+   est celui que le code interroge, qu'aucune écriture n'y est ouverte au rôle
+   anonyme ni à un simple porteur de jeton, et que la politique ouverte au rôle
+   anonyme est bien bornée par la table `documents`.
 
 Tant que le compartiment n'existe pas, l'écran Documents affiche une erreur de
 chargement — les autres écrans ne sont pas affectés.
@@ -273,14 +327,33 @@ chargement — les autres écrans ne sont pas affectés.
 C'est la vraie vérification : le message `Success` ne dit pas que les tables  
 existent, il dit que le SQL n'a pas échoué.
 
-**Les six premières ont déjà été vérifiées pour vous**, depuis l'extérieur, avec
-la clé que vous m'avez envoyée : elles répondent, et chacune refuse la lecture
-avec `permission denied for table …`. Les deux moitiés comptent — une table
-absente répondrait `404`, une table ouverte aurait laissé passer la lecture.
+**Les quinze ont été vérifiées pour vous**, depuis l'extérieur, avec la clé que
+vous m'avez envoyée : les quinze **existent**. C'est la vraie vérification, et
+elle est faite. Les deux moitiés comptent — une table absente répondrait `404`,
+une table ouverte aurait laissé passer la lecture.
 
-**Les neuf autres, non** : elles n'existent pas encore tant que les trois
-fichiers de migration n'ont pas été collés. Après les avoir collés, la même
-vérification s'applique, et je la referai si vous me le demandez.
+Elle ne dit pas la même chose de toutes, et c'est ce qui la rend utile :
+
+- **Huit refusent la clé publique** (`401`, `permission denied`) : `profiles`,
+  `signalements`, `discussion_messages`, `messages`, `conversations`,
+  `conversation_messages`, `cantine_reservations`, `sondage_votes`. Un `401`
+  prouve l'existence **et** la fermeture — c'est le meilleur des deux signes.
+- **Deux répondent avec des lignes** : `annonces` (2) et `cantine_menus` (10).
+  C'est le jeu d'essai, et il est bien passé.
+- **Quatre répondent avec zéro ligne** : `agenda_events`, `documents`,
+  `sondages`, `sondage_choices`. Elles sont **vides**, pas fermées — l'écran qui
+  les lit affichera « aucune donnée », ce qui est le comportement attendu avant
+  votre première publication.
+- **`push_tokens` répond aussi avec zéro ligne, et pour une autre raison** : elle
+  accepte l'écriture d'un appareil sans compte, mais sa lecture est réservée au
+  bureau. Le rôle anonyme n'y voit rien, exactement comme la politique le décrit.
+
+**Seule la quatrième migration manque**, et c'est mesuré aussi : la colonne
+`is_draft` répond `400` (elle n'existe pas), et les fonctions `changer_role` et
+`marquer_conversation` répondent `404` (elles n'existent pas). Les trois autres
+sont donc appliquées, et leurs fonctions répondent — `lister_conversations` et
+`decider_adhesion` refusent la clé publique (`401`), `lire_conversation` et
+`resultats_sondage` l'acceptent (`200`), ce qui est le partage voulu.
 
 1. Dans le menu de gauche, cliquez **Table Editor**.
 2. Vous devez voir les quinze tables : `agenda_events`, `annonces`,
@@ -772,16 +845,26 @@ lien utilisable. Les deux adresses sont recopiées du fichier
 - [ ] La **région** est européenne — je ne peux pas la lire sans vos identifiants
 - [ ] Mot de passe de la base noté
 - [x] `20260916120000_init.sql` collé et exécuté → les six premières tables existent
-- [ ] `20260919120000_rubriques.sql` collé et exécuté → les six tables des rubriques
-- [ ] `20260920120000_acces_public.sql` collé et exécuté → l'application s'ouvre  
-      **sans compte** : conversations avec le bureau, sondages, documents des familles
-- [ ] Compartiment `documents` **privé** dans Storage, et ses **deux**  
-      politiques de lecture collées _(sans elles, l'écran Documents est vide ou  
-      échoue : une politique manquante rend une liste vide, pas une erreur)_
-- [ ] `seed.sql` collé et exécuté → à confirmer : je ne peux pas compter les lignes  
-      depuis l'extérieur, les tables étant fermées à la clé publique
-- [ ] Table Editor : `annonces` a 2 lignes
-- [ ] Table Editor : les quinze tables sont là, dont `conversations` et `push_tokens`
+- [x] `20260919120000_rubriques.sql` collé et exécuté → **mesuré** : les tables des  
+      rubriques répondent, et la clé publique ne lit pas les leurs
+- [x] `20260920120000_acces_public.sql` collé et exécuté → **mesuré** : les six  
+      tables publiques répondent à la clé publique, et les fonctions du bureau  
+      (`lister_conversations`, `decider_adhesion`) la refusent
+- [ ] `20260921090000_administration.sql` collé et exécuté → le tableau de bord  
+      peut enregistrer un brouillon, changer un rôle et clore une conversation  
+      _(**mesuré absent** : `is_draft` répond `400`, `changer_role` répond `404`)_
+- [x] Compartiment `documents` **privé** dans Storage — **mesuré** : l'adresse  
+      publique du compartiment répond `Bucket not found`, et sa liste répond `200`  
+      _(il existe donc, et n'est pas public)_
+- [ ] Ses **cinq** politiques collées _(sans elles, l'écran Documents est vide ou  
+      échoue : une politique manquante rend une liste vide, pas une erreur)_ —  
+      les trois d'écriture sont celles dont le tableau de bord a besoin
+- [x] `seed.sql` collé et exécuté → **mesuré** : `annonces` a 2 lignes lues par la  
+      clé publique, et `cantine_menus` en a 10 — huit, plus deux d'une seconde  
+      exécution un autre jour, ce qui est le comportement décrit en §1.5
+- [x] Table Editor : `annonces` a 2 lignes
+- [x] Table Editor : les quinze tables sont là — **mesuré depuis l'extérieur**, les  
+      quinze répondent : huit refusent la clé publique, sept l'acceptent
 - [x] Project URL et publishable key envoyées dans la conversation
 - [x] Compte Expo créé — nom d'utilisateur `mchiker`
 - [x] Jeton d'accès posé en secret du dépôt, et compilation lancée

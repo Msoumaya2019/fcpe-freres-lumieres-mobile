@@ -54,6 +54,7 @@ export type Database = {
           category: Database['public']['Enums']['annonce_category'];
           author_id: string | null;
           published_at: string;
+          is_draft: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -64,6 +65,7 @@ export type Database = {
           category?: Database['public']['Enums']['annonce_category'];
           author_id?: string | null;
           published_at?: string;
+          is_draft?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -74,6 +76,7 @@ export type Database = {
           category?: Database['public']['Enums']['annonce_category'];
           author_id?: string | null;
           published_at?: string;
+          is_draft?: boolean;
           created_at?: string;
           updated_at?: string;
         };

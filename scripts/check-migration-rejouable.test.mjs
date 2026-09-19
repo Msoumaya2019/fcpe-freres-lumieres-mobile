@@ -108,6 +108,7 @@ const MIGRATIONS_ATTENDUES = [
   '20260916120000_init.sql',
   '20260919120000_rubriques.sql',
   '20260920120000_acces_public.sql',
+  '20260921090000_administration.sql',
 ];
 
 /**
