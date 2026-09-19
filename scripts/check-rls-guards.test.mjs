@@ -913,6 +913,39 @@ test('le compartiment que le guide protège est celui que le code demande', () =
   );
 });
 
+test('chaque exception déclarée dit pourquoi, et vers quoi se vérifier', () => {
+  // Les raisons de ces deux listes ne sont lues par aucun contrôle : elles sont
+  // écrites pour le prochain lecteur. C'est précisément pour cela qu'une fausse y
+  // survit — celle du compartiment affirmait qu'« aucun test du dépôt ne peut la
+  // lire », et c'était faux de la même façon que pour la longueur du mot de
+  // passe : le **réglage** du tableau de bord n'est pas lisible, l'**instruction**
+  // qui le configure l'est, et le test ci-dessus la lit désormais.
+  //
+  // Une justification d'absence doit donc **pointer** vers l'endroit où la vérité
+  // est écrite : un identifiant, un fichier, un test. C'est la seule propriété de
+  // ce texte qu'une machine puisse tenir — et elle suffit à écarter un « non
+  // vérifiable » écrit pour clore une question plutôt que pour la décrire.
+  for (const [liste, entrees] of [
+    ['ALLOWANCES', ALLOWANCES],
+    ['STOCKAGE_DOCUMENTE', STOCKAGE_DOCUMENTE],
+  ]) {
+    for (const [cle, raison] of entrees) {
+      assert.ok(
+        raison.trim().length > 20,
+        `la raison déclarée pour ${cle} dans \`${liste}\` est vide ou trop courte pour être relue`,
+      );
+
+      assert.match(
+        raison,
+        /`[^`]{3,}`/,
+        `la raison déclarée pour ${cle} dans \`${liste}\` ne nomme rien : une ` +
+          'justification d’absence doit pointer vers ce qui la rend vérifiable — un ' +
+          'fichier, un test, un identifiant',
+      );
+    }
+  }
+});
+
 test('chaque requête de l’application est couverte par une politique', () => {
   // Le défaut que ce test surveille ne produit ni exception ni message : un
   // `select` refusé renvoie une liste vide, et l'écran affiche « aucune donnée »
