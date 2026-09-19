@@ -2,9 +2,19 @@
 
 > **En résumé.** Les étapes 1 à 4 sont faites : Supabase répond, le projet Expo est
 > créé, le jeton est posé, et **les e-mails partent** — vérifié jusqu'au clic sur le
-> lien reçu. **Les deux binaires sont livrés** — l'APK Android et l'IPA non signé.
+> lien reçu. **Les deux binaires se recompilent** — l'APK Android et l'IPA non signé.
 > Ce qui reste tient en deux gestes : les quatre réglages du tableau de bord, et
 > installer l'application sur un téléphone.
+>
+> **Un binaire ne vaut que pour le commit dont il est né.** Ceux que je vous avais
+> envoyés dataient d'**avant la refonte visuelle** : 58 fichiers et 7 851 lignes les
+> séparaient de l'application actuelle, et vous auriez installé l'ancienne. Rien ne
+> le signalait — la phrase « les deux binaires sont livrés » était vraie le jour où
+> je l'ai écrite, et elle a cessé de l'être au premier commit suivant. Les deux sont
+> donc en cours de recompilation, et je vous donnerai les liens quand ils seront
+> prêts. **La règle, pour la suite : toute modification dans `src/` périme les deux
+> binaires.** Vérifiez toujours que la compilation est **postérieure** au dernier
+> changement du code avant d'installer.
 
 ---
 
@@ -31,9 +41,10 @@ service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 | 5   | Installer l'APK, ou signer l'IPA puis l'installer                 | ~2 min  | les vérifications sur appareil réel                             |
 | 6   | Les quatre réglages du tableau de bord                            | ~5 min  | le contrôle des quatre valeurs                                  |
 
-**Les étapes 1 à 4 sont faites, les deux binaires sont livrés, et les e-mails
-fonctionnent.** Il reste les quatre réglages du tableau de bord, puis l'installation
-sur un téléphone.
+**Les étapes 1 à 4 sont faites, et les e-mails fonctionnent.** Les deux binaires se
+recompilent depuis le code actuel — voir l'encadré en tête de ce guide : un binaire
+antérieur à la refonte vous montrerait l'ancienne application. Il reste les quatre
+réglages du tableau de bord, puis l'installation sur un téléphone.
 
 ---
 
@@ -437,6 +448,12 @@ et non par la configuration.
 
 C'est le seul geste qui ne s'automatise pas : installer une application demande votre  
 téléphone.
+
+**Avant d'installer, une vérification de dix secondes.** Un binaire ne vaut que pour
+le commit dont il est né : regardez la date de la compilation et comparez-la au
+dernier changement du code. Une compilation antérieure vous montre une version
+périmée — et c'est exactement ce qui s'était produit ici, sans que rien ne le
+signale.
 
 ### Sur Android — l'APK
 
