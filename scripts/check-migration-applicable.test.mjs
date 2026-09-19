@@ -444,3 +444,41 @@ test('la fonction de vote est en PL/pgSQL, et les onze déclencheurs sont posés
   );
   assert.equal(declencheurs[0].n, 11, 'déclencheurs sur les tables du schéma public');
 });
+
+/**
+ * La raison de l'ordre, éprouvée — et le message que le guide cite.
+ *
+ * `MISE-EN-SERVICE.md` §1.3 demande de coller les deux fichiers « dans cet
+ * ordre ». La raison est que le second **complète** le premier : il ajoute une
+ * colonne à `annonces`, une table que le premier crée. Le guide a longtemps dit
+ * l'inverse — « ce fichier est indépendant du premier, il ne le modifie pas » —,
+ * et le fichier lui-même démentait cette phrase : `alter table public.annonces`
+ * est sa première référence à une table de la première migration.
+ *
+ * L'affirmation est désormais corrigée, et voici ce qui la tient : collée
+ * **seule**, la seconde migration est refusée, et le refus nomme `annonces`.
+ * C'est exactement le message que le guide cite maintenant, et il est ici
+ * **vérifié** plutôt que recopié.
+ *
+ * Le sens de ce test compte autant que son contenu. Il n'épingle pas une
+ * limitation par goût de la contrainte : il tient la **raison** d'une consigne
+ * que l'adhérent lit. Le jour où la seconde migration deviendrait autonome, ce
+ * test tomberait — et c'est le guide qu'il faudrait relire, pas le test qu'il
+ * faudrait assouplir.
+ */
+test('la seconde migration, collée seule, est refusée — et le refus nomme annonces', async () => {
+  const dbSeule = await ouvrirBase();
+  const refus = await appliquer(dbSeule, RUBRIQUES);
+
+  assert.notEqual(
+    refus,
+    null,
+    'la seconde migration s’applique seule : l’ordre des deux fichiers ne compte ' +
+      'plus, et la phrase du guide doit être relue',
+  );
+  assert.match(
+    refus,
+    /relation "public\.annonces" does not exist/,
+    `le refus doit nommer la table que le premier fichier crée :\n  ${refus}`,
+  );
+});

@@ -159,12 +159,23 @@ export function resumer(erreur, texte) {
 
   // Le diagnostic du défaut d'origine, écrit une fois pour toutes : qui lit ce
   // message n'a pas à refaire l'enquête.
+  //
+  // Il a d'abord visé une seule cause — l'ordre des sections dans un fichier —,
+  // parce que c'était celle du défaut d'origine : un corps `language sql` lu à sa
+  // création, avant les tables qu'il lit. Une seconde cause produit le **même**
+  // code, et elle se rencontre en collant les fichiers : la table manquante
+  // appartient alors au fichier **précédent**. Le message distingue les deux par
+  // ce qu'il nomme, et c'est cette distinction qui est écrite ici — sans elle, le
+  // diagnostic enverrait chercher un ordre de sections là où il manque un
+  // fichier.
   const explication =
     erreur.code === '42P01'
-      ? "\n  Une relation absente à la création d'une fonction : vérifiez l'ORDRE des " +
-        'sections. Un corps `language sql` est analysé à sa création, un corps ' +
-        'PL/pgSQL seulement à son exécution — la section « Fonctions utilitaires » ' +
-        'doit donc suivre la section « Tables ».'
+      ? '\n  Une relation absente a deux causes, et le message dit laquelle : ' +
+        "si la table nommée vient d'une migration PRÉCÉDENTE, c'est l'ordre des " +
+        "FICHIERS qu'il faut vérifier ; si elle vient de ce fichier-ci, c'est " +
+        "l'ORDRE DES SECTIONS — un corps `language sql` est analysé à sa " +
+        'création, un corps PL/pgSQL seulement à son exécution, donc la section ' +
+        '« Fonctions utilitaires » doit suivre la section « Tables ».'
       : '';
 
   return `${message}${ou}${explication}`;

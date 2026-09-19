@@ -109,9 +109,14 @@ sondages, messages au bureau) :
 supabase/migrations/20260919120000_rubriques.sql
 ```
 
-Même geste, même message attendu. Ce fichier est **indépendant du premier** :
-il ne le modifie pas, et si vous l'aviez déjà collé, le recoller ne crée pas de
-doublon.
+Même geste, même message attendu. Ce fichier **s'ajoute** au premier, il ne le
+réécrit pas — mais il le **complète**, et c'est pourquoi l'ordre compte : il
+ajoute une colonne à la table `annonces`, que le premier fichier crée. Collé
+avant lui, il s'arrêterait sur `relation "public.annonces" does not exist`.
+
+Ce qu'il ne fait pas : il ne réécrit pas la première migration, qui est **déjà
+appliquée** sur votre base. C'est pour cela qu'il ajoute la colonne au lieu de
+modifier le fichier d'origine. Et le recoller ne crée pas de doublon.
 
 **Troisième collage** — même chose avec :
 
@@ -133,7 +138,8 @@ donc le message est le même. C'est normal.
 
 ### 1.4 Créer le compartiment des documents
 
-C'est la **seule étape que le SQL ne peut pas faire à votre place**, et elle est
+C'est la **seule pièce de la base** que le SQL ne peut pas créer à votre place —
+ce qui se règle à la main en dehors de la base est à l'étape 6 —, et elle est
 nécessaire pour que l'écran « Documents importants » fonctionne.
 
 Le schéma `storage` est géré par Supabase et n'existe pas dans nos migrations :
@@ -185,8 +191,13 @@ et je la referai si vous me le demandez.
    `cantine_menus`, `cantine_reservations`, `discussion_messages`, `documents`,
    `messages`, `profiles`, `signalements`, `sondage_choices`, `sondage_votes`,
    `sondages`.
-3. Cliquez sur **annonces** : vous devez voir **2 lignes**.
-4. Cliquez sur **cantine_menus** : vous devez voir **8 lignes**.
+3. Cliquez sur **annonces** : vous devez voir **2 lignes**. Ce nombre ne bouge
+   plus, même si vous relancez `seed.sql`.
+4. Cliquez sur **cantine_menus** : vous devez voir **8 lignes** la première fois.
+   Les menus sont datés à partir du jour où vous appliquez le fichier : si vous
+   le relancez un autre jour, huit menus **de plus** s'ajoutent pour les jours
+   suivants. C'est le seul nombre de cette page qui puisse grandir — un compte
+   supérieur à 8 n'est donc pas une erreur.
 
 Si les tables sont là mais vides, c'est que `seed.sql` n'a pas été exécuté — ce  
 n'est pas grave, relancez-le.
