@@ -85,6 +85,22 @@ updates:
     #
     # Ces paquets se montent par `npx expo install --fix`, après une montée de SDK,
     # et pas par npm.
+    #
+    # UNE PULL REQUEST ROUGE ATTENDUE, ET QUI N'EST PAS UN DÉFAUT
+    # ----------------------------------------------------------
+    # `eslint@10` ne s'installe pas ici, et la pull request échoue en treize
+    # secondes sur `ERESOLVE` : `eslint-plugin-react@7.37.5` déclare
+    # `peer eslint ^3 || … || ^9.7`. Le conflit vient d'un **pair qui n'a pas
+    # encore suivi**, pas de cette configuration — mesuré le 2026-09-19.
+    #
+    # Elle n'est donc pas inscrite ci-dessous, et c'est volontaire : la liste
+    # `ignore` est comparée **dans les deux sens** à `CONTRAINTES_DU_SDK` par
+    # `check-sdk-pins`, qui porte sur les versions épinglées par le SDK d'Expo.
+    # `eslint` n'en fait pas partie, et l'y ajouter pour faire taire le robot
+    # ferait dire au fichier une chose fausse.
+    #
+    # À traiter le jour où `eslint-plugin-react` annonce la 10 : la montée se
+    # fera alors d'elle-même.
     ignore:
       # Épinglage exact : le SDK nomme une version, pas une famille. Aucune montée
       # n'est légitime, pas même un correctif.

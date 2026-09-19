@@ -16,7 +16,8 @@
  *  et le remède est le même : mesurer.
  *
  *  Le 2026-09-18, la montée `libpg-query` 17.7.4 → 18.1.4 a été mesurée avant
- *  d'être acceptée. Sur les deux fichiers SQL du projet :
+ *  d'être acceptée. Sur les deux fichiers SQL que le projet comptait **alors** —
+ *  une troisième migration est venue depuis, et le relevé n'est pas rejoué :
  *
  *    - mêmes clés racines (`version`, `stmts`) et mêmes décomptes d'instructions
  *      (91 et 3) ;

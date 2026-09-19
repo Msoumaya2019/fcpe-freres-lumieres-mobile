@@ -299,7 +299,7 @@ test('le seed rejoué deux fois ne produit ni doublon ni échec', async () => {
  *  et l'échec aurait désigné un coupable qui n'existe pas.
  */
 
-/** Les douze tables après les deux migrations, et **aucune autre**. */
+/** Les douze tables après les **deux** premières migrations, et **aucune autre**. */
 const TABLES_APRES_RUBRIQUES = [
   'agenda_events',
   'annonces',
@@ -379,7 +379,11 @@ test('la seconde migration s’applique, et se rejoue sans échouer', async () =
   assert.equal(rubriquesAppliquee, 2, 'la seconde migration n’a pas été jouée deux fois');
 });
 
-test('les deux migrations produisent les douze tables, et aucune autre', async () => {
+test('les deux premières migrations produisent les douze tables, et aucune autre', async () => {
+  //  Les **deux premières**, et c'est un périmètre, pas un décompte du projet :
+  //  une troisième migration suit, elle ajoute trois tables, et c'est
+  //  `check-acces-public` qui l'exécute. Cette base-ci s'arrête avant elle, pour
+  //  que la liste ci-dessus reste close sur ce qu'elle décrit.
   exigerLesRubriques();
   const { rows } = await dbRubriques.query(
     "select tablename from pg_tables where schemaname = 'public' order by tablename",

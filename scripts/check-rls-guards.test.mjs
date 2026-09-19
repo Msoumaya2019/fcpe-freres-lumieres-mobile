@@ -242,11 +242,11 @@ test('la condition d’insertion des signalements laisse le bureau décider du s
 });
 
 test('aucune politique d’insertion n’est perdue à la lecture', () => {
-  // Douze tables ont une politique d'insertion, et elles se partagent en deux
-  // familles égales. Six sont insérables par un **membre** — `profiles`,
-  // `cantine_reservations`, `signalements`, `discussion_messages`,
-  // `sondage_votes`, `messages` — et six par le **bureau** — `annonces`,
-  // `cantine_menus`, `agenda_events`, `documents`, `sondages`,
+  // Douze tables ont une politique d'insertion **réservée aux porteurs d'un
+  // jeton**, et elles se partagent en deux familles égales. Six sont insérables
+  // par un **membre** — `profiles`, `cantine_reservations`, `signalements`,
+  // `discussion_messages`, `sondage_votes`, `messages` — et six par le **bureau**
+  // — `annonces`, `cantine_menus`, `agenda_events`, `documents`, `sondages`,
   // `sondage_choices`. L'analyse doit donc en trouver douze : sinon une
   // expression régulière trop stricte aurait laissé passer une table, et
   // l'invariant avec elle.
@@ -264,6 +264,79 @@ test('aucune politique d’insertion n’est perdue à la lecture', () => {
     'sondage_votes',
     'sondages',
   ]);
+});
+
+/**
+ * Les politiques d'insertion que le motif de `conditionsDInsertion` **ne
+ * sélectionne pas**.
+ *
+ * Le motif exige `to authenticated` seul. Une politique ouverte **aussi** au rôle
+ * anonyme ne le satisfait donc pas, et n'entre pas dans la liste close
+ * ci-dessus — qui, lue seule, affirmait pourtant une exhaustivité. La troisième
+ * migration en ajoute deux, et elles n'y figurent pas : c'est un choix, et le
+ * taire aurait été le défaut que ce fichier traque ailleurs.
+ *
+ * Le choix tient : ces deux politiques ne portent aucune comparaison à lire
+ * (`with check (true)`, ou une condition de vote), et `check-acces-public` les
+ * **exerce** au lieu de les analyser — il joue le rôle anonyme, et mesure
+ * l'acceptation comme le refus.
+ *
+ * Les nommer est ce qui empêche la liste close de mentir le jour où une
+ * troisième politique de cette forme apparaîtrait sans être éprouvée.
+ */
+const INSERTIONS_HORS_MOTIF = ['push_tokens_insert_device', 'sondage_votes_insert_public'];
+
+/** Toute politique d'insertion du schéma, avec le rôle qu'elle vise. */
+function politiquesDInsertion(sql) {
+  return [
+    ...sql.matchAll(
+      /create policy (\w+)\s+on public\.(\w+) for insert\s+to ([^;]*?)with check \(/g,
+    ),
+  ].map(([, nom, table, roles]) => ({ nom, table, roles: roles.trim().replace(/\s+/g, ' ') }));
+}
+
+test('les politiques d’insertion hors motif sont nommées, et aucune autre', () => {
+  // Contrôle du contrôle, et il porte sur ce que le test précédent ne peut pas
+  // voir par construction : le motif qu'il emploie. Sans lui, une politique
+  // d'insertion ouverte au rôle anonyme pourrait être ajoutée sans que rien ne
+  // le dise — et la liste close des douze continuerait d'affirmer le contraire.
+  const toutes = politiquesDInsertion(SQL);
+  const horsMotif = toutes.filter(({ roles }) => roles !== 'authenticated');
+
+  assert.deepEqual(
+    horsMotif.map(({ nom }) => nom).sort(),
+    [...INSERTIONS_HORS_MOTIF].sort(),
+    'ces politiques d’insertion ne visent pas `authenticated` seul, donc la liste ' +
+      'close des douze ne les voit pas : les déclarer ici, avec la raison, ou ' +
+      'mesurer leur comportement dans `check-acces-public`',
+  );
+
+  // Et la liste ne décrit pas des politiques disparues : une exception qui
+  // survit à ce qu'elle décrit est une justification périmée.
+  assert.deepEqual(
+    INSERTIONS_HORS_MOTIF.filter((nom) => !toutes.some((politique) => politique.nom === nom)),
+    [],
+    '`INSERTIONS_HORS_MOTIF` nomme une politique qui n’existe plus',
+  );
+
+  // Mesure de la prémisse : le motif sélectionne bien les douze **tables** de la
+  // liste close, et rien de plus. Les tables, et non les politiques : le texte
+  // porte quinze `create policy … for insert`, et deux d'entre elles sont
+  // remplacées plus loin par une politique du même rôle — `discussion_messages`
+  // passe de `_insert_own` à `_insert_member`, et `INSERTIONS` ne garde que la
+  // dernière, comme le fait PostgreSQL.
+  const vues = toutes.filter(({ roles }) => roles === 'authenticated');
+  assert.equal(
+    new Set(vues.map(({ table }) => table)).size,
+    INSERTIONS.size,
+    'le motif et la liste close ne portent pas sur le même ensemble de tables',
+  );
+
+  // Ce que ce fichier ne peut pas dire, et qui est dit ailleurs : `messages`
+  // figure dans la liste close alors que la troisième migration **retire** sa
+  // politique d'insertion. Le texte porte encore le `create policy`, et c'est la
+  // lecture seule qui a cette limite — `check-acces-public` la lève en jouant le
+  // rôle : un membre qui écrit dans `messages` y est refusé.
 });
 
 // --- Seconde famille : chaque table déclarée est-elle réellement protégée ? ---
@@ -691,7 +764,7 @@ const EFFACEMENT_DOCUMENTE = new Map([
   ['sondage_votes', 'les votes'],
 ]);
 
-test('le découpage par blocs voit les douze tables déclarées', () => {
+test('le découpage par blocs voit les quinze tables déclarées', () => {
   // Contrôle du contrôle, et non redondance : `tablesDeclarees` lit les en-têtes,
   // ce découpage lit les corps. S'ils divergent, l'analyse des clés étrangères
   // porterait sur un schéma partiel sans que rien ne le dise.

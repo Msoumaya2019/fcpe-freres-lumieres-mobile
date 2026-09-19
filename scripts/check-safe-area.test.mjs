@@ -26,7 +26,7 @@
  * `screenOptions.headerShown` pour le navigateur, quel `headerShown` sur
  * l'entrée, et — pour un onglet dont l'écran est lui-même un navigateur — ce que
  * ce navigateur imbriqué déclare à son tour. C'est la seule façon de retrouver,
- * sans le recopier, que « Plus » masque son en-tête **et** que ses sept écrans en
+ * sans le recopier, que « Plus » masque son en-tête **et** que ses neuf routes en
  * ont un.
  *
  * CE QUE LE CONTRÔLE NE PEUT PAS VOIR
