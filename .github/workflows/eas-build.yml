@@ -9,10 +9,17 @@
 #  Prérequis : le secret `EXPO_TOKEN` (Settings > Secrets and variables >
 #  Actions). Il se crée sur expo.dev, dans Account > Access tokens.
 #
-#  Les variables EXPO_PUBLIC_* ne sont PAS définies ici : elles vivent dans les
-#  environnements EAS, associés aux profils par `eas.json`. Les déclarer aussi
-#  dans ce fichier créerait deux sources de vérité, dont l'une finirait par
-#  diverger silencieusement.
+#  Les variables EXPO_PUBLIC_* ne sont PAS injectées ici : elles vivent dans les
+#  environnements EAS, associés aux profils par `eas.json`, et c'est EAS qui les
+#  pose. Les déclarer aussi au niveau du travail créerait deux sources de
+#  vérité, dont l'une finirait par diverger silencieusement.
+#
+#  Elles sont en revanche déclarées **au niveau d'une seule étape** — celle qui
+#  relit le binaire avant de le publier —, et c'est un renversement, non une
+#  contradiction : servir de **référence de comparaison** n'est pas servir
+#  d'entrée au build. Si les secrets GitHub et l'environnement EAS divergent, la
+#  vérification échoue au lieu de laisser partir un paquet muet. La duplication
+#  cesse alors d'être un risque pour devenir un détecteur.
 # =============================================================================
 
 name: EAS Build
@@ -127,6 +134,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PLATFORM: ${{ github.event.inputs.platform || 'android' }}
+          # Références de **comparaison** seulement — voir l'en-tête : elles ne
+          # sont pas injectées dans le build, qui les reçoit de l'environnement
+          # EAS. Servir à relire un paquet n'est pas servir à le produire.
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           set -euo pipefail
 
@@ -189,6 +201,20 @@ jobs:
 
             curl --fail --location --silent --show-error --output "$FICHIER" "$URL"
             echo "$FICHIER : $(wc -c < "$FICHIER") octets"
+
+            # Un flux vert dit que la compilation s'est terminée, pas que le
+            # paquet contient la configuration. `EXPO_PUBLIC_*` est remplacé au
+            # **regroupement** : une variable absente donne une application qui
+            # s'installe, s'ouvre, et n'affiche aucune donnée — sans une seule
+            # erreur. Le contrôle lit donc le binaire, et il passe **avant** la
+            # publication : un paquet muet ne doit jamais devenir téléchargeable.
+            #
+            # Il ne s'applique qu'à l'APK. Le format iOS range son bundle
+            # ailleurs, et c'est `ios-unsigned.yml` qui inspecte le sien, sur le
+            # `.app` qu'il vient de compiler.
+            if [ "$EXTENSION" = "apk" ]; then
+              node scripts/check-paquet.mjs "$FICHIER"
+            fi
 
             gh release upload "$TAG" "$FICHIER" --clobber
           done

@@ -1,6 +1,21 @@
 /**
- * Vérifie le **contenu** d'un paquet iOS compilé, au lieu de supposer que la
- * compilation a emporté la configuration.
+ * Vérifie le **contenu** d'un paquet compilé — `.app` iOS, `main.jsbundle`, ou
+ * `.apk` — au lieu de supposer que la compilation a emporté la configuration.
+ *
+ * L'APK A ÉTÉ AJOUTÉ APRÈS COUP, ET VOICI POURQUOI
+ * ------------------------------------------------
+ * `ios-unsigned.yml` appelait ce contrôle depuis le premier jour ;
+ * `eas-build.yml` ne l'appelait pas. L'APK était donc publié sans que personne
+ * ne lise son contenu. La vérification avait pourtant été faite — **une fois, à
+ * la main**, et elle avait trouvé les deux valeurs présentes. Mais une
+ * vérification faite à la main ne se refait pas au build suivant : c'est la
+ * définition d'un contrôle absent, et le prochain APK aurait pu partir muet.
+ *
+ * Le bundle Android ne vit pas au même endroit que celui d'iOS — il est rangé
+ * dans l'archive sous un nom fixé par le format — et il faut donc l'en extraire.
+ * L'extraction se fait ici, sans dépendance externe, pour deux raisons : `unzip`
+ * n'existe pas sur toutes les machines, et surtout un banc ne peut éprouver que
+ * ce qu'il peut construire lui-même. `zlib` est dans Node.
  *
  * POURQUOI CE CONTRÔLE EXISTE
  * ---------------------------
@@ -71,14 +86,16 @@
  * -----
  *     node scripts/check-paquet.mjs <chemin>
  *
- * `<chemin>` est le `.app` compilé ou directement son `main.jsbundle`. Les deux
- * variables `EXPO_PUBLIC_SUPABASE_URL` et `EXPO_PUBLIC_SUPABASE_ANON_KEY`
- * doivent être posées dans l'environnement. Aucune valeur n'est jamais
- * imprimée : un journal de compilation ne doit pas devenir une fuite.
+ * `<chemin>` est le `.app` compilé, son `main.jsbundle`, ou l'`.apk` — dans ce
+ * dernier cas le bundle est extrait de l'archive. Les deux variables
+ * `EXPO_PUBLIC_SUPABASE_URL` et `EXPO_PUBLIC_SUPABASE_ANON_KEY` doivent être
+ * posées dans l'environnement. Aucune valeur n'est jamais imprimée : un journal
+ * de compilation ne doit pas devenir une fuite.
  */
 
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { inflateRawSync } from 'node:zlib';
 
 /**
  * Une clef de l'ancienne famille : un JWT à trois segments.
@@ -155,6 +172,66 @@ function problemeDeClef(clef) {
   return null;
 }
 
+/**
+ * Le bundle JavaScript d'un APK, tel que le format le nomme.
+ *
+ * Ce nom n'est pas un choix : c'est celui qu'Expo inscrit dans l'archive. Le
+ * chercher ailleurs serait chercher un fichier qui n'existe pas.
+ */
+const BUNDLE_ANDROID = 'assets/index.android.bundle';
+
+/** La signature d'un en-tête local d'archive ZIP : « PK\x03\x04 ». */
+const ENTETE_ZIP = 0x04034b50;
+
+/**
+ * Extrait une entrée d'une archive ZIP, sans dépendance externe.
+ *
+ * Le parcours suit les **en-têtes locaux**, l'un après l'autre, plutôt que le
+ * répertoire central : chaque en-tête local porte la taille compressée de son
+ * entrée, ce qui suffit à atteindre le suivant. C'est plus court, et c'est
+ * exactement ce qu'un APK contient — les tailles y sont renseignées.
+ *
+ * Ce que ce parcours ne sait pas faire, et il faut le dire : une entrée dont la
+ * taille serait écrite **après** les données, dans un descripteur, porterait une
+ * taille compressée nulle et ferait dérailler la lecture. Aucun outil qui
+ * produit un APK n'écrit ainsi — `unzip -l` a servi de témoin sur le binaire
+ * réel, et ses tailles sont renseignées. Le jour où une archive résisterait, la
+ * sortie le dirait par `bundle-absent`, jamais par un silence.
+ *
+ * @param {Buffer} octets l'archive entière
+ * @param {string} nomCherche le nom exact de l'entrée
+ * @returns {Buffer|null} le contenu décompressé, ou `null` si l'entrée est absente
+ */
+function extraireDuZip(octets, nomCherche) {
+  let position = 0;
+
+  while (position + 30 <= octets.length) {
+    if (octets.readUInt32LE(position) !== ENTETE_ZIP) {
+      return null;
+    }
+
+    const methode = octets.readUInt16LE(position + 8);
+    const tailleCompressee = octets.readUInt32LE(position + 18);
+    const tailleNom = octets.readUInt16LE(position + 26);
+    const tailleSupplement = octets.readUInt16LE(position + 28);
+
+    const debutNom = position + 30;
+    const debutDonnees = debutNom + tailleNom + tailleSupplement;
+    const nom = octets.toString('utf8', debutNom, debutNom + tailleNom);
+
+    if (nom === nomCherche) {
+      const donnees = octets.subarray(debutDonnees, debutDonnees + tailleCompressee);
+      // Méthode 0 : rangée telle quelle. Méthode 8 : déflatée — le seul autre
+      // cas qu'un APK emploie.
+      return methode === 0 ? donnees : inflateRawSync(donnees);
+    }
+
+    position = debutDonnees + tailleCompressee;
+  }
+
+  return null;
+}
+
 function main() {
   const defauts = [];
   let verifications = 0;
@@ -202,16 +279,36 @@ function main() {
     return;
   }
 
-  const bundle = statSync(chemin).isDirectory() ? join(chemin, 'main.jsbundle') : chemin;
+  const cible = statSync(chemin).isDirectory() ? join(chemin, 'main.jsbundle') : chemin;
 
-  let contenu;
+  let octets;
   try {
-    contenu = readFileSync(bundle, 'latin1');
+    octets = readFileSync(cible);
   } catch {
-    console.error(`  [paquet-introuvable] aucun bundle lisible ici : ${bundle}`);
+    console.error(`  [paquet-introuvable] aucun bundle lisible ici : ${cible}`);
     console.error('\nLa compilation n’a pas produit ce qu’elle annonce.');
     process.exitCode = 1;
     return;
+  }
+
+  // Un APK est une archive : le bundle y est rangé, et il faut l'ouvrir avant de
+  // pouvoir le lire. La détection porte sur la **signature du format**, pas sur
+  // l'extension du fichier — un `.apk` renommé reste une archive, et un fichier
+  // qui porterait ce nom sans en être une doit être lu pour ce qu'il est.
+  let contenu;
+  if (octets.length >= 4 && octets.readUInt32LE(0) === ENTETE_ZIP) {
+    const extrait = extraireDuZip(octets, BUNDLE_ANDROID);
+    if (extrait === null) {
+      console.error(
+        `  [bundle-absent] l’archive ne contient pas « ${BUNDLE_ANDROID} » : ce n’est ` +
+          'pas un paquet Android, ou la compilation n’a rien regroupé',
+      );
+      process.exitCode = 1;
+      return;
+    }
+    contenu = extrait.toString('latin1');
+  } else {
+    contenu = octets.toString('latin1');
   }
 
   verifier(contenu.includes(url), {
@@ -252,6 +349,7 @@ function main() {
 
   console.log(
     `${verifications} vérification(s), ${defauts.length} défaut(s) — ` +
+      `bundle de ${contenu.length} octets, ` +
       `clef attendue ${decrire(clefAttendue)}, ` +
       `${jetons.length} jeton(s) de forme JWT dans le bundle : ` +
       `${jetons.map(decrire).join(', ') || 'aucun'}`,
