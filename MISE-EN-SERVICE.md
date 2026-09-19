@@ -1,10 +1,10 @@
 # Mise en service — le guide, étape par étape
 
-> **En résumé.** Les étapes 1, 2 et 3 sont faites : Supabase répond, le projet Expo
-> est créé, le jeton est posé. **Les deux binaires sont livrés** — l'APK Android et
-> l'IPA non signé —, et **le relais SMTP est vérifié de bout en bout**, remise
-> comprise. Ce qui reste tient en trois gestes : recopier les quatre valeurs SMTP dans
-> Supabase, y poser les quatre réglages, et installer l'application sur un téléphone.
+> **En résumé.** Les étapes 1 à 4 sont faites : Supabase répond, le projet Expo est
+> créé, le jeton est posé, et **les e-mails partent** — vérifié jusqu'au clic sur le
+> lien reçu. **Les deux binaires sont livrés** — l'APK Android et l'IPA non signé.
+> Ce qui reste tient en deux gestes : les quatre réglages du tableau de bord, et
+> installer l'application sur un téléphone.
 
 ---
 
@@ -27,14 +27,13 @@ service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 | 1   | Un projet Supabase, les deux fichiers SQL collés, l'URL et la clé | ~10 min | `.env.local`, promotion admin, variables EAS                    |
 | 2   | Un compte Expo, et la connexion faite une fois                    | ~5 min  | `eas init`, variables EAS, compilation de l'APK                 |
 | 3   | Un jeton Expo pour GitHub _(facultatif)_                          | ~2 min  | le secret `EXPO_TOKEN`, qui réveille la compilation automatique |
-| 4   | Recopier les quatre identifiants SMTP                             | ~5 min  | le texte des e-mails ; les valeurs sont **mesurées**            |
+| 4   | Recopier les quatre identifiants SMTP                             | ~5 min  | ✅ les e-mails partent, jusqu'au clic sur le lien               |
 | 5   | Installer l'APK, ou signer l'IPA puis l'installer                 | ~2 min  | les vérifications sur appareil réel                             |
 | 6   | Les quatre réglages du tableau de bord                            | ~5 min  | le contrôle des quatre valeurs                                  |
 
-**Les étapes 1, 2 et 3 sont faites, les deux binaires sont livrés, et le relais SMTP est
-vérifié.** Il reste à recopier les quatre valeurs SMTP dans Supabase — c'est l'étape 4,
-et c'est elle qui rend les e-mails de confirmation opérationnels —, puis à installer
-l'application sur un téléphone.
+**Les étapes 1 à 4 sont faites, les deux binaires sont livrés, et les e-mails
+fonctionnent.** Il reste les quatre réglages du tableau de bord, puis l'installation
+sur un téléphone.
 
 ---
 
@@ -286,7 +285,7 @@ même APK.
 
 ---
 
-## Étape 4 — L'envoi des e-mails _(~5 min, peut attendre le premier essai)_
+## Étape 4 — L'envoi des e-mails _(~5 min)_ ✅
 
 **Mesuré le 18 septembre 2026 sur votre projet** : la confirmation d'e-mail est  
 **exigée** (`mailer_autoconfirm` vaut `false`). Autrement dit, un compte neuf ne peut  
@@ -354,10 +353,18 @@ laissé actif couperait la confirmation d'inscription **en production**, sans me
 l'explique. Ce réglage est utile pour une clef d'API appelée depuis un serveur fixe ; il
 est inadapté ici.
 
-**Il ne reste qu'à recopier ces valeurs dans le tableau de bord Supabase, et je ne peux
-pas cliquer à votre place** : je n'y ai pas accès. L'écran est
-**Authentication → Emails → SMTP Settings** ; les quatre valeurs ci-dessus s'y recopient
-telles quelles. Je vérifierai ensuite qu'un e-mail de confirmation arrive réellement.
+Mesure à l'appui, et elle est instructive : l'événement Brevo porte un champ `ip`, mais
+il vaut **la même adresse** pour l'essai envoyé depuis cette machine et pour l'envoi de
+Supabase. Ce champ n'est donc pas l'adresse de l'expéditeur, et il ne peut pas servir à
+construire une liste d'autorisation. **Un champ nommé `ip` n'est pas forcément celui
+qu'on croit.**
+
+**C'est fait, et vérifié jusqu'au bout.** Les valeurs ont été recopiées dans
+**Authentication → Emails → SMTP Settings**, puis un e-mail de réinitialisation a été
+demandé depuis l'application. Le compte Brevo a enregistré la demande, puis la
+**remise**, puis l'ouverture du message, puis le **clic sur le lien**. La chaîne
+complète — Supabase, Brevo, boîte du destinataire — est donc établie par la mesure,
+et non par la configuration.
 
 ---
 
@@ -453,7 +460,7 @@ pas.
 **Plus tard, après le premier essai :**
 
 - [ ] Les quatre réglages du tableau de bord
-- [ ] Recopier les quatre valeurs SMTP dans Supabase _(le relais, lui, est vérifié)_
+- [x] Recopier les quatre valeurs SMTP dans Supabase — vérifié jusqu'au clic sur le lien
 - [ ] Le jeton Expo pour GitHub _(facultatif)_
 
 ---
@@ -465,12 +472,11 @@ navigation, l'authentification et la réinitialisation de mot de passe, les six 
 et leurs politiques de sécurité, les contrôles de schéma et de politiques, la chaîne  
 de vérification complète (`npm run verify`, **29 fichiers de test**), les  
 trois flux GitHub Actions, le dépôt public sans aucun secret, les deux binaires  
-compilés — l'APK Android et l'IPA non signé —, le relais SMTP vérifié de bout en  
-bout, remise comprise, et la documentation.
+compilés — l'APK Android et l'IPA non signé —, les e-mails vérifiés jusqu'au clic  
+sur le lien reçu, et la documentation.
 
 ## Une seule chose à retenir
 
-**Rien ne bloque plus l'APK ni l'IPA, et le SMTP est vérifié.** L'étape 4 — recopier
-les quatre valeurs dans Supabase — est la seule qui doive être faite avant d'ouvrir aux
-adhérents ; les étapes 5 et 6 peuvent attendre le premier essai, et je m'occupe de tout
-le reste sans vous.
+**Plus rien ne bloque l'ouverture aux adhérents, côté outillage.** Les e-mails partent,
+les deux binaires sont livrés. Restent les quatre réglages du tableau de bord et
+l'installation sur un téléphone — deux gestes qui demandent vos accès.
