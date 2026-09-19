@@ -409,6 +409,42 @@ l'atteindre. Le piège ne se reproduit que là où RLS ne s'applique pas, c'est-
 dans l'éditeur SQL, qui agit en propriétaire des tables. C'est exactement la
 situation de la mise en service.
 
+## Une conversation privée ne s'ouvre pas avec son numéro
+
+Une conversation entre un parent et le bureau n'appartient à **aucun compte** :
+c'est ce qui permet à une famille sans compte d'écrire, et de recevoir une
+réponse. Elle est identifiée par un numéro, et protégée par un **secret** tiré par
+la base — `gen_random_uuid()`, 122 bits — et **rendu une seule fois**, à l'appelant
+qui vient de créer le fil. La table n'en garde que `md5(secret)` : une
+transformation irréversible d'un jeton à forte entropie, et non un hachage de mot
+de passe. Si la table fuit, l'empreinte ne sert à rien.
+
+La propriété qui en découle est celle-ci : `lire_conversation(id, secret)` compare
+l'empreinte, et **un mauvais secret rend exactement ce qu'un numéro inconnu
+rend** — aucune ligne. Distinguer les deux dirait à un inconnu qu'une conversation
+existe, ce qui est déjà une information, et permettrait d'énumérer les numéros.
+Connaître le numéro d'un fil ne permet donc pas d'en lire le contenu, et il n'y a
+rien à énumérer.
+
+Deux conséquences, et elles sont assumées.
+
+**Les deux tables de conversation n'ont aucune politique**, ni pour `anon`, ni
+pour `authenticated` : la migration leur révoque tout, et seules les fonctions
+`security definer` les atteignent. Ce sont les seules tables du schéma dans ce
+cas, et ce n'est pas un oubli — une table sous RLS sans politique n'est pas
+ouverte, elle est fermée à tout le monde, application comprise. Le banc les nomme
+une par une (`SANS_POLITIQUE`) plutôt que de les compter comme ouvertes, et il
+tombe si l'une d'elles gagnait une politique : la liste ne survit pas à sa cause.
+
+**Le secret n'existe que sur le téléphone.** Le perdre — réinstallation,
+changement d'appareil — c'est perdre l'accès au fil, définitivement : l'application
+ne peut pas le rendre, puisque le serveur ne le connaît plus. C'est pourquoi le
+bouton des Réglages **n'y touche pas**. Il portait auparavant sur toutes les clés
+locales, et détruisait donc en silence l'unique copie du secret, sous un libellé
+qui parlait de badges de messages non lus. `scripts/check-effacement.test.mjs`
+exerce les quatre familles de clés locales et vérifie que l'effacement épargne
+celle-là.
+
 ## Données personnelles et RGPD
 
 | Traitement                                         | Base                              | Durée                            |

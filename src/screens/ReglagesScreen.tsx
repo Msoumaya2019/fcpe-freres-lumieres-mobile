@@ -6,7 +6,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/auth/AuthProvider';
 import { AppText, Button, Card, Screen } from '@/components';
-import { effacerPreferences } from '@/config/preferences';
+import { effacerMarquesDeLecture } from '@/config/preferences';
 import type { PlusStackParamList } from '@/navigation/types';
 import { accents, colors, spacing } from '@/theme';
 import { formatShortDate } from '@/utils/date';
@@ -20,12 +20,26 @@ import { formatShortDate } from '@/utils/date';
  * croit avoir changé quelque chose, et rien ne change. Cet écran ne propose donc
  * que ce qui produit un effet **mesurable** :
  *
- *   - l'effacement des données locales, qui fait réapparaître les badges de
+ *   - l'effacement des marques de lecture, qui fait réapparaître les badges de
  *     messages non lus — vérifiable à l'écran ;
  *   - la déconnexion.
  *
  * Le reste est de l'information : ce que l'application conserve, ce qu'elle
  * montre aux autres adhérents, et ce qu'elle ne sait pas encore faire.
+ *
+ * CE QUE CE BOUTON A CESSÉ D'EMPORTER, ET POURQUOI
+ * -----------------------------------------------
+ * Il s'appelait « Effacer les données locales » et effaçait **toutes** les clés
+ * de l'application. Il emportait donc, sans le dire, le secret des conversations
+ * ouvertes avec le bureau — dont le serveur ne garde qu'une empreinte, et qui
+ * n'existe nulle part ailleurs. Le parent perdait l'accès au fil **pour
+ * toujours**, et le texte qu'il venait de lire ne parlait que de badges de
+ * messages non lus.
+ *
+ * Le bouton ne fait plus que ce que son libellé annonce : il efface les marques
+ * de lecture, et épargne ce qui ne se recrée pas. La phrase « et rien d'autre »,
+ * qui décrivait ce que le téléphone retient, était fausse pour la même raison —
+ * elle nomme maintenant les quatre familles.
  *
  * CE QUE L'APPLICATION NE SAIT PAS FAIRE, ÉCRIT PLUTÔT QUE TU
  * ----------------------------------------------------------
@@ -50,8 +64,8 @@ export function ReglagesScreen({
     setOccupe(true);
 
     try {
-      await effacerPreferences();
-      setMessage('Données locales effacées. Les badges de messages non lus réapparaissent.');
+      await effacerMarquesDeLecture();
+      setMessage('Marques de lecture effacées. Les badges de messages non lus réapparaissent.');
     } catch {
       // Le message reste sur l'écran : une alerte disparaîtrait avant d'être
       // lue, et l'adhérent ne saurait pas si l'effacement a eu lieu.
@@ -95,7 +109,16 @@ export function ReglagesScreen({
           <View style={styles.ligne}>
             <Ionicons name="phone-portrait-outline" size={16} color={colors.textSecondary} />
             <AppText variant="caption" style={styles.ligneTexte}>
-              Sur ce téléphone : jusqu’où vous avez lu la discussion, et rien d’autre.
+              Sur ce téléphone : jusqu’où vous avez lu la discussion, et la clé de vote qui empêche
+              d’y voter deux fois.
+            </AppText>
+          </View>
+          <View style={styles.ligne}>
+            <Ionicons name="key-outline" size={16} color={colors.textSecondary} />
+            <AppText variant="caption" style={styles.ligneTexte}>
+              Aussi sur ce téléphone : le secret des conversations ouvertes avec le bureau. Il
+              n’existe qu’ici — le serveur n’en garde qu’une empreinte — et il ne peut pas être
+              recréé.
             </AppText>
           </View>
           <View style={styles.ligne}>
@@ -118,8 +141,14 @@ export function ReglagesScreen({
             Données de l’appareil
           </AppText>
           <AppText variant="caption">
-            Effacer les données locales remet à zéro les marques de lecture : les badges de messages
-            non lus réapparaissent. Cela ne vous déconnecte pas et ne supprime rien sur le serveur.
+            Ce bouton efface les marques de lecture : les badges de messages non lus réapparaissent.
+            C’est tout ce qu’il efface. Il ne vous déconnecte pas, et ne supprime rien sur le
+            serveur.
+          </AppText>
+          <AppText variant="caption">
+            Il ne touche pas aux conversations ouvertes avec le bureau : leur secret n’existe que
+            sur ce téléphone, et le perdre serait définitif. Désinstaller l’application les perd
+            aussi.
           </AppText>
 
           {message === null ? null : (
@@ -141,7 +170,7 @@ export function ReglagesScreen({
             </View>
           ) : (
             <Button
-              label="Effacer les données locales"
+              label="Effacer les marques de lecture"
               variant="secondary"
               onPress={() => {
                 setConfirmation(true);

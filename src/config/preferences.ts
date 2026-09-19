@@ -1,24 +1,48 @@
 /**
- * Préférences locales, non secrètes.
+ * Préférences locales — ce que l'application retient sur le téléphone.
  *
  * DISTINCTES DU STOCKAGE D'AUTHENTIFICATION
  * -----------------------------------------
  * `src/config/storage.ts` garde la session, et passe par `SecureStore` sur
- * téléphone. Ce fichier-ci garde ce qui n'a rien de confidentiel — la date de
- * dernière consultation d'une rubrique — et passe par `AsyncStorage`, qui n'a
+ * téléphone. Ce fichier-ci garde le reste, et passe par `AsyncStorage`, qui n'a
  * pas la limite de taille de `SecureStore` ni son coût.
  *
- * Mettre une date de lecture dans le trousseau serait un détournement : le
- * trousseau protège des secrets, et y ranger autre chose brouille ce qui est
- * réellement sensible. À l'inverse, une session n'a rien à faire ici.
+ * QUATRE FAMILLES DE CLÉS, UNE SEULE EST UNE PRÉFÉRENCE
+ * -----------------------------------------------------
+ * Le préfixe `fcpe.` isole ces clés de celles qu'une autre bibliothèque
+ * écrirait dans le même magasin. Il ne dit pas qu'elles se ressemblent :
  *
- * Le préfixe isole les clés de l'application de celles qu'une autre bibliothèque
- * pourrait écrire dans le même magasin.
+ *   `discussion.lu.*`        une **marque de lecture**. Elle se recalcule, et
+ *                            la remettre à zéro est un effet visible — c'est
+ *                            la **seule** chose que « Effacer » efface.
+ *   `appareil.cle`           la clé de vote de cet appareil. C'est ce qui
+ *                            empêche de voter deux fois : l'effacer ne
+ *                            remettrait pas un réglage à zéro, cela **lèverait
+ *                            une limite**. Elle ne se remet pas à zéro depuis
+ *                            un écran de réglages.
+ *   `sondage.vote.*`         le vote que cet appareil a déposé. L'effacer
+ *                            reproposerait de voter, et le serveur refuserait
+ *                            le doublon — un bouton qui mène à un refus.
+ *   `contact.conversations`  le **secret** de chaque conversation ouverte avec
+ *                            le bureau. Le serveur n'en garde qu'une empreinte,
+ *                            et ne le rend qu'à la création : c'est l'**unique
+ *                            copie**. L'effacer, c'est perdre l'accès au fil
+ *                            **définitivement** — là où un parent signale
+ *                            parfois une situation personnelle.
+ *
+ * D'où la règle que tient ce module : **l'effacement emporte ce qui se recrée,
+ * jamais ce qui ne se recrée pas.** Il portait auparavant sur toutes les clés du
+ * préfixe, et il détruisait donc en silence la seule copie des conversations
+ * avec le bureau — sous un libellé qui parlait de badges de messages non lus.
+ * `scripts/check-effacement.test.mjs` exerce les quatre familles à la fois.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PREFIXE = 'fcpe.';
+
+/** La famille des marques de lecture, isolée pour que la clé et l'effacement s'accordent. */
+const FAMILLE_MARQUES = 'discussion.lu.';
 
 /**
  * Clé de la dernière consultation de la discussion, par adhérent.
@@ -29,7 +53,7 @@ const PREFIXE = 'fcpe.';
  * ne verrait plus ce qu'il n'a pas lu.
  */
 export function cleDerniereLectureDiscussion(userId: string): string {
-  return `discussion.lu.${userId}`;
+  return `${FAMILLE_MARQUES}${userId}`;
 }
 
 /**
@@ -62,7 +86,8 @@ export function cleVoteSondage(sondageId: string): string {
  *
  * C'est la **seule** façon de relire un fil : le serveur ne rend le secret qu'à
  * la création, et il n'en garde qu'une empreinte. Le perdre, c'est perdre
- * l'accès — d'où l'avertissement affiché sur l'écran de contact.
+ * l'accès — d'où l'avertissement affiché sur l'écran de contact, et d'où le fait
+ * que l'effacement des préférences n'y touche pas.
  */
 export function cleConversation(): string {
   return 'contact.conversations';
@@ -77,39 +102,24 @@ export async function ecrirePreference(cle: string, valeur: string): Promise<voi
 }
 
 /**
- * Toutes les clés écrites par l'application, et elles seules.
+ * Efface les marques de lecture de la discussion — et **rien d'autre**.
  *
- * Le filtre porte sur le préfixe, et il est nécessaire : `AsyncStorage` est
- * partagé avec toute bibliothèque qui l'emploierait. Un `clear()` effacerait
- * aussi ce qui n'appartient pas à cette application, et le défaut ne se verrait
- * que chez quelqu'un d'autre.
+ * Le filtre porte sur la famille des marques, et non sur le préfixe entier.
+ * C'est la propriété que tient le banc : ce qui est effacé se recalcule, ce qui
+ * ne se recalcule pas reste. Les trois autres familles sont nommées dans
+ * l'en-tête de ce fichier, avec la raison de chacune.
+ *
+ * Le filtre reste nécessaire même réduit à une famille : `AsyncStorage` est
+ * partagé avec toute bibliothèque qui l'emploierait, et un `clear()` effacerait
+ * aussi ce qui ne vient pas de cette application.
  */
-export async function clesDeLApplication(): Promise<readonly string[]> {
+export async function effacerMarquesDeLecture(): Promise<void> {
   const cles = await AsyncStorage.getAllKeys();
+  const marques = cles.filter((cle) => cle.startsWith(PREFIXE + FAMILLE_MARQUES));
 
-  return cles.filter((cle) => cle.startsWith(PREFIXE));
-}
-
-/**
- * Efface les préférences locales.
- *
- * CE QUE CETTE ACTION NE FAIT PAS, ET C'EST LE POINT
- * -------------------------------------------------
- * Elle **ne déconnecte pas** : la session vit dans `SecureStore`, pas ici, et
- * c'est délibéré — le trousseau protège des secrets, ce magasin-ci garde des
- * dates de lecture. Les confondre ferait de l'effacement des préférences une
- * déconnexion, ce que personne n'attend.
- *
- * Elle n'efface rien en base non plus. Ce qu'elle remet à zéro est ce que
- * l'appareil retient : les marques de lecture, donc les badges de messages non
- * lus, qui réapparaissent.
- */
-export async function effacerPreferences(): Promise<void> {
-  const cles = await clesDeLApplication();
-
-  if (cles.length === 0) {
+  if (marques.length === 0) {
     return;
   }
 
-  await AsyncStorage.multiRemove([...cles]);
+  await AsyncStorage.multiRemove([...marques]);
 }

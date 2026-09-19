@@ -553,6 +553,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-dates.test.mjs       les dates civiles, les jours impossibles, les fuseaux
 │   ├── check-rls-guards.test.mjs  les colonnes sous verrou, insertion comprise
 │   ├── check-storage.test.mjs     le découpage des jetons, coupure par coupure
+│   ├── check-effacement.test.mjs  ce qu'un effacement emporte, et ce qu'il épargne
 │   ├── check-build-config.test.mjs  l'accord des versions, des permissions et des fins de ligne
 │   ├── check-input-limits.test.mjs  les limites de saisie, alignées sur la base
 │   ├── check-schema-types.test.mjs  le schéma SQL et son miroir TypeScript
@@ -1956,9 +1957,9 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Trente-trois fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Trente-quatre fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
-  `check-storage`, `check-build-config`, `check-input-limits`,
+  `check-storage`, `check-effacement`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
   `check-pending-action`, `check-password-policy`, `check-weak-password`,
   `check-screen-modes`, `check-inventory`, `check-schema-refs`,
