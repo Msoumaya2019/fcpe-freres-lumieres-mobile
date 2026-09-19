@@ -377,6 +377,27 @@ Vous pouvez revenir sur une décision : l'écran propose, pour chaque ligne, les
 transitions possibles depuis son statut. Rien n'est définitif, et **aucune donnée
 n'est effacée** par un refus ou une suspension — seul l'accès change.
 
+### 1.10 Mettre un document à disposition des familles
+
+Deux gestes, et l'ordre compte, parce que la politique du compartiment **relie les
+deux** : elle n'autorise un fichier que si la table `documents` porte une ligne qui le
+désigne.
+
+1. **Storage** → compartiment `documents` → **Upload file**. Notez le nom exact du
+   fichier : c'est le **chemin dans le compartiment**, par exemple
+   `reglement-2026.pdf`. N'ajoutez pas de dossier `documents/` devant — ce préfixe
+   ferait partie du nom.
+2. **Table Editor** → `documents` → **Insert row**. Renseignez `title`, puis
+   `storage_path` **au caractère près**, avec le nom de l'étape 1.
+3. `visibility` : laissez `familles` — c'est ce qui rend le document lisible par un
+   parent sans compte. Mettez `bureau` pour un document réservé aux adhérents
+   connectés.
+
+Une faute de frappe dans `storage_path` ne produit **aucune erreur** : le document
+apparaît dans la liste, et l'ouverture échoue. C'est le symptôme à reconnaître — il ne
+vient jamais de la politique du compartiment, qui est binaire, mais toujours du lien
+entre le fichier et sa fiche.
+
 ### Si quelque chose ne marche pas
 
 | Ce que vous voyez                                          | Ce qui se passe                                                                                                                                                                                               |
