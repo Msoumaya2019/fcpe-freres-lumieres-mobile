@@ -147,9 +147,21 @@ Le compartiment se crée donc à la main, une fois.
    compartiment public rendrait tous les documents lisibles par quiconque
    possède l'adresse.
 4. Créez, puis ouvrez **Policies** sur ce compartiment et autorisez la lecture aux
-   utilisateurs connectés. Les politiques d'un compartiment ne s'écrivent pas en
-   SQL dans ce dépôt : aucun test ne peut les lire, et c'est pourquoi le banc
-   `check-rls-guards` exige que tout appel au stockage soit déclaré nommément.
+   utilisateurs connectés. Le plus sûr est de coller la politique dans l'éditeur
+   SQL, comme les deux fichiers ci-dessus — le tableau de bord la crée à
+   l'identique, mais par des cases à cocher qu'on peut mal remplir :
+
+   ```sql
+   create policy storage_documents_select_authenticated
+   on storage.objects for select to authenticated
+   using (bucket_id = 'documents');
+   ```
+
+   Cette politique ne figure pas dans nos migrations : le schéma `storage`
+   n'existe pas dans la doublure des tests, et une instruction le concernant
+   empêcherait les deux fichiers ci-dessus d'être rejouables. C'est pourquoi le
+   banc `check-rls-guards` exige que tout appel au stockage soit déclaré
+   nommément.
 
 Tant que le compartiment n'existe pas, l'écran Documents affiche une erreur de
 chargement — les autres écrans ne sont pas affectés.
