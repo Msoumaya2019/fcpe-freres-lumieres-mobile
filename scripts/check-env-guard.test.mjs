@@ -412,3 +412,68 @@ test("aucun export de `env.ts` n'est déclaré sans être employé", () => {
       "canonique et en fera une copie au lieu de s'en servir",
   );
 });
+
+/**
+ * Les fichiers qui cachent quelque chose à qui n'est pas développeur.
+ *
+ * Liste **fermée, dans les deux sens** : un fichier qui se mettrait à employer
+ * `isDevelopment` sans figurer ici échoue — le critère doit rester unique —, et
+ * une entrée qui ne l'emploie plus échoue aussi.
+ */
+const QUI_MASQUENT = ['src/errors/index.ts', 'src/screens/ConfigurationScreen.tsx'];
+
+test('ce qui est caché à l’adhérent se décide sur `isDevelopment`, jamais sur `appEnv`', () => {
+  // Deux endroits masquent quelque chose à qui n'est pas développeur : le détail
+  // technique d'une erreur, et la procédure de mise en place de la
+  // configuration. Ils appliquaient **deux critères différents** —
+  // `isDevelopment` pour l'un, `appConfig.appEnv === 'production'` pour l'autre —
+  // alors que le second citait le premier comme sa règle.
+  //
+  // L'écart ne se voyait pas à la lecture, et se voyait à l'usage : l'APK publié
+  // est un build **preview**, donc `appEnv` y vaut « preview », et l'écran de
+  // configuration aurait affiché à un parent la procédure d'un développeur —
+  // « Copiez `.env.example` en `.env.local` » — au moment précis où il faut lui
+  // dire qui contacter. Mesuré le 2026-09-19.
+  //
+  // `appEnv` décrit le **profil de compilation** ; il ne dit pas qui tient
+  // l'appareil. Un binaire installé sur un téléphone n'est pas un poste de
+  // développement, quel que soit le profil qui l'a produit.
+  const vus = [];
+
+  const fichiers = [...fichiersSource(), join(RACINE, 'App.tsx'), join(RACINE, 'index.ts')];
+
+  for (const chemin of fichiers) {
+    const relatif = relative(RACINE, chemin).replace(/\\/g, '/');
+    if (relatif === 'src/config/env.ts') {
+      continue;
+    }
+
+    // `lirePourReference` retire les **imports** en plus des commentaires, et
+    // c'est nécessaire : cet écran importe `isDevelopment`, si bien qu'une
+    // lecture qui garde les imports compterait le nom même si la condition ne
+    // l'employait plus. Mesuré — la mutation « la condition devient
+    // `if (false)` » restait verte. C'est le même piège que le banc d'orphelins
+    // de `check-async-wiring`, qui comptait les occurrences d'un nom au lieu de
+    // regarder la relation.
+    const source = lirePourReference(chemin);
+
+    if (/\bisDevelopment\b/.test(source)) {
+      vus.push(relatif);
+    }
+
+    assert.doesNotMatch(
+      source,
+      /\bappEnv\b/,
+      `${relatif} décide d’après \`appEnv\` : c’est le profil EAS, pas le public. ` +
+        'Le critère du masquage est `isDevelopment`',
+    );
+  }
+
+  assert.deepEqual(
+    vus.sort(),
+    [...QUI_MASQUENT].sort(),
+    'la liste des fichiers qui masquent quelque chose a changé : un nouveau venu ' +
+      'doit être déclaré ici — le critère doit rester unique —, et une entrée qui ' +
+      'ne masque plus doit en sortir, sinon elle ferait croire à un masquage',
+  );
+});

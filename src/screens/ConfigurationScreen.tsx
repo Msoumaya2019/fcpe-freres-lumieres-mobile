@@ -1,5 +1,5 @@
 import { AppText, Card, Screen } from '@/components';
-import { appConfig } from '@/config/env';
+import { appConfig, isDevelopment } from '@/config/env';
 import { colors } from '@/theme';
 
 const SETUP_STEPS: readonly string[] = [
@@ -20,16 +20,25 @@ const SETUP_STEPS: readonly string[] = [
  * ---------------------------
  * Les étapes de mise en place ne s'adressent qu'à un développeur : elles parlent
  * de `.env.local` et de redémarrage du serveur, choses qu'un adhérent ne peut pas
- * faire. Les afficher dans un build de production reviendrait à confier à un
- * parent une procédure qu'il ne peut pas exécuter, au moment précis où il faut
- * lui dire qui contacter.
+ * faire. Les afficher dans un build **livré** reviendrait à confier à un parent
+ * une procédure qu'il ne peut pas exécuter, au moment précis où il faut lui dire
+ * qui contacter.
  *
- * C'est la même règle que `appErrorDetail()`, qui masque le détail technique en
- * production : ce qui décrit la base de données ne sort pas du poste de
- * développement.
+ * C'est la même règle que `appErrorDetail()`, qui masque le détail technique
+ * hors développement — **la même règle et le même critère**. La condition
+ * ci-dessous a dû être corrigée pour que cette phrase soit vraie : elle
+ * comparait `appEnv` à `production`, alors que l'APK publié est un build
+ * **preview**. Mesuré le 2026-09-19 : le binaire livré aurait donc affiché la
+ * procédure d'un développeur à qui n'en est pas un.
  */
 export function ConfigurationScreen() {
-  if (appConfig.appEnv === 'production') {
+  // `isDevelopment`, et non `appConfig.appEnv` : c'est le critère que
+  // `appErrorDetail` applique déjà, et le seul qui soit vrai du binaire livré.
+  // Un build `preview` n'est pas un poste de développement — c'est un fichier
+  // installé sur un téléphone, et le profil EAS qui l'a produit ne dit rien de
+  // qui le tient. `NODE_ENV`, lui, répond exactement à la question posée :
+  // « ce bundle vient-il de Metro en mode développement ? »
+  if (!isDevelopment) {
     return (
       <Screen scrollable>
         <Card>
