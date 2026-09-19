@@ -449,15 +449,27 @@ et non par la configuration.
 C'est le seul geste qui ne s'automatise pas : installer une application demande votre  
 téléphone.
 
-**Avant d'installer, une vérification de dix secondes.** Un binaire ne vaut que pour
-le commit dont il est né : regardez la date de la compilation et comparez-la au
-dernier changement du code. Une compilation antérieure vous montre une version
-périmée — et c'est exactement ce qui s'était produit ici, sans que rien ne le
-signale.
+### Où se trouvent les deux fichiers
+
+Les deux binaires de la version **0.1.0** sont attachés à une page unique :
+`https://github.com/Msoumaya2019/fcpe-freres-lumieres-mobile/releases/latest`.
+
+Vous y trouverez `fcpe-freres-lumieres-0.1.0-android.apk` et
+`fcpe-freres-lumieres-0.1.0-non-signe.ipa`. **Le nom du fichier porte la version** :
+c'est ce qui permet de savoir ce qu'on installe sans ouvrir le fichier — un binaire
+ne vaut que pour le commit dont il est né.
+
+Deux autres adresses circulent, et **aucune des deux ne marchera pour vous**, parce
+qu'elles demandent un compte : la page de compilation EAS affichée en fin de build
+refuse la lecture à un visiteur non connecté, et l'artefact `ipa-non-signe` du flux
+GitHub répond `401` sans jeton — ce qu'un navigateur de téléphone ne sait pas
+fournir. La page des versions, elle, se télécharge sans compte : c'est la seule des
+trois voies qu'un téléphone puisse suivre seul.
 
 ### Sur Android — l'APK
 
-1. Ouvrez le lien de téléchargement que je vous envoie, **depuis le téléphone**.
+1. Ouvrez la page des versions ci-dessus, **depuis le téléphone**, et téléchargez
+   `fcpe-freres-lumieres-0.1.0-android.apk`.
 2. Android affiche un avertissement : « Pour votre sécurité, votre téléphone n'est  
    pas autorisé à installer des applications inconnues provenant de cette source ».  
    Touchez **Paramètres**, puis activez **Autoriser depuis cette source**.
@@ -474,8 +486,8 @@ signature avant d'exécuter quoi que ce soit, et ne dit pas pourquoi il refuse. 
 que je produis n'est donc pas un produit fini, c'est un **produit intermédiaire** — la
 compilation sans la signature — et c'est ESign qui pose la signature, sur le téléphone.
 
-1. Je vous envoie le lien de l'artefact **`ipa-non-signe`** : téléchargez-le **depuis
-   l'iPhone**.
+1. Ouvrez la page des versions ci-dessus, **depuis l'iPhone**, et téléchargez
+   `fcpe-freres-lumieres-0.1.0-non-signe.ipa`.
 2. Ouvrez ESign et importez le fichier.
 3. Signez-le avec un certificat obtenu **sur l'appareil** — c'est le geste que je ne
    peux pas faire à votre place, il engage votre identifiant Apple.

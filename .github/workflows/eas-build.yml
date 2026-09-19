@@ -41,8 +41,13 @@ on:
     tags:
       - 'v*'
 
+# `contents: write`, et non `read` : la dernière étape dépose le binaire
+# compilé dans une **release**, qui est le seul endroit d'où l'adhérent peut le
+# télécharger sans compte. Mesuré le 2026-09-19 sur un dépôt public : un asset
+# de release répond 302, l'artefact d'un flux répond 401. Un jeton en lecture
+# seule ne pourrait pas écrire la release.
 permissions:
-  contents: read
+  contents: write
 
 # Pas d'annulation : un build interrompu peut laisser un artefact incohérent
 # côté EAS. Mieux vaut attendre la fin du précédent.
@@ -89,3 +94,86 @@ jobs:
           PROFILE: ${{ github.event.inputs.profile || 'production' }}
           PLATFORM: ${{ github.event.inputs.platform || 'android' }}
         run: eas build --profile "$PROFILE" --platform "$PLATFORM" --non-interactive
+
+      # -----------------------------------------------------------------------
+      #  Rendre le binaire atteignable par celui qui doit l'installer
+      # -----------------------------------------------------------------------
+      #
+      #  POURQUOI CETTE ÉTAPE EXISTE
+      #  ---------------------------
+      #  EAS affiche en fin de build une adresse — « See logs: …/builds/<id> » —
+      #  et elle ne mène à rien pour l'adhérent. Mesuré le 2026-09-19, sans
+      #  authentification : la page répond **200**, mais elle est une application
+      #  JavaScript dont le HTML ne contient aucune adresse de fichier (62 128
+      #  octets, zéro occurrence de `buildUrl`), et l'API refuse la lecture du
+      #  build — « Entity not authorized: TurtleBuildEntity[3dab2207-…]
+      #  (viewer = AnonymousViewerContext, action = READ) ». Autrement dit, le
+      #  seul lien que le service donne est inutilisable par quiconque n'est pas
+      #  propriétaire du projet.
+      #
+      #  Un **asset de release**, lui, se télécharge sans compte. C'est la même
+      #  mesure qui l'établit : 302 sur un asset d'un dépôt public, contre 401
+      #  pour l'artefact d'un flux. Les deux nombres ont été relevés le même
+      #  jour, sur la même machine, sans jeton.
+      #
+      #  CE QUE CETTE ÉTAPE NE PEUT PAS FAIRE
+      #  ------------------------------------
+      #  Elle ne peut pas vérifier que le fichier téléchargé est le bon : elle
+      #  compare une adresse, pas un contenu. La version, elle, est écrite dans
+      #  le nom du fichier — c'est ce qui permet à l'adhérent de reconnaître ce
+      #  qu'il installe, et à `scripts/check-release.test.mjs` de tenir l'accord
+      #  entre `app.json` et ce que le guide annonce.
+      - name: Publier le binaire dans la version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLATFORM: ${{ github.event.inputs.platform || 'android' }}
+        run: |
+          set -euo pipefail
+
+          VERSION=$(node -p "require('./app.json').expo.version")
+          TAG="v$VERSION"
+
+          # La release est créée si elle manque, et c'est le cas normal d'un
+          # premier build : `gh release create` crée alors le tag, ce qui
+          # déclenche à son tour le build de production. Une version se
+          # compile donc en production sans qu'on ait à y penser.
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "FCPE Frères Lumières $VERSION" \
+              --notes "Binaires de la version $VERSION, compilés depuis le commit $GITHUB_SHA." \
+              --target "$GITHUB_SHA"
+          fi
+
+          PLATEFORMES="$PLATFORM"
+          if [ "$PLATEFORMES" = "all" ]; then
+            PLATEFORMES="android ios"
+          fi
+
+          for PLATEFORME in $PLATEFORMES; do
+            # Le build le plus récent de cette plateforme : le flux vient de le
+            # terminer, et `concurrency` empêche deux builds du même commit de
+            # se chevaucher. La liste est filtrée par plateforme, sans quoi un
+            # build iOS répondrait à une demande Android.
+            URL=$(eas build:list --platform "$PLATEFORME" --limit 1 \
+              --non-interactive --json | jq -r '.[0].artifacts.buildUrl')
+
+            if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+              echo "::error::aucune adresse d'artefact pour $PLATEFORME — le build a-t-il abouti ?"
+              exit 1
+            fi
+
+            # L'adresse porte une signature en paramètres : on l'écarte avant de
+            # lire l'extension, sinon le nom du fichier contiendrait la requête.
+            SANS_PARAMETRES="${URL%%\?*}"
+            EXTENSION="${SANS_PARAMETRES##*.}"
+            FICHIER="fcpe-freres-lumieres-$VERSION-$PLATEFORME.$EXTENSION"
+
+            curl --fail --location --silent --show-error --output "$FICHIER" "$URL"
+            echo "$FICHIER : $(wc -c < "$FICHIER") octets"
+
+            gh release upload "$TAG" "$FICHIER" --clobber
+          done
+
+          echo "### Binaires publiés dans la version $TAG" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"

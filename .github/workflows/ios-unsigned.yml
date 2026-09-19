@@ -50,8 +50,13 @@ name: IPA non signé
 on:
   workflow_dispatch:
 
+# `contents: write`, et non `read` : la dernière étape dépose l'IPA dans une
+# **release**, qui est le seul endroit d'où l'adhérent peut le télécharger sans
+# compte. Mesuré le 2026-09-19 : l'artefact de ce flux répond 401 à un visiteur
+# anonyme, alors qu'un asset de release répond 302. Un jeton en lecture seule ne
+# pourrait pas écrire la release.
 permissions:
-  contents: read
+  contents: write
 
 # Pas d'annulation : interrompre une compilation macOS ne rend pas le temps
 # déjà consommé, et laisse un `ios/build` à moitié écrit.
@@ -269,7 +274,9 @@ jobs:
             echo "non signé est refusé, sans message qui l'explique. Il faut le"
             echo "**re-signer** — c'est le rôle d'ESign."
             echo
-            echo "1. Téléchargez l'artefact \`ipa-non-signe\` ci-dessous."
+            echo "1. Téléchargez l'IPA depuis la page des versions du dépôt —"
+            echo "   l'artefact de ce flux, lui, demande un compte GitHub :"
+            echo "   https://github.com/$GITHUB_REPOSITORY/releases/latest"
             echo "2. Ouvrez ESign sur l'iPhone et importez le fichier."
             echo "3. Signez avec un certificat obtenu sur l'appareil."
             echo "4. Installez depuis ESign, puis ouvrez l'application."
@@ -287,5 +294,55 @@ jobs:
           path: ${{ env.IPA }}
           # Un IPA de plusieurs dizaines de mégaoctets se télécharge à la main :
           # il n'a pas vocation à rester. Trente jours couvrent l'essai.
+          #
+          # Cet artefact n'est **pas** la voie de livraison : il demande un
+          # compte GitHub, et répond 401 à un visiteur anonyme — mesuré le
+          # 2026-09-19. Il reste ici pour la reprise d'un travail, pas pour
+          # l'installation. L'étape suivante publie la voie qui marche.
           retention-days: 30
           if-no-files-found: error
+
+      # -----------------------------------------------------------------------
+      #  Rendre l'IPA atteignable depuis l'iPhone
+      # -----------------------------------------------------------------------
+      #
+      #  POURQUOI CETTE ÉTAPE EXISTE
+      #  ---------------------------
+      #  Le mode d'emploi demande de télécharger l'IPA **sur l'iPhone** pour le
+      #  confier à ESign. Or l'artefact de ce flux vit derrière
+      #  `api.github.com`, qui exige un jeton : mesuré sans authentification,
+      #  `…/actions/artifacts/<id>/zip` répond **401**. Un navigateur de
+      #  téléphone ne peut donc pas l'ouvrir, et l'instruction était inapplicable
+      #  telle qu'elle était écrite.
+      #
+      #  Un asset de release répond **302** sans jeton, sur un dépôt public —
+      #  relevé le même jour. C'est la seule des deux voies qu'un iPhone peut
+      #  suivre sans compte.
+      - name: Publier l'IPA dans la version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          VERSION=$(node -p "require('./app.json').expo.version")
+          TAG="v$VERSION"
+
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "FCPE Frères Lumières $VERSION" \
+              --notes "Binaires de la version $VERSION, compilés depuis le commit $GITHUB_SHA." \
+              --target "$GITHUB_SHA"
+          fi
+
+          # Le nom porte la version et la mention « non signé », parce que c'est
+          # la première chose qu'on lit dans le dossier de téléchargements du
+          # téléphone — et qu'un IPA non signé ne s'installe pas tel quel.
+          FICHIER="fcpe-freres-lumieres-$VERSION-non-signe.ipa"
+          cp "$IPA" "$FICHIER"
+          echo "$FICHIER : $(wc -c < "$FICHIER") octets"
+
+          gh release upload "$TAG" "$FICHIER" --clobber
+
+          echo "### IPA publié dans la version $TAG" >> "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          echo "https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"

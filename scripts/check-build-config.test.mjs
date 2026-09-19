@@ -407,18 +407,88 @@ test("`ci.yml` n'utilise aucun secret, et c'est une contrainte de conception", (
   );
 });
 
-test('chaque flux déclare ses permissions, et aucune ne demande l’écriture', () => {
+/**
+ * Les flux qui ont besoin d'écrire dans le dépôt, et pourquoi.
+ *
+ * Liste **fermée, dans les deux sens** : un flux qui demande l'écriture sans
+ * figurer ici échoue, et un flux déclaré ici qui n'écrit plus échoue aussi —
+ * sans quoi une entrée morte ferait croire à une permission encore nécessaire.
+ *
+ * Le droit d'écrire vient d'une seule chose : `gh release`, qui dépose le
+ * binaire compilé dans la **release** de la version. C'est le seul endroit d'où
+ * l'adhérent peut le télécharger sans compte. Mesuré le 2026-09-19, sans jeton :
+ * un asset de release répond **302**, l'artefact d'un flux répond **401**, et
+ * l'adresse affichée par EAS en fin de build refuse la lecture du build à un
+ * visiteur anonyme — « viewer = AnonymousViewerContext, action = READ ».
+ *
+ * Le moindre privilège voudrait que le jeton n'écrive que dans le travail qui
+ * publie, les autres n'exécutant que du code tiers (`npm ci`, `expo prebuild`).
+ * Cela demanderait un second travail et le transit du fichier par un artefact.
+ * Ce n'est pas fait ici, et la raison est écrite pour que la décision soit prise
+ * le jour où l'un de ces flux exécutera du code qu'il ne maîtrise pas, plutôt
+ * que subie.
+ */
+const FLUX_QUI_ECRIVENT = new Map([
+  [
+    'eas-build.yml',
+    "dépose l'APK dans la release de la version — la page EAS ne le donne pas à " +
+      'un visiteur anonyme',
+  ],
+  [
+    'ios-unsigned.yml',
+    "dépose l'IPA dans la release de la version — l'artefact du flux exige un " +
+      'compte GitHub, alors que l’IPA se télécharge depuis l’iPhone',
+  ],
+]);
+
+test('seuls les flux nommés écrivent dans le dépôt, et chacun le justifie', () => {
+  // La règle de fond n'a pas changé : le réglage par défaut du dépôt peut
+  // accorder l'écriture, donc la déclarer explicitement est le seul moyen de
+  // savoir ce que le jeton peut faire — et accorder un droit doit être un choix
+  // **nommé**. Ce qui change, c'est qu'un flux a désormais besoin d'écrire :
+  // « aucun flux n'en a besoin » est devenu faux le jour où les binaires ont dû
+  // devenir téléchargeables, et le contrôle devait le dire autrement que par un
+  // échec.
+  const ecrivent = [];
+
   for (const { nom, source } of workflows()) {
     // Un flux sans bloc `permissions:` reçoit le réglage par défaut du dépôt, qui
-    // peut accorder l'écriture. Le déclarer explicitement est le seul moyen de
-    // savoir ce que le jeton peut faire.
+    // peut accorder l'écriture.
     const bloc = blocDePremierNiveau(source, 'permissions');
-    assert.equal(
-      /:\s*write\b/.test(bloc),
-      false,
-      `${nom} demande un droit d'écriture (${bloc.trim().replace(/\s+/g, ' ')}). ` +
-        "Aucun flux n'en a besoin aujourd'hui : en accorder un doit être un choix " +
-        'nommé, pas un héritage du réglage par défaut',
+    const ecrit = /:\s*write\b/.test(bloc);
+
+    if (ecrit) {
+      ecrivent.push(nom);
+    }
+
+    if (!FLUX_QUI_ECRIVENT.has(nom)) {
+      assert.equal(
+        ecrit,
+        false,
+        `${nom} demande un droit d'écriture (${bloc.trim().replace(/\s+/g, ' ')}). ` +
+          "Aucun flux n'en a besoin sans figurer dans `FLUX_QUI_ECRIVENT` : en " +
+          'accorder un doit être un choix nommé, pas un héritage du réglage par défaut',
+      );
+    }
+  }
+
+  // Le second sens : une entrée déclarée qui n'écrit plus est une entrée morte.
+  // Sans cette boucle, la liste ne ferait que s'allonger, et une permission
+  // qu'on croit nécessaire finit par être recopiée de flux en flux.
+  for (const nom of FLUX_QUI_ECRIVENT.keys()) {
+    assert.ok(
+      ecrivent.includes(nom),
+      `\`FLUX_QUI_ECRIVENT\` déclare ${nom}, qui ne demande plus l'écriture : ` +
+        "l'entrée a vieilli, et elle fait croire à une permission encore justifiée",
+    );
+  }
+
+  // Et la liste doit dire **pourquoi** : une raison vide serait une entrée
+  // décorative, c'est-à-dire exactement ce que ce test existe pour empêcher.
+  for (const [nom, raison] of FLUX_QUI_ECRIVENT) {
+    assert.ok(
+      raison.trim().length > 20,
+      `la raison déclarée pour ${nom} est vide ou trop courte pour être relue`,
     );
   }
 });
@@ -506,4 +576,99 @@ test('chaque extension binaire présente dans `assets/` est déclarée binaire',
         'de fins de ligne y écrirait des octets qui ne sont pas ceux de l’image',
     );
   }
+});
+
+/**
+ * Les noms de binaires que le guide annonce, avec la version qu'ils portent.
+ *
+ * Le guide est le seul document que l'opérateur suit à la lettre, et il nomme
+ * désormais les deux fichiers à télécharger. Un nom y est une **promesse** : si
+ * la version qu'il porte n'est pas celle de `app.json`, l'adhérent cherchera un
+ * fichier qui n'existe pas sur la page des versions — et conclura que la
+ * livraison a échoué, alors que c'est le document qui a vieilli.
+ *
+ * C'est le même accord que les quatre copies de la version de Node, à une
+ * différence près : ici, personne ne peut le vérifier à l'œil, parce que le nom
+ * du fichier n'est écrit nulle part ailleurs que dans le guide et dans deux
+ * scripts de publication.
+ */
+function nomsAnnoncesParLeGuide() {
+  const motif = /fcpe-freres-lumieres-([0-9]+\.[0-9]+\.[0-9]+)((?:-[a-z]+)*\.[a-z]+)/g;
+  return [...lire('MISE-EN-SERVICE.md').matchAll(motif)].map((correspondance) => ({
+    nom: correspondance[0],
+    version: correspondance[1],
+    suffixe: correspondance[2],
+  }));
+}
+
+test('le guide nomme les binaires de la version que `app.json` porte', () => {
+  const version = JSON.parse(lire('app.json')).expo.version;
+  const annonces = nomsAnnoncesParLeGuide();
+
+  assert.notEqual(
+    annonces.length,
+    0,
+    'le guide n’annonce aucun nom de fichier : ce contrôle ne porterait sur rien — ' +
+      'et c’est précisément l’état qui a rendu l’étape 5 inapplicable',
+  );
+
+  for (const { nom, version: portee } of annonces) {
+    assert.equal(
+      portee,
+      version,
+      `le guide annonce « ${nom} », qui porte la version ${portee}, alors que ` +
+        `\`app.json\` déclare ${version} : l’adhérent chercherait un fichier absent ` +
+        'de la page des versions',
+    );
+  }
+
+  // Les deux plateformes, et rien d’autre : un seul nom annoncé laisserait une
+  // des deux voies d’installation sans fichier à télécharger.
+  const suffixes = [...new Set(annonces.map(({ suffixe }) => suffixe))].sort();
+  assert.deepEqual(
+    suffixes,
+    ['-android.apk', '-non-signe.ipa'],
+    `le guide annonce ${suffixes.length} fichier(s) — ${suffixes.join(', ')} — alors ` +
+      'que les deux voies d’installation en demandent exactement deux',
+  );
+});
+
+test('les deux flux construisent leurs noms avec la version de `app.json`', () => {
+  // Le guide et les flux ne peuvent pas se lire : l'un est un document, les
+  // autres des scripts. Ce qui les relie est la chaîne `$VERSION`, alimentée par
+  // la même expression dans les deux — `node -p "require('./app.json')…"`. La
+  // vérifier ici, c'est vérifier que le nom annoncé est bien celui qui sera
+  // publié.
+  for (const flux of ['eas-build.yml', 'ios-unsigned.yml']) {
+    const source = lire(`.github/workflows/${flux}`);
+
+    assert.match(
+      source,
+      /node -p "require\('\.\/app\.json'\)\.expo\.version"/,
+      `${flux} ne lit pas la version de \`app.json\` : le nom du fichier publié ne ` +
+        'serait plus relié à ce que l’application annonce',
+    );
+
+    assert.match(
+      source,
+      /FICHIER="fcpe-freres-lumieres-\$VERSION-/,
+      `${flux} ne nomme pas son fichier avec la racine que le guide annonce`,
+    );
+  }
+});
+
+test('l’extension annoncée par le guide est celle que le profil produit', () => {
+  // Le guide promet un `.apk`. Cette promesse ne dépend pas du flux, qui lit
+  // l'extension de l'adresse fournie par EAS : elle dépend de `eas.json`, où
+  // `buildType` décide de ce qu'EAS fabrique. Un profil `preview` passé en
+  // `app-bundle` ferait annoncer un paquet installable là où EAS produirait un
+  // paquet de magasin — et le fichier publié s'appellerait `…-android.aab`.
+  const easJson = JSON.parse(lire('eas.json'));
+
+  assert.equal(
+    easJson.build.preview.android.buildType,
+    'apk',
+    'le profil `preview` ne produit plus un `apk`, alors que le guide annonce ' +
+      '`fcpe-freres-lumieres-<version>-android.apk`',
+  );
 });
