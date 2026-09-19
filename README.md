@@ -1851,6 +1851,12 @@ répond `401`, l'adresse affichée par EAS en fin de build refuse la lecture du
 build (« viewer = AnonymousViewerContext »), et un asset de release répond
 `302`. L'adhérent n'a que son téléphone.
 
+Un tag `v*` **poussé à la main** lance un build de production. Un tag créé par
+`gh release create` depuis un flux n'en lance aucun : GitHub ne relance pas un
+flux pour un événement provoqué par `GITHUB_TOKEN`, afin d'empêcher les
+boucles. Mesuré — `v0.1.0`, créé par `eas-build.yml` le 2026-09-19, ne porte
+aucune exécution.
+
 ## 9. Limites connues
 
 - **La réinitialisation de mot de passe n'est pas éprouvée de bout en bout.**

@@ -134,9 +134,19 @@ jobs:
           TAG="v$VERSION"
 
           # La release est créée si elle manque, et c'est le cas normal d'un
-          # premier build : `gh release create` crée alors le tag, ce qui
-          # déclenche à son tour le build de production. Une version se
-          # compile donc en production sans qu'on ait à y penser.
+          # premier build : `gh release create` crée alors le tag.
+          #
+          # Ce tag **ne déclenche aucun build de production** — mesuré, et non
+          # supposé. La version `v0.1.0` a été créée par ce script le
+          # 2026-09-19, et l'historique ne porte aucune exécution sur ce tag.
+          # GitHub ne relance pas un flux pour un événement provoqué par
+          # `GITHUB_TOKEN`, précisément pour empêcher les boucles : le
+          # déclenchement `push: tags: v*` ne vaut que pour un tag poussé à la
+          # main. La phrase contraire figurait ici avant d'être mesurée.
+          #
+          # Ce n'est pas un défaut : publier une prévisualisation ne doit pas
+          # consommer un build de production. Pour en obtenir un, poussez le tag
+          # — `git push origin v0.1.0`.
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             # La création peut perdre une course avec l'autre flux, qui publie
             # dans la même version : l'échec est alors sans conséquence. Il n'est
