@@ -10,11 +10,14 @@
 import type { Database, Tables } from '@/types/database';
 
 export type MemberRole = Database['public']['Enums']['member_role'];
+export type MemberStatus = Database['public']['Enums']['member_status'];
 export type SignalementCategory = Database['public']['Enums']['signalement_category'];
 export type SignalementStatus = Database['public']['Enums']['signalement_status'];
 export type DocumentCategory = Database['public']['Enums']['document_category'];
+export type DocumentVisibility = Database['public']['Enums']['document_visibility'];
 export type MessageCategory = Database['public']['Enums']['message_category'];
 export type AnnonceCategory = Database['public']['Enums']['annonce_category'];
+export type ConversationStatus = Database['public']['Enums']['conversation_status'];
 
 export type Profile = Tables<'profiles'>;
 export type Annonce = Tables<'annonces'>;
@@ -28,6 +31,9 @@ export type Sondage = Tables<'sondages'>;
 export type SondageChoice = Tables<'sondage_choices'>;
 export type SondageVote = Tables<'sondage_votes'>;
 export type MemberMessage = Tables<'messages'>;
+export type Conversation = Tables<'conversations'>;
+export type ConversationMessage = Tables<'conversation_messages'>;
+export type PushToken = Tables<'push_tokens'>;
 
 /**
  * Un message accompagné du nom de son auteur.
@@ -100,22 +106,35 @@ export const MESSAGE_CATEGORIES: readonly MessageCategory[] = [
 ];
 
 /**
- * Un sondage, ses réponses, et le vote de l'adhérent s'il a voté.
+ * Un sondage, ses réponses, et le vote **de cet appareil** s'il a voté.
  *
- * POURQUOI AUCUN DÉCOMPTE DE VOIX N'EST AFFICHÉ
- * --------------------------------------------
- * La politique de lecture de `sondage_votes` ne laisse voir que **son propre**
- * vote. Un `count` côté client renverrait donc 0 ou 1, jamais le résultat — et
- * un écran affichant « 1 voix » pour un sondage qui en a quarante serait pire
- * que de n'afficher aucun chiffre.
+ * POURQUOI LE VOTE EST LU LOCALEMENT
+ * ----------------------------------
+ * La politique de lecture de `sondage_votes` ne laissait voir que son propre
+ * vote, et elle comparait `voter_id` à `auth.uid()` : deux valeurs qui sont
+ * nulles pour un vote déposé sans compte. Elle a donc été retirée, et
+ * l'application garde elle-même la trace de ce qu'elle a répondu.
  *
- * Un décompte exact demanderait une fonction `security definer` qui rende des
- * compteurs sans exposer les votants, donc une migration de plus. Le bureau lit
- * les résultats depuis le tableau de bord, où la clé de service ne passe par
- * aucune politique ; c'est suffisant aujourd'hui, et l'écran se contente de
- * montrer ce à quoi on peut répondre.
+ * Ce que cela coûte est écrit sur l'écran de vote : réinstaller l'application
+ * efface cette trace, et un second vote devient possible. C'est la limite
+ * raisonnable d'un vote sans compte, et elle vaut mieux qu'une politique qui
+ * n'autoriserait rien de ce qu'on croit.
  */
 export interface SondageWithChoices extends Sondage {
   readonly choices: readonly SondageChoice[];
   readonly myChoiceId: string | null;
+}
+
+/**
+ * Une ligne de résultat : une réponse, et le nombre de voix qu'elle a reçues.
+ *
+ * Le décompte vient de `resultats_sondage()`, une fonction `security definer`
+ * qui rend des **compteurs** — jamais une ligne de vote. Le nom du votant ne
+ * sort donc pas de la base, et c'est ce qui rend le résultat affichable.
+ */
+export interface SondageResultat {
+  readonly choice_id: string;
+  readonly label: string;
+  readonly rang: number;
+  readonly voix: number;
 }

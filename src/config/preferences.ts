@@ -32,6 +32,42 @@ export function cleDerniereLectureDiscussion(userId: string): string {
   return `discussion.lu.${userId}`;
 }
 
+/**
+ * Clé de l'appareil, tirée par la base à la première demande.
+ *
+ * POURQUOI ELLE N'EST PAS TIRÉE ICI
+ * ---------------------------------
+ * React Native n'expose pas de générateur aléatoire cryptographique, et
+ * `Math.random()` n'en est pas un. La fonction `cle_appareil()` la tire avec
+ * `gen_random_uuid()`, côté serveur, et l'application la garde ensuite.
+ *
+ * Ce n'est pas un secret : elle ne donne accès à rien. La ranger dans
+ * `AsyncStorage` — et non dans le trousseau — est donc le bon endroit.
+ */
+export const CLE_APPAREIL = 'appareil.cle';
+
+/**
+ * Le choix déposé par cet appareil sur un sondage.
+ *
+ * L'identifiant du sondage est dans la clé, comme celui de l'adhérent pour la
+ * discussion : deux sondages ne se recouvrent donc pas, et relire un vote ne
+ * demande pas de parcourir une liste.
+ */
+export function cleVoteSondage(sondageId: string): string {
+  return `sondage.vote.${sondageId}`;
+}
+
+/**
+ * Le secret d'une conversation, et son identifiant.
+ *
+ * C'est la **seule** façon de relire un fil : le serveur ne rend le secret qu'à
+ * la création, et il n'en garde qu'une empreinte. Le perdre, c'est perdre
+ * l'accès — d'où l'avertissement affiché sur l'écran de contact.
+ */
+export function cleConversation(): string {
+  return 'contact.conversations';
+}
+
 export async function lirePreference(cle: string): Promise<string | null> {
   return AsyncStorage.getItem(PREFIXE + cle);
 }

@@ -30,15 +30,28 @@
  *   2. le fait que le signal repose sur une **référence** de données, condition
  *      de validité annoncée par le module et rendue visible ici plutôt que
  *      laissée dans un commentaire ;
- *   3. l'écran de cantine ne tient pas un second marqueur, et ne relâche pas
- *      celui qu'il dérive avant la relecture — un test de **forme**, seul moyen
- *      de tenir un ordre d'exécution sans rendre un composant ;
- *   4. l'écran de discussion couvre lui aussi la relecture, **et** son état vide
- *      cède la place tant qu'un envoi dure ;
- *   5. le seul écran d'écriture qui relâche tôt empêche bien de rejouer son
+ *   3. l'écran de discussion couvre la relecture, ne tient pas un second
+ *      marqueur, **et** son état vide cède la place tant qu'un envoi dure — un
+ *      test de **forme**, seul moyen de tenir un ordre d'exécution sans rendre
+ *      un composant ;
+ *   4. le seul écran d'écriture qui relâche tôt empêche bien de rejouer son
  *      action. Ce banc vérifie que ce justificatif tient, sans quoi l'exception
  *      deviendrait fausse en silence — c'est la forme demandée pour toute
  *      exception assumée.
+ *
+ * L'ÉCRAN DE CANTINE A QUITTÉ CE BANC, ET POURQUOI
+ * -----------------------------------------------
+ * Il en était le témoin principal : c'est sa mesure qui a fait apparaître le
+ * défaut, et ses deux tests tenaient la forme corrigée.
+ *
+ * Il ne propose plus de réserver — le bouton n'était relié à aucun service de
+ * restauration scolaire, et un parent croyait avoir réservé un repas —, donc il
+ * n'écrit plus, donc il n'a plus de relecture à couvrir. Ses deux tests
+ * n'avaient plus d'objet, et les garder aurait mesuré un fichier où la mécanique
+ * ne se trouve plus. La règle, elle, reste tenue : l'écran de discussion
+ * l'exerce sur **tous** les points que la cantine portait, second marqueur
+ * compris. Retirer un témoin devenu sans objet n'est pas perdre une couverture ;
+ * garder un témoin sans objet, si.
  *
  * LA MESURE QUI A FONDÉ LE POINT 4
  * --------------------------------
@@ -80,7 +93,6 @@ import { fileURLToPath } from 'node:url';
 const RACINE = fileURLToPath(new URL('../', import.meta.url));
 
 const MODULE = new URL('../src/utils/pendingAction.ts', import.meta.url).href;
-const CANTINE = `${RACINE}src/screens/CantineScreen.tsx`;
 const DISCUSSION = `${RACINE}src/screens/DiscussionMembresScreen.tsx`;
 const SIGNALEMENTS = `${RACINE}src/screens/MesSignalementsScreen.tsx`;
 
@@ -121,8 +133,14 @@ function blocDEcriture(source, nom) {
 
 // Les données telles que `useAsyncData` les produit : un objet neuf à chaque
 // chargement réussi. Deux contenus identiques, deux références distinctes.
-const DONNEES_AVANT = { menus: [], reservedMenuIds: [] };
-const DONNEES_APRES = { menus: [], reservedMenuIds: ['A'] };
+//
+// La forme est neutre, et c'est délibéré : elle a porté les champs de la
+// réservation de cantine tant que cet écran était le témoin. Le prédicat, lui,
+// ne regarde jamais le contenu — seulement la référence —, et des champs nommés
+// d'après un écran qui n'écrit plus donneraient à lire une dépendance qui
+// n'existe pas.
+const DONNEES_AVANT = { messages: [] };
+const DONNEES_APRES = { messages: ['A'] };
 
 test("aucun appui n'est en cours quand rien n'a été demandé", () => {
   assert.strictEqual(pendingTarget(null, 'ready', DONNEES_AVANT), null);
@@ -161,35 +179,6 @@ test('le signal repose sur la référence des données, pas sur leur contenu', (
     pendingTarget(appui, 'ready', { ...DONNEES_AVANT }),
     null,
     'un chargeur qui mémoïserait son résultat garderait l’indicateur allumé pour toujours',
-  );
-});
-
-test("l'écran de cantine dérive son marqueur, il n'en tient pas un second", () => {
-  const source = sansCommentaires(lire(CANTINE));
-  assert.ok(source.length > 1000, 'garde de lecture : le fichier semble vide');
-
-  // L'invariant porte sur l'**origine** du marqueur, pas sur la forme de
-  // l'affectation : extraire l'appel dans une variable intermédiaire est une
-  // remise en forme légitime, et le premier jet de ce banc la refusait — le
-  // contrôle inverse l'a montré.
-  assert.match(
-    source,
-    /pendingTarget\(\s*pending\s*,\s*status\s*,\s*data\s*\)/,
-    "le marqueur doit être dérivé de l'état chargé, jamais tenu à part",
-  );
-  assert.ok(
-    !/const \[pendingMenuId/.test(source),
-    'un second marqueur, relâché à la main, est exactement ce qui rouvre la fenêtre',
-  );
-});
-
-test("l'écran de cantine ne relâche pas son marqueur avant la relecture", () => {
-  const bloc = blocDEcriture(sansCommentaires(lire(CANTINE)), 'CantineScreen');
-
-  assert.ok(bloc.includes('reload()'), 'le bloc relevé ne relit pas la liste');
-  assert.ok(
-    !/\bfinally\b/.test(bloc),
-    'un `finally` relâcherait le marqueur avant l’arrivée de la liste relue',
   );
 });
 

@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { useNavigation } from '@react-navigation/native';
+import { useCallback, useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/auth/AuthProvider';
@@ -355,6 +356,7 @@ function NewPasswordForm({ onCancel }: { readonly onCancel: () => void }) {
 
 export function ConnexionScreen() {
   const {
+    status,
     signIn,
     signUp,
     passwordRecovery,
@@ -362,6 +364,25 @@ export function ConnexionScreen() {
     dismissLinkMessage,
     cancelPasswordRecovery,
   } = useAuth();
+  const navigation = useNavigation();
+
+  /**
+   * Y a-t-il où revenir ?
+   *
+   * `canGoBack()` est faux quand cet écran est **racine** — le cas de la
+   * récupération, où la pile ne contient que lui. Il est vrai quand la pile
+   * « Plus » l'a empilé sous « Espace membres », et c'est là qu'un retour doit
+   * être offert : cet écran n'a pas d'en-tête de navigation, donc pas de flèche
+   * système.
+   *
+   * La valeur est lue au rendu, et elle est stable : la pile ne change pas sous
+   * l'écran sans qu'il soit remonté.
+   */
+  const peutRevenir = navigation.canGoBack();
+
+  const revenir = useCallback(() => {
+    navigation.goBack();
+  }, [navigation]);
 
   const [mode, setMode] = useState<Mode>('connexion');
   const [displayName, setDisplayName] = useState('');
@@ -375,6 +396,28 @@ export function ConnexionScreen() {
   // mot de passe n'est pas changé, l'écran ne peut pas proposer autre chose.
   const effectiveMode: Mode = passwordRecovery ? 'nouveau-mot-de-passe' : mode;
   const isSignUp = effectiveMode === 'inscription';
+
+  /**
+   * La connexion réussie referme l'écran.
+   *
+   * POURQUOI C'EST ICI, ET NON DANS LE FOURNISSEUR
+   * ----------------------------------------------
+   * `AuthProvider` publie `status` et ne navigue jamais : c'est ce qui évite les
+   * doubles navigations, et cette règle n'a pas changé. Mais elle suffisait tant
+   * que la connexion **était** la racine de l'application — il n'y avait rien à
+   * fermer. Depuis que l'application est publique et que la connexion s'empile
+   * par-dessus, quelqu'un doit refermer cette pile, et le seul endroit qui sache
+   * qu'on y est entré **par ici** est cet écran.
+   *
+   * `passwordRecovery` est exclu : dans ce cas l'écran n'est pas empilé mais
+   * racine, et `RootNavigator` le remplace en changeant d'ensemble de routes —
+   * un `goBack()` n'y aurait nulle part où aller.
+   */
+  useEffect(() => {
+    if (status === 'signedIn' && !passwordRecovery) {
+      navigation.goBack();
+    }
+  }, [status, passwordRecovery, navigation]);
 
   /**
    * Efface ce que l'écran affichait, et ce que le **fournisseur** y avait mis.
@@ -474,7 +517,9 @@ export function ConnexionScreen() {
             setNotice(
               userMessage(
                 `Un e-mail de confirmation a été envoyé à ${trimmedEmail}. ` +
-                  'Ouvrez-le pour activer votre compte, puis connectez-vous.',
+                  'Ouvrez-le pour activer votre compte, puis connectez-vous. ' +
+                  'Votre demande d’adhésion sera ensuite examinée par le bureau de ' +
+                  'l’association.',
               ),
             );
             setMode('connexion');
@@ -515,6 +560,19 @@ export function ConnexionScreen() {
   }, [displayName, email, isSignUp, password, signIn, signUp]);
 
   return (
+    //  PAS DE `edges` ICI, ET C'EST DÉLIBÉRÉ.
+    //
+    //  Cet écran sert deux fois : plein écran pendant une récupération, et
+    //  empilé sous « Espace membres ». Les deux montages sont **sans en-tête de
+    //  navigation** — celui de la récupération parce qu'il remplace
+    //  l'application, celui de l'espace membre parce que l'écran porte déjà son
+    //  propre en-tête de marque. C'est donc à lui de protéger l'encoche, et le
+    //  bord par défaut du composant (`['top']`) le fait.
+    //
+    //  Le lui retirer avait été tenté pour l'afficher sous l'en-tête de la pile
+    //  « Plus » : la flèche de retour aurait été gratuite, mais l'encoche
+    //  l'aurait été aussi, deux fois. Le retour est donc offert plus bas, en
+    //  toutes lettres, et seulement quand il y a où revenir.
     <Screen scrollable>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -555,6 +613,25 @@ export function ConnexionScreen() {
           ) : (
             <>
               <AppText variant="heading">{isSignUp ? 'Créer un compte' : 'Connexion'}</AppText>
+
+              {/*  Ce qu'un compte donne, et ce qu'il ne donne pas tout de suite.
+
+                  L'application s'ouvre **sans compte** : ce formulaire ne sert
+                  donc pas à lire les menus ou l'agenda, mais à rejoindre
+                  l'espace des membres. Et cet espace ne s'ouvre qu'après
+                  l'accord du bureau — un compte en attente ne lit pas la
+                  discussion, parce que la politique RLS la lui refuse.
+
+                  Le dire ici, avant la saisie, évite la question « pourquoi la
+                  discussion est-elle vide ? » posée trois jours plus tard. */}
+              {isSignUp ? (
+                <AppText variant="caption">
+                  Ce compte sert à rejoindre l’espace des membres de la FCPE. Votre demande sera
+                  examinée par le bureau de l’association : la discussion s’ouvrira une fois votre
+                  inscription acceptée. Pour lire les menus, l’agenda et les actualités, aucun
+                  compte n’est nécessaire.
+                </AppText>
+              ) : null}
 
               {isSignUp ? (
                 <TextField
@@ -632,6 +709,22 @@ export function ConnexionScreen() {
             onPress={goToResendConfirmation}
             disabled={submitting}
           />
+        ) : null}
+
+        {/* Le retour, écrit en toutes lettres, et seulement quand il y a où
+            revenir.
+
+            L'écran est monté sans en-tête de navigation : sous « Espace
+            membres » il n'y a donc pas de flèche système, et un parent qui
+            ouvre cette rubrique doit pouvoir revenir au menu. La barre d'onglets
+            et le geste système le permettent, mais les deux se devinent — ce
+            bouton, lui, se voit.
+
+            Pendant une récupération, la pile ne contient que cet écran :
+            `canGoBack()` est faux, et le bouton disparaît. C'est exactement ce
+            qu'on veut — on ne « revient » pas d'un lien de réinitialisation. */}
+        {peutRevenir ? (
+          <Button label="Retour" variant="ghost" onPress={revenir} disabled={submitting} />
         ) : null}
       </KeyboardAvoidingView>
     </Screen>

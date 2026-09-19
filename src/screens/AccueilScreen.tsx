@@ -94,10 +94,14 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
     // ici en double : cette copie-ci se rafraîchissait au montage et au tirer
     // pour rafraîchir, jamais au retour d'une lecture. La cloche annonçait des
     // messages déjà lus. Voir `src/hooks/useNonLus.ts`.
-    const [annonces, sondages] = await Promise.all([fetchAnnonces(), fetchSondages(userId)]);
+    //
+    // `fetchSondages()` ne prend plus d'identifiant d'adhérent : un sondage se
+    // lit et se vote **sans compte**, et le choix de cet appareil est relu dans
+    // les préférences locales plutôt que filtré par `auth.uid()`.
+    const [annonces, sondages] = await Promise.all([fetchAnnonces(), fetchSondages()]);
 
     return { annonces, sondage: sondageOuvert(sondages) };
-  }, [userId]);
+  }, []);
 
   const { status, data, errorMessage, refreshing, refresh, reload } = useAsyncData(loader);
 

@@ -391,26 +391,51 @@ function position(ou, motif) {
   return index;
 }
 
-test("RootNavigator refuse l'entrée tant que le mot de passe n'est pas choisi", () => {
+test("RootNavigator remplace l'application par la récupération, et l'ouvre sinon", () => {
+  // LE CONTRÔLE A CHANGÉ DE SENS, ET IL FAUT LE DIRE.
+  //
+  // Il exigeait une condition **nommée** — `entersApplication` — mêlant deux
+  // termes : une session ouverte, et la récupération close. Elle gardait
+  // l'entrée de l'application. Ce n'est plus la question : l'application
+  // s'ouvre **sans compte**, c'est l'accès libre des familles, et le seul terme
+  // qui subsiste est la récupération, qui n'est déjà qu'un booléen nommé. Un
+  // second nom pour un seul booléen serait un habillage, pas une lisibilité.
+  //
+  // Ce qui reste à tenir est la **place** de chaque écran, et c'est ce que ce
+  // test tient désormais : la récupération est la branche gardée, l'application
+  // l'alternative. Les inverser ferait entrer dans l'application un adhérent qui
+  // vient de cliquer un lien de réinitialisation, et viderait le lien de son
+  // sens — le défaut que la version précédente surveillait déjà.
   const source = lireSource('src/navigation/RootNavigator.tsx');
 
-  const condition = source.match(/const entersApplication = ([^;]+);/);
-  assert.notEqual(condition, null, "la condition d'entrée doit être nommée pour être lisible");
-  assert.match(condition[1], /status === 'signedIn'/, "l'entrée suppose une session ouverte");
-  assert.match(
-    condition[1],
-    /!passwordRecovery/,
-    "l'entrée suppose la récupération close : sans ce terme, le lien ouvre l'application",
-  );
-
-  // La garde ne protège rien si l'écran de l'application n'est pas derrière elle.
-  const garde = position(source, 'entersApplication ? (');
+  const garde = position(source, 'passwordRecovery ? (');
+  const recuperation = position(source, '<Stack.Screen name="Recuperation"');
   const application = position(source, '<Stack.Screen name="Application"');
-  const connexion = position(source, '<Stack.Screen name="Connexion"');
 
   assert.ok(
-    garde < application && application < connexion,
-    "l'écran de l'application doit être la branche gardée, et la connexion l'alternative",
+    garde < recuperation && recuperation < application,
+    'la récupération doit être la branche gardée, et l’application l’alternative',
+  );
+
+  // L'application ne doit dépendre d'aucune session. Un `status === 'signedIn'`
+  // réintroduit ici redemanderait un compte à un parent venu lire un menu de
+  // cantine : c'est le premier obstacle que l'accès public retire.
+  assert.doesNotMatch(
+    source,
+    /status === 'signedIn'/,
+    'l’application s’ouvre sans compte : la condition d’entrée ne doit plus citer de session',
+  );
+
+  // La session est lue **avant** la pile : sinon un écran s'afficherait puis
+  // serait corrigé, et « application puis récupération » se verrait au lancement
+  // d'un lien.
+  const attente = position(source, "status === 'loading'");
+  const pile = position(source, '<Stack.Navigator');
+
+  assert.ok(
+    attente < pile,
+    'la session doit être lue avant que la pile ne monte quoi que ce soit : ' +
+      'sans quoi un rendu « connecté sans récupération » passerait avant la correction',
   );
 });
 

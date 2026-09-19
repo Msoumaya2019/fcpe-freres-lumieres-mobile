@@ -195,22 +195,25 @@ const SAISIES = [
     ecran: 'src/screens/DiscussionMembresScreen.tsx',
     constante: 'MAX_MESSAGE_LENGTH',
   },
-  //  Les trois colonnes saisies par l'écran de contact. Elles n'étaient pas
-  //  visibles tant que ce banc ne lisait que la première migration.
+  //  Les trois colonnes saisies par l'écran de contact. Elles ont changé de
+  //  table, pas de borne : le contact écrit désormais une conversation, dont les
+  //  contraintes reprennent exactement 160, 4000 et 254. Le test de la limite
+  //  ci-dessous le **vérifie** au lieu de le supposer — c'est lui qui dirait
+  //  qu'une des trois a dérivé.
   {
-    table: 'messages',
+    table: 'conversations',
     colonne: 'subject',
     ecran: 'src/screens/ContactScreen.tsx',
     constante: 'MAX_SUBJECT_LENGTH',
   },
   {
-    table: 'messages',
+    table: 'conversation_messages',
     colonne: 'body',
     ecran: 'src/screens/ContactScreen.tsx',
     constante: 'MAX_BODY_LENGTH',
   },
   {
-    table: 'messages',
+    table: 'conversations',
     colonne: 'reply_to',
     ecran: 'src/screens/ContactScreen.tsx',
     constante: 'MAX_EMAIL_LENGTH',
@@ -257,6 +260,42 @@ const NON_SAISIES = [
     table: 'sondage_choices',
     colonne: 'label',
     raison: 'les réponses possibles sont rédigées par le bureau ; aucun écran ne les écrit',
+  },
+  {
+    table: 'push_tokens',
+    colonne: 'token',
+    raison:
+      'le jeton est produit par le système de notification, jamais saisi : il n’y a ' +
+      'pas de champ à borner. La borne du serveur ne protège pas d’une faute de ' +
+      'frappe mais d’une valeur corrompue, que personne ne verrait passer',
+    ecrite: true,
+  },
+  //  `messages` n'est plus écrit par l'application, et ses trois colonnes
+  //  bornées n'ont donc plus de champ en face. La table reste, ses lignes aussi
+  //  — elles partent en cascade avec le compte de leur auteur, comme
+  //  `SECURITY.md` le promet —, mais le contact passe désormais par une
+  //  conversation. Les contraintes, elles, n'ont pas bougé : c'est la raison
+  //  pour laquelle il faut encore les déclarer ici, une par une.
+  {
+    table: 'messages',
+    colonne: 'subject',
+    raison:
+      'l’ancien écran de contact n’écrit plus dans `messages` : la table garde les ' +
+      'messages déjà reçus, et plus aucun champ ne les saisit',
+  },
+  {
+    table: 'messages',
+    colonne: 'body',
+    raison:
+      'l’ancien écran de contact n’écrit plus dans `messages` : la table garde les ' +
+      'messages déjà reçus, et plus aucun champ ne les saisit',
+  },
+  {
+    table: 'messages',
+    colonne: 'reply_to',
+    raison:
+      'l’ancien écran de contact n’écrit plus dans `messages` : la table garde les ' +
+      'messages déjà reçus, et plus aucun champ ne les saisit',
   },
 ];
 
@@ -311,6 +350,9 @@ test('l’extraction lit bien la migration et les écrans', () => {
     [
       'agenda_events_title_length',
       'annonces_title_not_blank',
+      'conversation_messages_body_length',
+      'conversations_reply_to_length',
+      'conversations_subject_length',
       'discussion_messages_body_not_blank',
       'documents_path_length',
       'documents_title_length',
@@ -318,6 +360,7 @@ test('l’extraction lit bien la migration et les écrans', () => {
       'messages_reply_length',
       'messages_subject_length',
       'profiles_display_name_length',
+      'push_tokens_token_length',
       'signalements_subject_not_blank',
       'sondage_choices_label_length',
       'sondages_question_length',
@@ -381,7 +424,30 @@ test('aucun écran n’écrit dans une table déclarée sans saisie', () => {
   // La raison donnée dans `NON_SAISIES` est une affirmation sur le code, et elle
   // est vérifiée : le jour où un écran publie une annonce, il lui faudra aussi
   // borner son titre.
-  const fautives = NON_SAISIES.flatMap((champ) => ecrituresDans(champ.table));
+  //
+  // Une entrée peut porter `ecrite: true` — la table est bien écrite par le
+  // code, mais la colonne n'est pas saisie. C'est le cas du jeton de
+  // notification, qui vient du système. Le test suivant empêche que ce drapeau
+  // serve à taire cette vérification.
+  const fautives = NON_SAISIES.filter((champ) => champ.ecrite !== true).flatMap((champ) =>
+    ecrituresDans(champ.table),
+  );
 
   assert.deepEqual(fautives, []);
+});
+
+test('une table déclarée écrite par le code l’est réellement', () => {
+  // Le pendant du test précédent, et sans lui le drapeau `ecrite` serait une
+  // porte de sortie : il suffirait de le poser pour ne plus rien vérifier. Ici,
+  // le poser sans que le code écrive vraiment la table fait tomber le test.
+  const mensongeres = NON_SAISIES.filter(
+    (champ) => champ.ecrite === true && ecrituresDans(champ.table).length === 0,
+  );
+
+  assert.deepEqual(
+    mensongeres.map((champ) => `${champ.table}.${champ.colonne}`),
+    [],
+    'ces colonnes sont déclarées écrites par le code, et aucune ligne de `src/` ' +
+      'n’écrit dans leur table : soit retirer le drapeau, soit écrire le code',
+  );
 });

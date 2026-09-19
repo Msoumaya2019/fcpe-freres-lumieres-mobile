@@ -169,40 +169,77 @@ une contrainte d'unicité, qui refuserait deux homonymes bien réels — et il n
 peut pas être corrigé par le code de l'application, qui n'est pas une barrière.
 
 La cause est la même que celle de l'inscription ouverte, et le remède l'est
-aussi : **filtrer l'inscription**. Tant qu'un compte est actif dès sa création,
-l'application ne peut pas distinguer un adhérent d'un inconnu qui a choisi le
-même nom. Voir la limite correspondante au README, §9, et `validated_at` pour la
-marche à suivre.
+aussi : **filtrer l'inscription**. C'est ce que fait la troisième migration — un
+`status` sur `profiles`, la fonction `is_member()` qui exige `accepte`, et
+`decider_adhesion()`, par laquelle le bureau accepte, refuse ou suspend. Un compte
+créé naît `en_attente` : il peut lire ce qui est public — annonces, menus, agenda,
+sondages, documents destinés aux familles —, mais **pas publier dans le salon**.
+L'usurpateur reste donc dehors tant que le bureau ne l'a pas accepté, et c'est ce
+que `check-acces-public` mesure : un compte en attente reçoit une liste **vide**,
+pas une erreur. Ce qui reste ouvert à tout porteur d'un jeton est la liste des
+noms affichés et des rôles, jamais les adresses e-mail.
 
 ## Ce que la relecture des politiques a établi
 
-Les dix-neuf appels de `src/services/` ont été croisés un par un avec les
-politiques des deux migrations. Treize lectures, six écritures — et **aucune
-modification** : le relevé ci-dessous est celui de
-`grep -rn "\.update(\|\.upsert(\|\.insert(\|\.delete(" src/`.
+Les **seize** appels de `src/services/` ont été croisés un par un avec les
+politiques des trois migrations. Quatorze clés distinctes — deux appels
+partagent une même clé —, et **une seule écrit une ligne existante** :
+`push_tokens.update`, par laquelle un appareil déjà connu rafraîchit sa date.
 
-| Requête                        | Table                  | Opération         | Politique                                  |
-| ------------------------------ | ---------------------- | ----------------- | ------------------------------------------ |
-| `fetchAgendaEvents`            | `agenda_events`        | select            | `agenda_events_select_authenticated`       |
-| `fetchAnnonces`                | `annonces`             | select            | `annonces_select_authenticated`            |
-| `fetchUpcomingMenus`           | `cantine_menus`        | select            | `cantine_menus_select_authenticated`       |
-| `fetchReservedMenuIds`         | `cantine_reservations` | select            | `cantine_reservations_select_own_or_admin` |
-| `setReservation` (réservation) | `cantine_reservations` | insert            | `cantine_reservations_insert_own`          |
-| `setReservation` (retrait)     | `cantine_reservations` | delete            | `cantine_reservations_delete_own_or_admin` |
-| `fetchDiscussionMessages`      | `discussion_messages`  | select            | `discussion_messages_select_authenticated` |
-| `postDiscussionMessage`        | `discussion_messages`  | insert            | `discussion_messages_insert_own`           |
-| `fetchDocuments`               | `documents`            | select            | `documents_select_authenticated`           |
-| `documentUrl`                  | _(bucket `documents`)_ | `createSignedUrl` | _(politique du tableau de bord)_           |
-| `fetchMyMessages`              | `messages`             | select            | `messages_select_own_or_admin`             |
-| `createMessage`                | `messages`             | insert            | `messages_insert_own`                      |
-| `fetchProfile`                 | `profiles`             | select            | `profiles_select_authenticated`            |
-| `fetchAuthorNames`             | `profiles`             | select            | `profiles_select_authenticated`            |
-| `fetchMySignalements`          | `signalements`         | select            | `signalements_select_own_or_admin`         |
-| `createSignalement`            | `signalements`         | insert            | `signalements_insert_own`                  |
-| `fetchSondages` (sondages)     | `sondages`             | select            | `sondages_select_authenticated`            |
-| `fetchSondages` (choix)        | `sondage_choices`      | select            | `sondage_choices_select_authenticated`     |
-| `fetchSondages` (votes)        | `sondage_votes`        | select            | `sondage_votes_select_own_or_admin`        |
-| `castVote`                     | `sondage_votes`        | insert            | `sondage_votes_insert_own`                 |
+Le relevé ci-dessous n'est pas la source : la source est
+`scripts/check-rls-guards.test.mjs`, qui tient la liste **close** et tombe dès
+qu'un appel apparaît ou disparaît sans être déclaré. Ce tableau le recopie, et
+c'est ce banc qu'il faut relire en cas de désaccord.
+
+| Requête                      | Table                  | Opération         | Politique                                                               |
+| ---------------------------- | ---------------------- | ----------------- | ----------------------------------------------------------------------- |
+| `fetchAgendaEvents`          | `agenda_events`        | select            | `agenda_events_select_public` · `…_select_authenticated`                |
+| `fetchAnnonces`              | `annonces`             | select            | `annonces_select_public` · `…_select_authenticated`                     |
+| `fetchUpcomingMenus`         | `cantine_menus`        | select            | `cantine_menus_select_public` · `…_select_authenticated`                |
+| `fetchDiscussionMessages`    | `discussion_messages`  | select            | `discussion_messages_select_member`                                     |
+| `postDiscussionMessage`      | `discussion_messages`  | insert            | `discussion_messages_insert_member`                                     |
+| `fetchDocuments`             | `documents`            | select            | `documents_select_public` · `…_select_authenticated`                    |
+| `documentUrl`                | _(bucket `documents`)_ | `createSignedUrl` | `storage_documents_select_familles` · `storage_documents_select_bureau` |
+| `enregistrerAppareil` (pose) | `push_tokens`          | insert            | `push_tokens_insert_device`                                             |
+| `enregistrerAppareil` (date) | `push_tokens`          | update            | `push_tokens_update_device`                                             |
+| `fetchProfile`               | `profiles`             | select            | `profiles_select_authenticated`                                         |
+| `fetchAuthorNames`           | `profiles`             | select            | `profiles_select_authenticated`                                         |
+| `listerAdhesions`            | `profiles`             | select            | `profiles_select_authenticated`                                         |
+| `fetchMySignalements`        | `signalements`         | select            | `signalements_select_own_or_admin`                                      |
+| `createSignalement`          | `signalements`         | insert            | `signalements_insert_own`                                               |
+| `fetchSondages` (sondages)   | `sondages`             | select            | `sondages_select_public` · `…_select_authenticated`                     |
+| `fetchSondages` (choix)      | `sondage_choices`      | select            | `sondage_choices_select_public` · `…_select_authenticated`              |
+| `castVote`                   | `sondage_votes`        | insert            | `sondage_votes_insert_public` · `sondage_votes_insert_own`              |
+
+Deux remarques que le tableau seul ne dirait pas. Les six tables publiques
+portent **deux** politiques de lecture et non une : `*_select_public` pour le
+rôle `anon`, `*_select_authenticated` pour un porteur de jeton. Un parent sans
+compte et un adhérent lisent les mêmes lignes par deux chemins distincts, et
+retirer l'une des deux ne se verrait pas à l'écriture — d'où les deux noms.
+`profiles.select` est écrit **trois fois** (le profil de l'appelant, les noms des
+auteurs d'une page, la file des adhésions du bureau) et ne réclame qu'une
+politique : c'est le même couple table/opération.
+
+Les deux lignes de `push_tokens` sont les seules du tableau qu'**aucun écran
+n'appelle** : `enregistrerAppareil` est écrit, éprouvé, et branché sur rien — voir
+la limite « Les notifications push ne partent pas » au README, §9. Le banc les
+déclare quand même, et c'est voulu : elles sont la moitié serveur d'une
+fonctionnalité dont la moitié cliente existe, et les déclarer est ce qui empêchera
+l'oubli le jour où un écran les appellera.
+
+Les deux politiques de compartiment, elles, vivent **hors du dépôt** — le schéma
+`storage` n'existe pas dans la doublure des tests. Ce qui est dans le dépôt, c'est
+l'**instruction** qui les crée : `MISE-EN-SERVICE.md` §1.4, que
+`scripts/check-rls-guards.test.mjs` lit pour vérifier que le compartiment protégé
+est celui que le code interroge, que rien n'y autorise l'écriture, et que la
+politique ouverte au rôle anonyme est **bornée** par la table `documents` — sans
+quoi la seule clé publique, extraite d'un APK, ouvrirait aussi les documents du
+bureau.
+
+Une écriture de statut n'apparaît pas dans ce tableau, et c'est normal : elle ne
+passe par aucune requête de `src/services/`. Le bureau décide d'une adhésion par
+`decider_adhesion()`, une fonction `security definer` qui vérifie `is_admin()`
+dans son corps — voir plus bas.
 
 La ligne du bucket est la seule de ce tableau qui ne soit pas une table. Les
 documents sont rangés dans un compartiment **privé**, et l'application n'en
@@ -244,13 +281,35 @@ auth.uid()))`, avec un `with check` qui reprenait la condition pour qu'on ne
   étiquette » ; le bureau garde de quoi corriger un libellé depuis le tableau de
   bord, où la clé `service_role` ne passe par aucune politique.
 
+**Un statut se change par une fonction, jamais par une politique.** C'est la
+suite directe du constat précédent. `profiles` n'ayant aucune politique
+d'écriture, le bureau ne pouvait accepter une adhésion que depuis l'éditeur SQL,
+avec sa parenthèse `disable trigger` — un geste de développeur pour une décision
+d'association, et le parent restait en attente sans que rien ne le dise.
+
+Rouvrir une politique `for update` aurait réglé le symptôme en élargissant la
+capacité bien au-delà du besoin : elle aurait porté sur **toutes** les colonnes
+de la ligne, pour tout administrateur, et le déclencheur `prevent_role_change`
+serait devenu la seule barrière entre un client modifié et un changement de rôle.
+`decider_adhesion(p_id, p_statut)` fait exactement ce qui est demandé — un
+statut, sur une ligne, par un administrateur — et rien de plus : elle est
+`security definer`, vérifie `is_admin()` dans son corps, et ne connaît pas la
+colonne `role`. Promouvoir un administrateur reste le geste manuel de
+`MISE-EN-SERVICE.md`.
+
+Le banc l'éprouve **dans les deux sens** : un membre ordinaire reçoit « Réservé
+au bureau. », le bureau obtient le changement, et le changement est relu en base
+— l'absence d'erreur ne suffit pas, une fonction qui ne toucherait aucune ligne
+serait silencieuse. Le refus d'un identifiant inconnu est mesuré de même.
+
 **Le détecteur, pour la troisième fois de la même famille.** Les trois constats
 ci-dessus sont sortis de la même question — _cette politique autorise-t-elle
 quelque chose que le code n'exerce pas ?_ — et le troisième ne se voyait qu'en
 confrontant la liste des politiques à celle des requêtes. Un test de forme le fait
 désormais à chaque exécution : il relève les appels de `src/services/`, exige que
-chacun ait une politique, exige que l'application ne fasse **aucune**
-modification, et **nomme une par une** les politiques qu'aucun écran n'exerce.
+chacun ait une politique, exige que toute modification de ligne soit déclarée
+**nommément avec sa raison** — il n'y en a qu'une, `push_tokens.update` —, et
+**nomme une par une** les politiques qu'aucun écran n'exerce.
 Toute politique non exercée doit donc être un chemin d'administration
 (`is_admin()`), ou figurer dans une liste d'exceptions écrites à la main — dont
 `profiles.insert`, le filet de sécurité de `handle_new_user`. Ajouter une

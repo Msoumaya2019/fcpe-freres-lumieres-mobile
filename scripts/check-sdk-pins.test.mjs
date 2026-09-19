@@ -34,9 +34,22 @@
  *
  *  CE QUE LA LISTE CONTIENT, ET CE QU'ELLE NE CONTIENT PAS
  *  ------------------------------------------------------
- *  Seize paquets installés ici sont contraints par le SDK. Les treize autres —
+ *  Dix-sept paquets installés ici sont contraints par le SDK. Tous les autres —
  *  Supabase, React Navigation, ESLint, Prettier, `libpg-query` — ne le sont pas
  *  et restent libres : ils se mettent à jour par Dependabot, normalement.
+ *
+ *  UN RELEVÉ NE VOIT PAS CE QU'ON INSTALLE APRÈS LUI
+ *  -------------------------------------------------
+ *  La liste est un relevé : elle nomme ce que le SDK épingle au moment où elle a
+ *  été écrite. Elle ne peut donc pas voir un paquet de l'écosystème ajouté plus
+ *  tard — c'est arrivé avec `expo-notifications`, installé par
+ *  `npx expo install`, qui pose bien la version que le SDK admet mais que rien
+ *  ne retenait ensuite : Dependabot aurait proposé la mineure suivante, et rien
+ *  n'aurait protesté.
+ *
+ *  Un second contrôle ferme ce chemin : tout paquet installé dont le nom vient
+ *  de l'écosystème doit être **soit** au relevé, **soit** dans `HORS_RELEVE`
+ *  avec sa raison. Une troisième possibilité n'existe pas.
  *
  *  PORTÉE — CE QUE CE BANC NE COUVRE PAS
  *  -------------------------------------
@@ -74,6 +87,7 @@ const CONTRAINTES_DU_SDK = {
   'expo-constants': '~57.0.19',
   'expo-font': '~57.0.4',
   'expo-linking': '~57.0.10',
+  'expo-notifications': '~57.0.20',
   'expo-secure-store': '~57.0.4',
   'expo-splash-screen': '~57.0.9',
   'expo-status-bar': '~57.0.1',
@@ -187,10 +201,63 @@ test('le relevé porte sur le SDK réellement installé', () => {
   );
 });
 
+/**
+ * Les paquets de l'écosystème installés ici que le SDK **ne contraint pas**.
+ *
+ * POURQUOI CETTE SECONDE LISTE EXISTE
+ * -----------------------------------
+ * `CONTRAINTES_DU_SDK` est un relevé : il nomme ce que le SDK épingle au moment
+ * où il a été écrit, et il ne peut donc pas voir un paquet de l'écosystème
+ * installé **plus tard**. C'est arrivé avec `expo-notifications` : `npx expo
+ * install` a bien posé la version que le SDK admet, mais rien ne la retenait
+ * ensuite, et Dependabot aurait pu proposer la mineure suivante sans que rien ne
+ * proteste.
+ *
+ * Le contrôle qui suit ferme ce chemin : tout paquet installé dont le nom vient
+ * de l'écosystème est **soit** au relevé, **soit** ici, avec sa raison. Une
+ * troisième possibilité n'existe pas — c'est la même fermeture que pour
+ * `SURFACE_PUBLIQUE` dans `check-rls-guards`.
+ */
+const HORS_RELEVE = new Map([
+  [
+    'react-native-url-polyfill',
+    'polyfill JavaScript pur, sans module natif : il ne figure donc pas au relevé ' +
+      'des modules natifs du SDK, et sa version se choisit dans ce dépôt',
+  ],
+]);
+
 test('chaque paquet contraint est déclaré dans une plage que le SDK admet', () => {
   for (const [nom, duSdk] of Object.entries(CONTRAINTES_DU_SDK)) {
     assert.equal(ecart(declare(nom), duSdk), null, `\`${nom}\` : ${ecart(declare(nom), duSdk)}`);
   }
+});
+
+test('aucun paquet de l’écosystème n’est installé sans être tranché', () => {
+  // Le préfixe est celui de l'écosystème Expo : `expo`, `expo-*`, `@expo/*`,
+  // `react-native`, `react-native-*`, `@react-native/*`, `@types/react`. Un
+  // paquet qui entre par ce filtre et n'est ni au relevé ni dans `HORS_RELEVE`
+  // est un paquet dont personne n'a décidé la politique de montée.
+  const ecosysteme =
+    /^(expo$|expo-|@expo\/|react-native$|react-native-|@react-native\/|@types\/react$)/;
+  const installes = Object.keys({ ...paquet.dependencies, ...paquet.devDependencies });
+
+  assert.deepEqual(
+    installes.filter(
+      (nom) => ecosysteme.test(nom) && !(nom in CONTRAINTES_DU_SDK) && !HORS_RELEVE.has(nom),
+    ),
+    [],
+    'ces paquets viennent de l’écosystème Expo sans figurer au relevé du SDK : ' +
+      'soit les y ajouter avec la plage que donne l’API, soit les inscrire dans ' +
+      '`HORS_RELEVE` avec leur raison',
+  );
+
+  // Et la seconde liste ne décrit pas des paquets absents : une exclusion qui
+  // survit au paquet qu'elle décrit est une justification périmée.
+  assert.deepEqual(
+    [...HORS_RELEVE.keys()].filter((nom) => !installes.includes(nom)),
+    [],
+    '`HORS_RELEVE` nomme un paquet qui n’est pas installé',
+  );
 });
 
 test('Dependabot ignore exactement les paquets que le SDK contraint', () => {

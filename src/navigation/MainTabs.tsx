@@ -4,7 +4,7 @@ import { useCallback, type ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useAuth, useCurrentUserId } from '@/auth/AuthProvider';
+import { useAuth } from '@/auth/AuthProvider';
 import { TabBar, WeakPasswordNotice, type TabIcons } from '@/components';
 import { useNonLus } from '@/hooks/useNonLus';
 import { PlusStack } from '@/navigation/PlusStack';
@@ -34,12 +34,26 @@ const TAB_ICONS: TabIcons = {
   Plus: { active: 'ellipsis-horizontal', inactive: 'ellipsis-horizontal-outline' },
 };
 
+/**
+ * Le bouton de déconnexion, **seulement** pour un porteur de session.
+ *
+ * Il n'a plus sa place dans l'en-tête de l'accueil, désormais que l'accueil est
+ * public : un parent qui n'a jamais ouvert de compte y verrait un bouton de
+ * déconnexion, c'est-à-dire l'annonce d'un compte qu'il n'a pas. La déconnexion
+ * se demande donc depuis « Plus », où elle est à sa place — et le bouton de
+ * l'en-tête ne subsiste que pour un adhérent connecté, à qui il fait gagner un
+ * détour.
+ */
 function SignOutButton() {
-  const { signOut } = useAuth();
+  const { status, signOut } = useAuth();
 
   const handlePress = useCallback(() => {
     void signOut();
   }, [signOut]);
+
+  if (status !== 'signedIn') {
+    return null;
+  }
 
   return (
     <Pressable
@@ -165,8 +179,11 @@ function WeakPasswordGate({
  * autres le gardent, et c'est ce qui évite d'avoir à déplacer l'encoche.
  */
 export function MainTabs() {
-  const userId = useCurrentUserId();
-  const nonLus = useNonLus(userId);
+  const { session } = useAuth();
+  // La chaîne vide est l'état d'un parent **sans compte** : `useNonLus` le
+  // reconnaît et ne compte rien, sans quoi l'onglet « Plus » porterait une
+  // pastille calculée pour personne.
+  const nonLus = useNonLus(session?.user.id ?? '');
 
   return (
     <Tab.Navigator

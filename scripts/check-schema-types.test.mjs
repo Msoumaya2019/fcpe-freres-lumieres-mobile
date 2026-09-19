@@ -205,6 +205,50 @@ function colonnesAjouteesSql() {
   return ajouts;
 }
 
+/**
+ * Les colonnes **modifiées** après coup, par `alter table … alter column`.
+ *
+ * POURQUOI CE SECOND RELEVÉ, APRÈS CELUI DES AJOUTS
+ * -------------------------------------------------
+ * Une colonne peut changer de nature sans être ajoutée : la troisième migration
+ * rend `sondage_votes.voter_id` facultatif, parce qu'un parent sans compte doit
+ * pouvoir voter. Le relevé des ajouts ne voyait pas cette ligne, et le banc
+ * accusait alors le miroir d'écrire « string | null » pour une colonne « not
+ * null en base » — un défaut du relevé, exactement comme pour `add column`
+ * avant lui.
+ *
+ * Les quatre formes sont reconnues : `set not null`, `drop not null`,
+ * `set default` et `drop default`. Une forme non reconnue ne rendrait pas le
+ * banc faux, elle le rendrait **muet** — la colonne garderait la valeur du
+ * `create table`, et le contrôle passerait sur un schéma qui a changé.
+ *
+ * La valeur du défaut est **consommée sans être lue** : `set default
+ * 'en_attente'` doit être reconnu comme un défaut, sans quoi la colonne restait
+ * « obligatoire sans défaut » et le miroir, qui dit juste, était accusé.
+ */
+function colonnesModifieesSql() {
+  const sql = sqlDesMigrations();
+  const motif =
+    /alter table (?:only )?public\.(\w+)\s+alter column (\w+) (set|drop) (not null|default)(?:\s+[^;]*)?;/g;
+  const modifications = new Map();
+
+  let modification;
+  while ((modification = motif.exec(sql)) !== null) {
+    const [, table, nom, action, quoi] = modification;
+    const liste = modifications.get(table) ?? [];
+
+    liste.push(
+      quoi === 'not null'
+        ? { nom, nonNulle: action === 'set' }
+        : { nom, parDefaut: action === 'set' },
+    );
+
+    modifications.set(table, liste);
+  }
+
+  return modifications;
+}
+
 function tablesSql() {
   const sql = sqlDesMigrations();
   const motif = /create table (?:if not exists )?public\.(\w+)\s*\(([\s\S]*?)\n\);/g;
@@ -228,6 +272,33 @@ function tablesSql() {
     for (const colonne of colonnes) {
       if (!existantes.some((candidate) => candidate.nom === colonne.nom)) {
         existantes.push(colonne);
+      }
+    }
+  }
+
+  //  Puis les colonnes **modifiées** : leur caractère obligatoire est réécrit
+  //  sur place. Sans ce passage, `voter_id` resterait « not null » à jamais,
+  //  parce que c'est ce que dit le `create table` — et le miroir, qui dit juste,
+  //  serait accusé.
+  for (const [nom, modifications] of colonnesModifieesSql()) {
+    const existantes = tables.get(nom);
+
+    if (existantes === undefined) {
+      continue;
+    }
+
+    for (const modification of modifications) {
+      const colonne = existantes.find((candidate) => candidate.nom === modification.nom);
+
+      if (colonne === undefined) {
+        continue;
+      }
+
+      if (modification.nonNulle !== undefined) {
+        colonne.nonNulle = modification.nonNulle;
+      }
+      if (modification.parDefaut !== undefined) {
+        colonne.parDefaut = modification.parDefaut;
       }
     }
   }

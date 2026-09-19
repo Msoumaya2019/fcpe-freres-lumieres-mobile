@@ -61,7 +61,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -72,23 +72,53 @@ const racine = fileURLToPath(new URL('../', import.meta.url));
 
 /** D'où vient le relevé ci-dessous, et quand il a été fait. */
 const SOURCE_DU_RELEVE =
-  'libpg-query 18.1.4, arbre des deux fichiers SQL du projet, relevé le 2026-09-18';
+  'libpg-query 18.1.4, arbre des trois migrations et du jeu d’essai, relevé le 2026-09-19';
 
-/** Le SQL du projet, celui dont l'arbre est interrogé. */
-const FICHIERS_SQL = ['supabase/migrations/20260916120000_init.sql', 'supabase/seed.sql'];
+/**
+ * Le SQL du projet, celui dont l'arbre est interrogé : **toutes** les migrations,
+ * puis le jeu d'essai.
+ *
+ * La version précédente nommait un seul fichier de migration, et l'en-tête
+ * parlait pourtant de « l'arbre des deux fichiers SQL du projet ». À la
+ * troisième migration, la phrase est devenue fausse : `FunctionParameter` et
+ * `UpdateStmt` y sont produits, et le relevé les aurait ignorés — un type lu par
+ * un banc et absent du relevé se serait retrouvé classé « lu sans être produit »,
+ * c'est-à-dire décrit comme une branche morte alors qu'il vit.
+ *
+ * Le dossier est donc lu, plutôt que nommé. Ce n'est pas un trou de couverture :
+ * la liste **close** des migrations vit dans `check-migration-rejouable`, qui
+ * tombe si l'une manque ou si l'une est ajoutée sans être déclarée. Ici, on ne
+ * décide pas de ce qui doit exister — on relève ce que l'analyseur produit sur
+ * ce qui existe.
+ */
+const FICHIERS_SQL = [
+  ...readdirSync(join(racine, 'supabase', 'migrations'))
+    .filter((nom) => nom.endsWith('.sql'))
+    .sort()
+    .map((nom) => `supabase/migrations/${nom}`),
+  'supabase/seed.sql',
+];
 
 /** Les bancs qui lisent l'arbre : ce sont eux qui deviendraient aveugles. */
 const BANCS_QUI_LISENT_L_ARBRE = ['scripts/check-schema-refs.test.mjs', 'scripts/check-sql.mjs'];
 
 /**
- * Les types de nœud que le SQL du projet **produit**, relevés le 2026-09-18.
+ * Les types de nœud que le SQL du projet **produit**, relevés le 2026-09-19.
  *
- * Trente-sept, et non trente-six : `CreateEnumStmt` n'apparaît pas dans l'arbre
- * du fichier. PostgreSQL n'a pas de `create type if not exists`, donc la seule
- * forme rejouable est le bloc `do`, dont le corps est une **chaîne** pour
- * l'analyseur. Le type n'existe que dans l'arbre obtenu en **réanalysant** ce
- * corps — ce que fait `check-schema-refs`, et ce que ce banc refait ici, de son
- * côté, pour ne pas hériter d'un défaut de cet extracteur-là.
+ * Quarante-et-un, et le relevé est plus large que le précédent parce que son
+ * **sujet** l'est : il portait sur une seule migration sur trois. Les quatre
+ * types que la troisième a fait apparaître sont `FunctionParameter` et
+ * `TypeName` — la fonction `resultats_sondage` déclare un paramètre —,
+ * `NullTest` et `UpdateStmt` — la colonne `voter_id` est rendue nullable, et
+ * l'index partiel teste `is not null`.
+ *
+ * `CreateEnumStmt` mérite d'être noté, parce qu'il ne se lit pas comme les
+ * autres : il n'apparaît pas dans l'arbre du fichier. PostgreSQL n'a pas de
+ * `create type if not exists`, donc la seule forme rejouable est le bloc `do`,
+ * dont le corps est une **chaîne** pour l'analyseur. Le type n'existe que dans
+ * l'arbre obtenu en **réanalysant** ce corps — ce que fait `check-schema-refs`,
+ * et ce que ce banc refait ici, de son côté, pour ne pas hériter d'un défaut de
+ * cet extracteur-là.
  */
 const TYPES_PRODUITS = [
   'A_Const',
@@ -111,11 +141,13 @@ const TYPES_PRODUITS = [
   'DoStmt',
   'DropStmt',
   'FuncCall',
+  'FunctionParameter',
   'GrantStmt',
   'IndexElem',
   'IndexStmt',
   'InsertStmt',
   'List',
+  'NullTest',
   'ObjectWithArgs',
   'RangeSubselect',
   'RangeVar',
@@ -127,6 +159,8 @@ const TYPES_PRODUITS = [
   'String',
   'SubLink',
   'TypeCast',
+  'TypeName',
+  'UpdateStmt',
   'VariableSetStmt',
 ];
 
@@ -156,6 +190,7 @@ const TYPES_LUS = [
   'CreateTrigStmt',
   'DefElem',
   'DoStmt',
+  'FunctionParameter',
   'IndexElem',
   'InsertStmt',
   'JoinExpr',

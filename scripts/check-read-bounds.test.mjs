@@ -146,18 +146,30 @@ test('l’extraction lit bien les services, et rien d’autre', () => {
   //
   // L'ancre est la **liste des tables lues**, pas un décompte : une lecture
   // ajoutée sur une nouvelle table doit obliger à venir relire ce fichier.
+  //
+  // Trois tables ont quitté cette liste avec l'accès public, et pour trois
+  // raisons différentes.
+  //
+  // `cantine_reservations` d'abord : l'écran de cantine ne propose plus de
+  // réserver. La fonction n'était reliée à aucun service de restauration
+  // scolaire — un parent croyait avoir réservé un repas, et rien n'était
+  // commandé. La table et ses lignes restent en base.
+  //
+  // `messages` ensuite : le contact passe par une conversation, dont la lecture
+  // est une fonction et non une chaîne `.select`.
+  //
+  // `sondage_votes` enfin, qui reste **écrit** sans être lu : un vote d'appareil
+  // n'a plus d'auteur à qui le relire (`voter_id` est nul), le choix est gardé
+  // par le téléphone et le décompte vient de `resultats_sondage()`.
   assert.deepEqual(tablesLues(), [
     'agenda_events',
     'annonces',
     'cantine_menus',
-    'cantine_reservations',
     'discussion_messages',
     'documents',
-    'messages',
     'profiles',
     'signalements',
     'sondage_choices',
-    'sondage_votes',
     'sondages',
   ]);
 
@@ -194,27 +206,33 @@ test('la règle reconnaît les deux bornes, et refuse ce qui n’en a pas', () =
   assert.ok(!estLectureUnique(sansBorne), 'un eq() seul ne fait pas une lecture unique');
 });
 
-test('la lecture des réservations est bornée par les menus affichés', () => {
+test('la lecture des réponses d’un sondage est bornée par les sondages affichés', () => {
   // L'invariant nommé, et non seulement la règle générale : c'est ce défaut-là
   // qui a motivé ce fichier, et sa forme exacte mérite d'être tenue.
-  const source = sansCommentaires(lireFichier(join(RACINE, 'src', 'services', 'cantine.ts')));
-  const lecture = chainesDeLecture(source).find((l) => l.table === 'cantine_reservations');
+  //
+  // Il portait sur `cantine_reservations`, dont la lecture a disparu avec le
+  // bouton « Réserver » — la fonction n'était reliée à aucun service de
+  // restauration, et un parent croyait avoir réservé un repas. Le témoin est
+  // donc **déplacé**, pas supprimé : `sondage_choices` est aujourd'hui la seule
+  // lecture bornée par une liste affichée, et sans ce test la règle ne serait
+  // plus exercée sur aucun cas réel — le contrôle général, lui, ne mesure que
+  // la présence d'une borne, jamais qu'elle vient de ce qui est à l'écran.
+  const source = sansCommentaires(lireFichier(join(RACINE, 'src', 'services', 'sondages.ts')));
+  const lecture = chainesDeLecture(source).find((l) => l.table === 'sondage_choices');
 
-  assert.ok(lecture, 'la lecture de cantine_reservations a disparu de src/services/cantine.ts');
+  assert.ok(lecture, 'la lecture de sondage_choices a disparu de src/services/sondages.ts');
   assert.match(
     lecture.chaine,
-    /\.in\(\s*'menu_id'/,
-    'la lecture doit être bornée par les identifiants des menus affichés',
+    /\.in\(\s*'sondage_id'/,
+    'la lecture doit être bornée par les identifiants des sondages affichés',
   );
 
-  const ecran = sansCommentaires(lireFichier(join(RACINE, 'src', 'screens', 'CantineScreen.tsx')));
-
-  // Seule l'existence du **second argument** est exigée, jamais son écriture :
-  // extraire le `map` dans une variable est une remise en forme légitime, et un
-  // banc qui la refuserait mesurerait l'écriture au lieu de l'invariant.
+  // La borne vient des sondages **affichés**. L'exiger sur la variable, et non
+  // sur l'écriture exacte de l'appel, laisse la remise en forme libre — c'est
+  // l'invariant qui est mesuré, pas la façon de l'écrire.
   assert.match(
-    ecran,
-    /fetchReservedMenuIds\(\s*userId\s*,\s*[^)\s]/,
-    'l’écran doit passer les menus affichés à la lecture des réservations',
+    source,
+    /const ids = sondages\.map\(/,
+    'la borne doit venir des sondages affichés, et non d’une liste écrite sur place',
   );
 });

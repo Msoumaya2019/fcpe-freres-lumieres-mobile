@@ -9,21 +9,36 @@ import { ConnexionScreen } from '@/screens/ConnexionScreen';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 /**
- * Pile racine : l'écran de connexion et l'application connectée s'excluent.
+ * Pile racine : l'application, et l'écran de connexion **par-dessus**.
  *
- * Les deux écrans sont déclarés conditionnellement plutôt qu'empilés puis
- * remplacés par un `navigate()`. Ce choix a une conséquence directe et
- * souhaitable : à la déconnexion, l'écran de connexion est **monté**, donc
- * vierge, et non réaffiché avec le mot de passe précédemment saisi. Il rend
- * aussi impossible le retour arrière vers un écran authentifié, que le bouton
- * « précédent » d'Android permettrait sinon d'atteindre.
+ * POURQUOI L'APPLICATION N'EST PLUS DERRIÈRE UNE CONNEXION
+ * --------------------------------------------------------
+ * La version précédente rendait l'un **ou** l'autre : sans session, il n'y avait
+ * que l'écran de connexion. C'était juste tant que tout était réservé aux
+ * adhérents, et c'est devenu faux le jour où les familles ont dû consulter les
+ * menus, l'agenda et les actualités **sans compte**. Un parent qui installe
+ * l'application n'a aucune raison de créer un compte pour lire un menu de
+ * cantine, et le lui demander était le premier obstacle de l'application.
  *
- * La récupération de mot de passe est le troisième cas, et le moins évident :
- * un lien reçu par e-mail ouvre une **vraie session**, donc `status` vaut
- * `signedIn` alors que l'adhérent n'a pas encore choisi son mot de passe. Le
- * laisser entrer dans l'application à ce moment-là viderait le lien de son sens
- * — le mot de passe resterait inchangé, et le lien encore valable. C'est
- * pourquoi `passwordRecovery` l'emporte sur `status`.
+ * La pile est donc : l'application en premier, la connexion empilée par-dessus
+ * quand on la demande. Le parent qui n'ouvre jamais la connexion ne la voit
+ * jamais.
+ *
+ * LES TROIS CAS, ET POURQUOI ILS SONT DISTINGUÉS
+ * ----------------------------------------------
+ *   - `loading` : la session stockée se lit. Rien d'autre ne peut être décidé
+ *     avant, sans quoi l'application afficherait un état puis le corrigerait.
+ *   - `passwordRecovery` : un lien reçu par e-mail a ouvert une **vraie
+ *     session**, mais l'adhérent n'a pas encore choisi son mot de passe. La
+ *     connexion prend alors toute la place — l'application reste démontée —,
+ *     parce qu'entrer maintenant viderait le lien de son sens.
+ *   - le cas ordinaire : l'application, et la connexion disponible.
+ *
+ * La récupération porte un **nom de route distinct** (`Recuperation`) et non
+ * `Connexion` avec une condition. Deux noms, deux ensembles de routes, donc deux
+ * montages distincts : quand la récupération se termine, la pile ne peut pas
+ * conserver l'écran de récupération par-dessus l'application, ce qu'un même nom
+ * aurait laissé faire.
  */
 export function RootNavigator() {
   const { status, passwordRecovery } = useAuth();
@@ -32,14 +47,12 @@ export function RootNavigator() {
     return <LoadingView message="Chargement de votre session…" />;
   }
 
-  const entersApplication = status === 'signedIn' && !passwordRecovery;
-
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {entersApplication ? (
-        <Stack.Screen name="Application" component={MainTabs} />
+      {passwordRecovery ? (
+        <Stack.Screen name="Recuperation" component={ConnexionScreen} />
       ) : (
-        <Stack.Screen name="Connexion" component={ConnexionScreen} />
+        <Stack.Screen name="Application" component={MainTabs} />
       )}
     </Stack.Navigator>
   );

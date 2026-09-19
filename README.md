@@ -196,15 +196,17 @@ npx supabase link --project-ref <référence>
 npx supabase db push
 ```
 
-Douze tables, toutes protégées par Row Level Security, avec un déclencheur qui
+Quinze tables, toutes protégées par Row Level Security, avec un déclencheur qui
 crée le profil à l'inscription :
 
 - **les six de la première migration** — `profiles`, `annonces`, `cantine_menus`,
   `cantine_reservations`, `signalements`, `discussion_messages` ;
 - **les six de la seconde**, `20260919120000_rubriques.sql` — `agenda_events`,
-  `documents`, `sondages`, `sondage_choices`, `sondage_votes` et `messages`.
+  `documents`, `sondages`, `sondage_choices`, `sondage_votes` et `messages` ;
+- **les trois de la troisième**, `20260920120000_acces_public.sql` —
+  `conversations`, `conversation_messages` et `push_tokens`.
 
-Les deux migrations sont **rejouables** : chacune peut être appliquée en entier
+Les trois migrations sont **rejouables** : chacune peut être appliquée en entier
 sur une base qui la porte déjà, sans échouer à mi-parcours. C'est ce que vérifie
 `scripts/check-migration-rejouable.test.mjs`.
 
@@ -215,13 +217,20 @@ stockage** qui porte les fichiers. C'est volontaire : le schéma `storage` est g
 par Supabase et absent de l'essai Postgres local, si bien qu'une instruction le
 concernant rendrait la migration non rejouable hors du tableau de bord.
 
-Créez donc un compartiment **privé** nommé `documents`, puis posez ses politiques
-dans le tableau de bord (Storage > Policies). L'application n'ouvre jamais un
-fichier directement : elle demande une **adresse signée** valable une heure, par
-`documentUrl`. Aucun test du dépôt ne peut lire ces politiques — elles vivent dans
-le tableau de bord —, et c'est pourquoi `scripts/check-rls-guards.test.mjs` exige
-que tout appel à Storage soit déclaré nommément, avec sa raison, plutôt que de
-laisser croire qu'il est couvert par les politiques du schéma.
+Créez donc un compartiment **privé** nommé `documents`, puis collez-y **deux**
+politiques de lecture : une pour les documents marqués `familles`, ouverte au rôle
+anonyme, une pour tout le reste, réservée aux porteurs d'un jeton. L'application
+n'ouvre jamais un fichier directement : elle demande une **adresse signée** valable
+une heure, par `documentUrl`.
+
+Le tableau de bord n'est pas lisible depuis le dépôt — mais l'**instruction** qui
+le configure, elle, y est : `MISE-EN-SERVICE.md` §1.4 porte les deux politiques, et
+`scripts/check-rls-guards.test.mjs` **lit ce guide** pour vérifier que le
+compartiment protégé est celui que le code interroge, que rien n'y autorise
+l'écriture, et que la politique ouverte au rôle anonyme est bien bornée par la
+table `documents`. C'est la même distinction que pour la longueur minimale du mot
+de passe : ce qui se règle dans le tableau de bord échappe au test, ce qui
+s'installe par une instruction n'y échappe pas.
 
 Après la première inscription, promouvez votre compte :
 
@@ -517,8 +526,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   │   ├── types.ts               paramètres de routes typés
 │   │   ├── RootNavigator.tsx      connexion ⇄ application
 │   │   ├── MainTabs.tsx           les cinq onglets, et la barre écrite à la main
-│   │   └── PlusStack.tsx          les sept écrans rangés sous « Plus »
-│   ├── screens/                   les treize écrans, et celui des clés absentes
+│   │   └── PlusStack.tsx          les neuf routes rangées sous « Plus »
+│   ├── screens/                   les quatorze écrans, et celui des clés absentes
 │   ├── services/                  accès aux données, une fonction par requête
 │   ├── components/                bibliothèque d'interface
 │   ├── hooks/useAsyncData.ts      chargement avec états explicites
@@ -569,7 +578,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-audit-scope.test.mjs  ce qui est livré, et ce qui est seulement construit
 │   ├── check-parser-surface.test.mjs  les types de nœud que l'analyseur produit, et ce que les bancs en lisent
 │   ├── check-non-lus.test.mjs     un chiffre affiché trois fois, et sa seule source
-│   └── check-safe-area.test.mjs   l'encoche, selon que l'écran a un en-tête ou non
+│   ├── check-safe-area.test.mjs   l'encoche, selon que l'écran a un en-tête ou non
+│   └── check-acces-public.test.mjs  la surface publiée, jouée sous le rôle anonyme
 └── .github/workflows/             CI, build EAS, IPA non signé
 ```
 
@@ -1894,16 +1904,33 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   vérifier que la liste **reste** avec le bandeau, puis couper le réseau au
   premier chargement et vérifier que l'écran d'erreur et son bouton
   « Réessayer » apparaissent bien.
-- **Inscription ouverte.** Un compte créé dans l'application est immédiatement
-  actif. Ce n'est pas seulement un manque fonctionnel : c'est **la règle d'accès
-  effective** de l'application. Les politiques écrivent `to authenticated`, ce
-  qui équivaut ici à « quiconque a installé l'application » — donc n'importe qui
-  peut lire le salon des membres et la liste des noms affichés, et s'inscrire
-  sous le nom d'un adhérent existant. Pour n'accepter que les adhérents validés,
-  ajoutez une colonne `validated_at`, testez-la dans les politiques RLS, et
-  vérifiez qu'elle ne rend pas le déclencheur `handle_new_user` inopérant. Voir
-  `SECURITY.md`, sections « Ce que `authenticated` signifie » et « Le nom
-  affiché est une étiquette, pas une identité vérifiée ».
+- **L'inscription reste ouverte, mais elle n'ouvre plus rien.** N'importe qui
+  peut créer un compte : la création de compte est le seul chemin d'accès à
+  l'espace membre, et le bureau ne peut pas la fermer sans se fermer lui-même.
+  Ce qui a changé avec `20260920120000_acces_public.sql`, c'est ce qu'un compte
+  **neuf** obtient : son `status` vaut `en_attente`, et `is_member()` — qui exige
+  `accepte` — garde le salon, les conversations et les votes. Un compte en
+  attente reçoit une **liste vide**, pas une erreur. Ce qui reste ouvert à tout
+  porteur d'un jeton est ce qui est public : annonces, menus, agenda, sondages,
+  documents destinés aux familles, et la liste des noms affichés et des rôles
+  (`profiles`, jamais les adresses e-mail). Un inconnu peut donc encore
+  s'inscrire sous le nom affiché d'un adhérent et **demander** son adhésion —
+  c'est au bureau de refuser, depuis l'écran « Adhésions ». Pour supprimer ce
+  dernier pas, il faudrait fermer l'inscription et créer les comptes depuis le
+  tableau de bord. Voir `SECURITY.md`, sections « Ce que `authenticated`
+  signifie » et « Le nom affiché est une étiquette, pas une identité vérifiée ».
+- **Les notifications push ne partent pas.** La table `push_tokens` et
+  `enregistrerAppareil` (le dépôt du jeton, avec sa politique d'insertion et sa
+  politique de modification) existent et sont éprouvés, mais **aucun écran ne les
+  appelle** : demander l'autorisation pour un envoi qui n'existe pas serait une
+  promesse sans destinataire. Deux raisons, et elles tiennent au mode de
+  distribution : l'IPA est **non signé**, donc sans compte Apple Developer il n'y
+  a pas d'APNs ; et Android passe par FCM, dont la clé doit être déposée dans
+  Expo. Il manque par ailleurs l'émetteur — une fonction serveur qui lirait
+  `push_tokens` et appellerait le service d'Expo, avec la clé de service côté
+  serveur. Rien de tout cela n'est dans l'application, et rien n'y est
+  nécessaire : le jour où l'émetteur existe, il n'y a que
+  `enregistrerAppareil` à appeler depuis un écran.
 - **Un seul salon de discussion.** Passer à des fils thématiques demande une
   colonne `thread_id` et un écran de détail.
 - **Pas de mode sombre.** `userInterfaceStyle` est fixé à `light`, avec
@@ -1911,7 +1938,7 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Trente-deux fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Trente-trois fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
@@ -1922,7 +1949,7 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   `check-migration-rejouable`, `check-migration-applicable`,
   `check-rls-comportement`, `check-sdk-pins`, `check-scripts-executables`,
   `check-markdown-listes`, `check-audit-scope`, `check-parser-surface`,
-  `check-non-lus` et `check-safe-area`
+  `check-non-lus`, `check-safe-area` et `check-acces-public`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui

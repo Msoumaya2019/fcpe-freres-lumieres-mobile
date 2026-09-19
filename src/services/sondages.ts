@@ -1,8 +1,34 @@
-/** Sondages — les questions posées aux adhérents, et leur vote. */
+/**
+ * Sondages — les questions posées aux familles, et le vote d'un appareil.
+ *
+ * CE QUI A CHANGÉ, ET POURQUOI
+ * ----------------------------
+ * Un sondage demandait un compte : le vote se rattachait à `auth.uid()`, et la
+ * contrainte d'unicité `(sondage_id, voter_id)` garantissait « un vote par
+ * adhérent ». C'était solide, et cela excluait la majorité des familles — celles
+ * qui consultent l'application sans jamais créer de compte.
+ *
+ * Le vote se rattache donc désormais à une **clé d'appareil**, tirée par la base
+ * (`cle_appareil()`) à la première demande et gardée dans les préférences
+ * locales. La contrainte d'unicité porte sur `(sondage_id, voter_key)`.
+ *
+ * CE QUE CETTE LIMITE VAUT, ET CE QU'ELLE NE VAUT PAS
+ * ---------------------------------------------------
+ * Elle rend un second vote difficile **sur le même appareil**. Elle ne garantit
+ * pas « une personne, un vote » : réinstaller l'application donne une nouvelle
+ * clé, et aucun identifiant d'appareil ne peut empêcher cela. C'est écrit ici
+ * pour ne pas être pris pour une garantie, et l'écran le dit en une phrase.
+ */
 
+import {
+  CLE_APPAREIL,
+  cleVoteSondage,
+  ecrirePreference,
+  lirePreference,
+} from '@/config/preferences';
 import { requireSupabase } from '@/config/supabase';
 import { toAppError } from '@/errors';
-import type { Sondage, SondageChoice, SondageWithChoices } from '@/types/models';
+import type { Sondage, SondageChoice, SondageResultat, SondageWithChoices } from '@/types/models';
 
 const MAX_SONDAGES = 50;
 
@@ -10,7 +36,6 @@ const MAX_SONDAGES = 50;
 export interface NewVote {
   readonly sondageId: string;
   readonly choiceId: string;
-  readonly voterId: string;
 }
 
 function estOuvert(sondage: Sondage, maintenant: number): boolean {
@@ -22,25 +47,48 @@ function estOuvert(sondage: Sondage, maintenant: number): boolean {
 }
 
 /**
- * Sondages, leurs réponses, et le vote de l'adhérent.
+ * La clé de cet appareil, tirée par la base la première fois.
  *
- * TROIS REQUÊTES, ET POURQUOI PAS UNE
- * -----------------------------------
- * Le typage des relations imbriquées de PostgREST dépend des métadonnées de
- * clés étrangères que la plateforme renvoie ; une erreur à cet endroit ne se
- * voit qu'à l'exécution. Trois requêtes simples restent vérifiables à la
- * compilation, et c'est le choix déjà fait pour les auteurs de messages.
- *
- * La troisième — les votes de l'adhérent — est filtrée sur `voter_id` côté
- * client. La politique RLS le fait déjà ; le filtre évite de transférer pour
- * rien les votes des autres, qui ne franchiraient de toute façon pas la
- * politique. Une requête qui ne dépend que d'une des deux protections casse le
- * jour où l'autre évolue.
+ * Le tirage est fait par PostgreSQL, et non par le téléphone : React Native
+ * n'expose aucun générateur aléatoire cryptographique, et `Math.random()` n'en
+ * est pas un. Le résultat est gardé ici, et n'est **pas** un secret — il ne
+ * donne accès à rien.
  */
-export async function fetchSondages(
-  voterId: string,
-  limit: number = MAX_SONDAGES,
-): Promise<SondageWithChoices[]> {
+export async function cleAppareil(): Promise<string> {
+  const connue = await lirePreference(CLE_APPAREIL);
+
+  if (connue !== null) {
+    return connue;
+  }
+
+  const { data, error } = await requireSupabase().rpc('cle_appareil');
+
+  if (error !== null) {
+    throw toAppError(error);
+  }
+
+  await ecrirePreference(CLE_APPAREIL, data);
+
+  return data;
+}
+
+/**
+ * Sondages, leurs réponses, et le vote de cet appareil.
+ *
+ * DEUX REQUÊTES, ET UNE LECTURE LOCALE
+ * ------------------------------------
+ * Les sondages et leurs réponses se lisent en base — les politiques publiques
+ * les ouvrent en lecture. Le vote, lui, ne se relit plus en base : la politique
+ * qui l'autorisait comparait `voter_id` à `auth.uid()`, deux valeurs nulles pour
+ * un vote d'appareil. Il est donc relu dans les préférences locales, où
+ * `castVote` l'a écrit.
+ *
+ * Ce découpage a un défaut, et il est assumé : une application réinstallée perd
+ * la trace et repropose de voter. Le serveur, lui, refusera le doublon **si la
+ * clé d'appareil a survécu** — ce qui n'est pas le cas d'une réinstallation. La
+ * limite est donc celle de la clé, pas celle de la relecture.
+ */
+export async function fetchSondages(limit: number = MAX_SONDAGES): Promise<SondageWithChoices[]> {
   const client = requireSupabase();
 
   const { data: sondages, error: erreurSondages } = await client
@@ -69,16 +117,6 @@ export async function fetchSondages(
     throw toAppError(erreurChoix);
   }
 
-  const { data: votes, error: erreurVotes } = await client
-    .from('sondage_votes')
-    .select('*')
-    .eq('voter_id', voterId)
-    .in('sondage_id', ids);
-
-  if (erreurVotes !== null) {
-    throw toAppError(erreurVotes);
-  }
-
   const choixParSondage = new Map<string, SondageChoice[]>();
   for (const ligne of choix) {
     const liste = choixParSondage.get(ligne.sondage_id) ?? [];
@@ -86,10 +124,10 @@ export async function fetchSondages(
     choixParSondage.set(ligne.sondage_id, liste);
   }
 
-  const monVote = new Map<string, string>();
-  for (const vote of votes) {
-    monVote.set(vote.sondage_id, vote.choice_id);
-  }
+  const mesVotes = await Promise.all(
+    sondages.map(async (sondage) => [sondage.id, await lirePreference(cleVoteSondage(sondage.id))]),
+  );
+  const monVote = new Map(mesVotes.map(([id, choixId]) => [id as string, choixId]));
 
   return sondages.map((sondage) => ({
     ...sondage,
@@ -110,23 +148,46 @@ export function sondageOuvert(
  * Déposer un vote.
  *
  * La politique d'insertion de `sondage_votes` revérifie, en base, que le vote
- * appartient à l'appelant **et** que le sondage est ouvert. Ce contrôle-ci ne
- * la remplace pas : il évite un aller-retour voué à l'échec, et il permet à
- * l'écran de dire pourquoi. Un client modifié se heurte de toute façon à la
- * politique.
+ * vient d'un appareil **et** que le sondage est ouvert. Ce contrôle-ci ne la
+ * remplace pas : il évite un aller-retour voué à l'échec.
  *
- * Un second vote sur le même sondage échoue sur la contrainte d'unicité
- * `(sondage_id, voter_id)`, ce qui est le comportement voulu : l'écran ne
- * propose le vote que sur un sondage où `myChoiceId` est nul.
+ * La trace locale est écrite **après** le succès du serveur, et jamais avant :
+ * l'écrire d'abord afficherait « votre réponse est enregistrée » pour un vote
+ * que la base aurait refusé. Et si l'écriture locale échouait à son tour, le
+ * pire qui arriverait est que l'écran repropose de voter — le serveur, lui,
+ * refuserait le doublon.
  */
 export async function castVote(input: NewVote): Promise<void> {
+  const voterKey = await cleAppareil();
+
   const { error } = await requireSupabase().from('sondage_votes').insert({
     sondage_id: input.sondageId,
     choice_id: input.choiceId,
-    voter_id: input.voterId,
+    voter_key: voterKey,
   });
 
   if (error !== null) {
     throw toAppError(error);
   }
+
+  await ecrirePreference(cleVoteSondage(input.sondageId), input.choiceId);
+}
+
+/**
+ * Le décompte des voix d'un sondage.
+ *
+ * Il passe par `resultats_sondage()`, et non par la table : la fonction rend des
+ * compteurs par réponse, jamais une ligne de vote. Le nom d'un votant ne sort
+ * donc pas de la base — ce qui est la condition pour afficher un résultat.
+ */
+export async function fetchResultats(sondageId: string): Promise<SondageResultat[]> {
+  const { data, error } = await requireSupabase().rpc('resultats_sondage', {
+    p_sondage_id: sondageId,
+  });
+
+  if (error !== null) {
+    throw toAppError(error);
+  }
+
+  return data;
 }

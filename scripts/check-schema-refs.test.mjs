@@ -85,7 +85,7 @@ const RACINE = fileURLToPath(new URL('../', import.meta.url));
 const MIGRATIONS = join(RACINE, 'supabase/migrations');
 const SEED = join(RACINE, 'supabase/seed.sql');
 
-/** Les douze tables que le schéma doit déclarer. */
+/** Les quinze tables que le schéma doit déclarer — un plancher, pas une liste close. */
 const TABLES_ATTENDUES = [
   'profiles',
   'annonces',
@@ -99,6 +99,9 @@ const TABLES_ATTENDUES = [
   'sondage_choices',
   'sondage_votes',
   'messages',
+  'conversations',
+  'conversation_messages',
+  'push_tokens',
 ];
 
 /**
@@ -129,8 +132,38 @@ const GENRES_EXTERNES_AUTORISES = new Set(['déclencheur']);
 /** Le schéma dont ce dépôt est responsable. */
 const SCHEMA_PUBLIC = 'public';
 
-/** Les formes d'`alter table` que ce contrôle sait suivre. */
-const FORMES_SUIVIES = new Set(['AT_EnableRowSecurity', 'AT_AddColumn']);
+/**
+ * Les formes d'`alter table` que ce contrôle sait suivre.
+ *
+ * La carte des colonnes ne porte qu'une chose : des **noms**. Une forme est donc
+ * suivie si elle peut changer cette liste, ou si elle a été examinée et qu'elle
+ * ne le peut pas. Les cinq formes de la troisième migration tombent dans le
+ * second cas, et chacune pour une raison qui se dit :
+ *
+ * - `AT_AddColumn` et `AT_EnableRowSecurity` — suivies : l'une ajoute un nom,
+ *   l'autre conditionne la lecture ;
+ * - `AT_ColumnDefault`, `AT_SetNotNull`, `AT_DropNotNull` — elles changent ce
+ *   qu'une colonne **accepte**, jamais son nom. `check-schema-types` les lit, et
+ *   c'est lui qui doit les lire : il compare des colonnes à un miroir TypeScript,
+ *   là où ce fichier-ci résout des références ;
+ * - `AT_AddConstraint`, `AT_DropConstraint` — une contrainte nommée, posée ou
+ *   retirée. Elle ne renomme rien. Les contraintes de clé étrangère sont lues
+ *   par ailleurs, sur la définition des colonnes.
+ *
+ * Les nommer n'est pas une formalité : c'est ce qui oblige à se demander, à
+ * chaque migration, si la carte reste vraie. Une forme **renommante** —
+ * `AT_RenameColumn`, `AT_DropColumn` — ne figure pas ici, et c'est voulu : elle
+ * doit faire tomber le test.
+ */
+const FORMES_SUIVIES = new Set([
+  'AT_EnableRowSecurity',
+  'AT_AddColumn',
+  'AT_ColumnDefault',
+  'AT_SetNotNull',
+  'AT_DropNotNull',
+  'AT_AddConstraint',
+  'AT_DropConstraint',
+]);
 
 /** Le dernier segment d'un nom qualifié (`public.member_role` → `member_role`). */
 function dernierSegment(noeuds) {
@@ -366,6 +399,14 @@ async function lireLeSchema() {
           langue: options.get('language')?.String?.sval ?? null,
           fixeSearchPath: options.get('set')?.VariableSetStmt?.name === 'search_path',
           corps: corpsDe(fonction),
+          // Les noms des paramètres. Ils sont **résolubles** dans le corps au
+          // même titre qu'une colonne, et le résolveur ne les connaissait pas :
+          // `p_sondage_id` a été signalé comme « aucune table de la portée ne
+          // porte… » alors que le corps était juste. Un nom sans paramètre
+          // nommé n'entre pas dans la liste — il ne se cite pas.
+          parametres: (fonction.parameters ?? [])
+            .map((parametre) => parametre.FunctionParameter?.name)
+            .filter((nom) => typeof nom === 'string'),
         });
         continue;
       }
@@ -773,7 +814,7 @@ function liensTriggerFonction() {
   }));
 }
 
-test('le schéma se lit, et les douze tables attendues y sont', () => {
+test('le schéma se lit, et les quinze tables attendues y sont', () => {
   // Mesure de la prémisse : un contrôle qui lit un arbre peut être vert en
   // n'ayant rien lu. Les planchers portent sur ce que le schéma contient
   // aujourd'hui, et sur les noms — pas sur des nombres, qui bougeraient à chaque
@@ -986,7 +1027,15 @@ test('le corps des fonctions écrites en SQL se résout', async () => {
   for (const fonction of enSql) {
     assert.ok(fonction.corps !== null, `corps illisible : ${fonction.nom}`);
     const arbre = await parse(fonction.corps);
-    lireRequete(arbre, [], fonction.nom, rapport);
+    // Les paramètres forment la portée **la plus externe** : un corps les voit
+    // partout, y compris dans une sous-requête. Les passer comme une table
+    // ordinaire aurait été faux — ils n'ont ni colonnes ni alias —, mais ils se
+    // résolvent exactement de la même façon : par leur nom.
+    const porteeDesParametres =
+      fonction.parametres.length === 0
+        ? []
+        : [{ nom: fonction.court, colonnes: fonction.parametres }];
+    lireRequete(arbre, [porteeDesParametres], fonction.nom, rapport);
   }
 
   assert.ok(

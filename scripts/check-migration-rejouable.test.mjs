@@ -104,7 +104,44 @@ const DOSSIER = fileURLToPath(new URL('../supabase/migrations', import.meta.url)
  * Liste **fermée** : voir l'en-tête. Une migration ajoutée doit être déclarée
  * ici — c'est le moment de vérifier qu'elle est, elle aussi, rejouable.
  */
-const MIGRATIONS_ATTENDUES = ['20260916120000_init.sql', '20260919120000_rubriques.sql'];
+const MIGRATIONS_ATTENDUES = [
+  '20260916120000_init.sql',
+  '20260919120000_rubriques.sql',
+  '20260920120000_acces_public.sql',
+];
+
+/**
+ * Les politiques que la troisième migration **retire**, et qui n'ont donc pas
+ * de `create policy` en face.
+ *
+ * Une garde sans instruction est le plus souvent une politique supprimée dont la
+ * garde est restée — c'est ce que le test du surnombre surveille. Ici, les
+ * retraits sont délibérés, et ils appartiennent à trois familles :
+ *
+ *   - la discussion passe d'« tout porteur d'un jeton » à « membre accepté », et
+ *     laisser l'ancienne politique en place l'aurait **élargie** au lieu de la
+ *     restreindre, puisque deux politiques de même opération pour un même rôle
+ *     se cumulent ;
+ *   - le vote de sondage n'a plus d'auteur à relire : `voter_id` est nul pour un
+ *     vote d'appareil, donc la politique de lecture comparait deux valeurs
+ *     nulles et n'autorisait rien de ce qu'elle annonçait ;
+ *   - `messages` n'est plus écrit par l'application : l'ancien contact exigeait
+ *     un compte, ce que l'accès public corrige. Les deux politiques partent,
+ *     **aucune ligne n'est supprimée** — les messages déjà reçus restent en
+ *     base, effacés en cascade avec le compte de leur auteur, comme
+ *     `SECURITY.md` le promet.
+ *
+ * Les nommer vaut mieux que de tolérer des gardes en surnombre : la liste dit
+ * lesquelles, et le test vérifie que chacune est bien retirée et bien absente
+ * des créations.
+ */
+const RETRAITS = [
+  'discussion_messages_insert_own',
+  'discussion_messages_select_authenticated',
+  'messages_insert_own',
+  'messages_select_own_or_admin',
+  'sondage_votes_select_own_or_admin',
+];
 
 /** Les noms des fichiers de migration, dans un ordre stable. */
 function nomsDeMigrations() {
@@ -282,9 +319,44 @@ test('les gardes ne sont pas en surnombre — une garde par instruction', () => 
   // signe d'une politique supprimée dont la garde est restée, ou d'un
   // déplacement qui a laissé la paire en désordre. Les deux se lisent mal à
   // l'œil, et aucun des tests précédents ne les voit.
-  const politiques = compter(/^\s*create policy /);
-  const gardes = compter(/^\s*drop policy if exists /);
-  assert.equal(gardes, politiques, `${gardes} gardes de politique pour ${politiques} politiques`);
+  //
+  // Le contrôle est passé du **compte** à la **liste** le jour où une migration
+  // a légitimement retiré deux politiques : un compte égal aurait continué de
+  // passer, mais un compte inégal ne dit pas lesquelles — et c'est justement ce
+  // qu'on veut relire. Les deux retraits sont donc nommés dans `RETRAITS`, et
+  // n'importe quel autre écart fait tomber le test.
+  const occurrences = (motif) => {
+    const compte = new Map();
+
+    for (const ligne of lignes()) {
+      const nom = motif.exec(ligne)?.[1];
+
+      if (nom !== undefined) {
+        compte.set(nom, (compte.get(nom) ?? 0) + 1);
+      }
+    }
+
+    return compte;
+  };
+
+  const creees = occurrences(/^\s*create policy (\w+)$/);
+  const gardees = occurrences(/^\s*drop policy if exists (\w+) on /);
+
+  // Un nom est en surnombre quand il est retiré plus souvent qu'il n'est créé.
+  // C'est ce qui distingue les deux retraits délibérés de la troisième migration
+  // — qui visent des politiques **créées par la première** — d'une garde restée
+  // derrière une politique supprimée.
+  const sansInstruction = [...gardees.keys()]
+    .filter((nom) => (gardees.get(nom) ?? 0) > (creees.get(nom) ?? 0))
+    .sort();
+
+  assert.notEqual(gardees.size, 0, 'aucune garde de politique : le contrôle serait vide');
+  assert.deepEqual(
+    sansInstruction,
+    [...RETRAITS].sort(),
+    'ces gardes ne précèdent aucune création : une politique supprimée dont la ' +
+      'garde est restée, ou un retrait délibéré qu’il faut inscrire dans `RETRAITS`',
+  );
 
   const declencheurs = compter(/^\s*create trigger /);
   const gardesDeclencheur = compter(/^\s*drop trigger if exists /);

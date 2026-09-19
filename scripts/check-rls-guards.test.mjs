@@ -297,8 +297,37 @@ function tablesSousRls(sql) {
   );
 }
 
-function tablesSansAnon(sql) {
-  return [...sql.matchAll(/revoke all on public\.(\w+)\s+from anon;/g)].map(([, table]) => table);
+/**
+ * Tables dont le rôle anonyme est privé **par un `revoke`**.
+ *
+ * La première version exigeait `from anon;` — un rôle unique. La troisième
+ * migration écrit `from anon, authenticated;`, et le motif ne l'aurait pas vue :
+ * les deux tables de conversation auraient été comptées comme ouvertes. Le rôle
+ * est donc cherché **dans la liste** plutôt que dans une forme figée.
+ */
+function tablesRevoqueesAnon(sql) {
+  return [...sql.matchAll(/revoke all on public\.(\w+)\s+from ([^;]+);/g)]
+    .filter(([, , roles]) => roles.split(',').some((role) => role.trim() === 'anon'))
+    .map(([, table]) => table);
+}
+
+/**
+ * Tables auxquelles le rôle anonyme a un privilège, quelle qu'en soit la
+ * nature. C'est la **surface publiée**, et elle doit tenir dans une liste close :
+ * c'est la seule formulation qui reste vraie quand une table cesse d'être
+ * publique, ou le devient.
+ *
+ * `grant execute on function public.is_member()` ne compte pas : le motif exige
+ * `on public.<table>`, là où la fonction écrit `on function public.<nom>`.
+ */
+function tablesOuvertesAnon(sql) {
+  return [
+    ...new Set(
+      [...sql.matchAll(/grant [\w, ]+ on public\.(\w+)\s+to ([^;]+);/g)]
+        .filter(([, , roles]) => roles.split(',').some((role) => role.trim() === 'anon'))
+        .map(([, table]) => table),
+    ),
+  ];
 }
 
 function tablesAvecPolitique(sql) {
@@ -307,8 +336,87 @@ function tablesAvecPolitique(sql) {
 
 const DECLAREES = tablesDeclarees(SQL);
 const SOUS_RLS = tablesSousRls(SQL);
-const SANS_ANON = tablesSansAnon(SQL);
+const REVOQUEES_ANON = tablesRevoqueesAnon(SQL);
+const OUVERTES_ANON = tablesOuvertesAnon(SQL);
 const AVEC_POLITIQUE = tablesAvecPolitique(SQL);
+
+/**
+ * La surface publiée : les tables que le rôle anonyme atteint, et **pourquoi**.
+ *
+ * Jusqu'à la troisième migration, l'invariant tenait en une phrase — « aucune
+ * table n'est ouverte à `anon` » — et la phrase était vraie. Elle a cessé de
+ * l'être le jour où l'application a ouvert la consultation aux familles sans
+ * compte : huit tables sont désormais atteignables par la clé publique.
+ *
+ * La remplacer par « aucune » aurait été faux ; la supprimer aurait laissé
+ * `anon` s'étendre sans que rien ne le dise. La règle se dit donc en deux
+ * temps : **toute table atteignable par `anon` est inscrite ici, et aucune
+ * autre ne l'est.** Une table publiée par mégarde tombe, et une table publiée
+ * volontairement demande qu'on écrive sa raison.
+ */
+const SURFACE_PUBLIQUE = new Map([
+  [
+    'annonces',
+    'les actualités de l’école, publiées par le bureau pour être lues ; la ' +
+      'politique `annonces_select_public` les ouvre en lecture seule',
+  ],
+  [
+    'cantine_menus',
+    'les menus de la semaine, affichés par `cantine_menus_select_public` — c’est ' +
+      'la première chose qu’un parent vient chercher',
+  ],
+  ['agenda_events', 'les dates de l’agenda scolaire, ouvertes par `agenda_events_select_public`'],
+  [
+    'sondages',
+    'la question d’un sondage, posée à toutes les familles par `sondages_select_public`',
+  ],
+  [
+    'sondage_choices',
+    'les réponses proposées par `sondage_choices_select_public` : sans elles, la ' +
+      'question serait illisible',
+  ],
+  [
+    'documents',
+    "la politique `documents_select_public` filtre sur `visibility = 'familles'` : " +
+      'les pièces du bureau restent hors de portée, y compris si leur adresse est connue',
+  ],
+  [
+    'sondage_votes',
+    'insertion **seule** : un appareil dépose son vote, personne ne lit les votes ' +
+      'par cette voie — le dépouillement passe par `resultats_sondage()`',
+  ],
+  [
+    'push_tokens',
+    'un appareil sans compte enregistre son jeton ; la lecture, elle, est réservée ' +
+      'au bureau par `push_tokens_select_admin`',
+  ],
+]);
+
+/**
+ * Tables délibérément sans aucune politique.
+ *
+ * Une table sous RLS sans politique n'est pas ouverte : elle est **fermée à tout
+ * le monde**, application comprise. C'est exactement ce qu'on veut des deux
+ * tables de conversation — seul le code qui compare le secret doit les
+ * atteindre, et il passe par des fonctions `security definer`.
+ *
+ * L'exception est donc nommée, et elle est vérifiée dans les deux sens : une
+ * table inscrite ici qui gagnerait une politique ferait tomber le test, sans
+ * quoi la liste deviendrait un commentaire.
+ */
+const SANS_POLITIQUE = new Map([
+  [
+    'conversations',
+    'aucun rôle ne doit lire un fil directement : la seule clé d’accès est le ' +
+      'secret, comparé dans `lire_conversation()`. Une politique « lecture par le ' +
+      'bureau » aurait ouvert la table à toute requête portant un jeton',
+  ],
+  [
+    'conversation_messages',
+    'même raison que `conversations` : les messages d’un fil ne se lisent qu’à ' +
+      'travers la fonction qui a comparé le secret, jamais par un `select` direct',
+  ],
+]);
 
 /**
  * Les trois endroits qui documentent la promotion du premier administrateur.
@@ -321,7 +429,7 @@ const PROMOTION = [
   'README.md',
 ];
 
-test('les migrations déclarent les douze tables attendues', () => {
+test('les migrations déclarent les quinze tables attendues', () => {
   // Contrôle : sans lui, une analyse qui ne lirait rien ferait passer les trois
   // invariants suivants sur zéro table. La liste est **close** : une table
   // ajoutée sans être déclarée ici fait tomber le test, et l'ajouter est une
@@ -340,6 +448,9 @@ test('les migrations déclarent les douze tables attendues', () => {
     'sondage_choices',
     'sondage_votes',
     'messages',
+    'conversations',
+    'conversation_messages',
+    'push_tokens',
   ]);
 });
 
@@ -356,22 +467,60 @@ test('chaque table déclarée a RLS activée', () => {
   assert.deepEqual([...SOUS_RLS].sort(), [...DECLAREES].sort());
 });
 
-test('chaque table déclarée a au moins une politique', () => {
+test('chaque table déclarée a au moins une politique, ou dit pourquoi elle n’en a pas', () => {
   // RLS activée sans aucune politique ne ferme pas la table : elle la rend
   // inaccessible à tout le monde, application comprise, et l'écran reste vide
-  // sans message d'erreur.
+  // sans message d'erreur. C'est le défaut ordinaire — mais il est parfois
+  // **voulu**, et les deux tables de conversation en vivent : leur seul accès
+  // passe par une fonction qui a comparé un secret. La règle tolère donc
+  // l'absence, à condition qu'elle soit **nommée et motivée**.
   assert.deepEqual(
-    DECLAREES.filter((table) => !AVEC_POLITIQUE.includes(table)),
+    DECLAREES.filter((table) => !AVEC_POLITIQUE.includes(table) && !SANS_POLITIQUE.has(table)),
     [],
-    'une table sous RLS sans politique est inaccessible, application comprise',
+    'une table sous RLS sans politique est inaccessible, application comprise : ' +
+      'soit lui en donner une, soit l’inscrire dans SANS_POLITIQUE avec sa raison',
   );
+
+  // Et l'exception doit être vraie : une table inscrite là qui gagnerait une
+  // politique ne serait plus une exception, et la liste deviendrait un
+  // commentaire que personne ne relit.
+  for (const table of SANS_POLITIQUE.keys()) {
+    assert.ok(DECLAREES.includes(table), `SANS_POLITIQUE nomme « ${table} », qui n’existe pas`);
+    assert.ok(
+      !AVEC_POLITIQUE.includes(table),
+      `« ${table} » est inscrite dans SANS_POLITIQUE et porte pourtant une politique : ` +
+        'l’exception n’est plus vraie, il faut la retirer',
+    );
+  }
 });
 
-test('chaque table déclarée est fermée au rôle anonyme', () => {
+test('le rôle anonyme n’atteint que la surface publiée, et rien de plus', () => {
+  // L'invariant tenait, jusqu'à la troisième migration, en un mot : « aucune ».
+  // Il ne peut plus s'écrire ainsi, mais il ne peut pas non plus disparaître —
+  // c'est lui qui empêche `anon` de s'étendre sans qu'on s'en aperçoive. Il se
+  // dit donc en deux temps, et les deux moitiés sont nécessaires :
+  //
+  //   1. toute table atteignable par `anon` figure dans SURFACE_PUBLIQUE ;
+  //   2. toute table qui n'y figure pas lui est **refusée par un `revoke`**.
+  //
+  // La seconde moitié est ce qui distingue « pas encore publiée » de « publiée
+  // par mégarde » : sans elle, une table dont on aurait simplement oublié le
+  // `revoke` passerait, puisque `anon` n'a de toute façon aucun privilège par
+  // défaut en base locale — mais en a un sur un vrai projet Supabase, dont les
+  // privilèges par défaut du schéma `public` sont plus larges.
   assert.deepEqual(
-    DECLAREES.filter((table) => !SANS_ANON.includes(table)),
+    [...OUVERTES_ANON].sort(),
+    [...SURFACE_PUBLIQUE.keys()].sort(),
+    'une table atteignable par la clé publique sans être déclarée ici est une ' +
+      'publication qu’on n’a pas décidée ; une table déclarée ici et non accordée ' +
+      'rendrait la déclaration fausse',
+  );
+
+  assert.deepEqual(
+    DECLAREES.filter((table) => !SURFACE_PUBLIQUE.has(table) && !REVOQUEES_ANON.includes(table)),
     [],
-    'le rôle anon ne doit rien pouvoir, même en l’absence de politique à son intention',
+    'une table hors de la surface publiée doit être explicitement retirée au rôle ' +
+      'anonyme : `revoke all on public.<table> from anon`',
   );
 });
 
@@ -552,7 +701,7 @@ test('le découpage par blocs voit les douze tables déclarées', () => {
   );
 });
 
-test('l’analyse voit les quatorze clés étrangères du schéma', () => {
+test('l’analyse voit les quinze clés étrangères du schéma', () => {
   // Contrôle du contrôle, et il porte tout le reste de la famille : la fermeture
   // transitive ne vaut que par les arêtes qu'on lui donne. Une arête perdue
   // rétrécit la liste des tables effacées, et les tests suivants s'accorderaient
@@ -569,6 +718,7 @@ test('l’analyse voit les quatorze clés étrangères du schéma', () => {
       'annonces.author_id → profiles set null',
       'cantine_reservations.menu_id → cantine_menus cascade',
       'cantine_reservations.user_id → profiles cascade',
+      'conversation_messages.conversation_id → conversations cascade',
       'discussion_messages.author_id → profiles cascade',
       'documents.author_id → auth.users set null',
       'messages.author_id → auth.users cascade',
@@ -711,11 +861,37 @@ function lireFichier(cheminRelatif) {
  * (`insert` et `update`), et le compter pour une seule ferait passer le contrôle
  * à côté. S'il apparaît un jour, le test des méthodes échoue et oblige à
  * trancher plutôt qu'à deviner.
+ *
+ * `delete` n'y figure plus, et pour la même raison : c'est la table des
+ * réservations de cantine qui l'employait, et l'écran ne propose plus de
+ * réserver. Le retrait de cette ligne fait tomber le test le jour où un `delete`
+ * réapparaîtrait — c'est exactement ce qu'on veut, puisqu'une suppression est la
+ * seule opération qui **détruit** une donnée, et qu'elle mérite d'être décidée.
  */
 const METHODES = new Map([
   ['select', 'select'],
   ['insert', 'insert'],
-  ['delete', 'delete'],
+  ['update', 'update'],
+]);
+
+/**
+ * Les seules tables que l'application **modifie**, et la raison de chacune.
+ *
+ * Jusqu'à l'enregistrement des notifications, cette liste était vide : le code
+ * n'écrivait que des lignes nouvelles. Un appareil déjà connu doit pourtant
+ * rafraîchir sa date, sinon il serait purgé alors qu'il est toujours installé.
+ *
+ * La liste est close, et c'est tout son intérêt : ajouter une modification
+ * ailleurs demande de l'écrire ici, donc de la décider. Une modification est
+ * toujours plus large qu'une insertion — elle peut viser une ligne qu'on n'a pas
+ * créée — et c'est ce qui justifie qu'elle ne passe pas inaperçue.
+ */
+const TABLES_MODIFIEES = new Map([
+  [
+    'push_tokens',
+    'l’appareil rafraîchit `last_seen_at` de la ligne dont il connaît déjà le ' +
+      'jeton ; sans quoi une purge par date finirait par retirer un appareil actif',
+  ],
 ]);
 
 /**
@@ -762,13 +938,41 @@ function appelsDeLApplication() {
   return { requetes, stockages };
 }
 
-/** Politiques écrites : clé « table.operation » → nom, rôle et corps. */
+/**
+ * Politiques écrites : clé « table.operation » → nom, rôle et corps.
+ *
+ * LES RETRAITS SONT APPLIQUÉS, DANS L'ORDRE DU FICHIER
+ * ---------------------------------------------------
+ * Une migration peut retirer une politique qu'une précédente avait créée :
+ * c'est ainsi que `messages` perd ses deux politiques, et que `sondage_votes`
+ * perd la sienne. Sans soustraction, le banc répondrait sur des politiques
+ * **qui n'existent plus** — il réclamait une raison pour `messages.select`,
+ * retirée par la troisième migration.
+ *
+ * L'ordre est nécessaire, et pas seulement la liste : plusieurs politiques sont
+ * retirées **puis recréées sous le même nom** dans le même fichier
+ * (`push_tokens_insert_device`, `sondage_votes_insert_public`). Une liste de
+ * retraits lue globalement effacerait la politique vivante. Un `drop` n'enlève
+ * donc que ce qui le précède.
+ */
 function politiquesEcrites(sql) {
   const politiques = new Map();
-  const motif = /create policy (\w+)\s+on public\.(\w+) for (\w+)\s+to (\w+)([\s\S]*?);/g;
+  const instruction =
+    /(create|drop) policy (?:if exists )?(\w+)\s+on public\.(\w+)(?:\s+for (\w+)\s+to (\w+)([\s\S]*?))?;/g;
 
-  for (const [, nom, table, operation, role, corps] of sql.matchAll(motif)) {
-    politiques.set(`${table}.${operation}`, { nom, role, corps });
+  for (const [, verbe, nom, table, operation, role, corps] of sql.matchAll(instruction)) {
+    if (verbe === 'create') {
+      if (operation !== undefined) {
+        politiques.set(`${table}.${operation}`, { nom, role, corps });
+      }
+      continue;
+    }
+
+    for (const [cle, politique] of [...politiques]) {
+      if (politique.nom === nom) {
+        politiques.delete(cle);
+      }
+    }
   }
 
   return politiques;
@@ -783,8 +987,9 @@ const NON_EXERCEES = [...POLITIQUES.keys()].filter((cle) => !CLES_REQUETES.inclu
 
 /**
  * Politiques qu'aucun écran n'exerce et qui ne sont pas des chemins
- * d'administration. Il n'en existe qu'une sur ce schéma, et elle porte sa raison
- * ici : c'est ce qui empêche d'en ajouter une sans y penser.
+ * d'administration. Chacune porte sa raison ici, et le test qui suit vérifie
+ * qu'aucune ne survit à l'arrivée du code qui l'exercerait : sans quoi la liste
+ * deviendrait un cimetière de justifications.
  */
 const ALLOWANCES = new Map([
   [
@@ -792,36 +997,55 @@ const ALLOWANCES = new Map([
     "filet de sécurité si `handle_new_user` n'a pas pu s'exécuter — le rôle y est " +
       'figé à « membre », donc on ne s’attribue pas de droits en s’insérant soi-même',
   ],
+  [
+    'cantine_reservations.insert',
+    'la politique reste, l’application ne l’exerce plus : l’écran de cantine ne ' +
+      'propose plus de réserver, parce que le bouton n’était relié à aucun service ' +
+      'de restauration scolaire et qu’un parent croyait avoir réservé un repas. ' +
+      'La borne `user_id = auth.uid()` interdit d’écrire au nom d’un autre, et la ' +
+      'table garde ses lignes — voir `src/services/cantine.ts`',
+  ],
 ]);
 
-test('l’analyse des requêtes trouve les dix-neuf appels attendus', () => {
+test('l’analyse des requêtes trouve les seize appels attendus', () => {
   // Contrôle, et invariant en même temps : le nombre est celui que SECURITY.md
   // annonce. Une expression régulière trop stricte qui ne trouverait rien ferait
   // passer les quatre tests suivants sur zéro cas.
   //
-  // Dix-neuf **appels** pour dix-huit clés distinctes : un même couple
-  // table/méthode est écrit deux fois. Le décompte porte sur les appels parce que
-  // c'est ce que l'analyse parcourt ; la liste, elle, porte sur les clés, parce
-  // qu'une politique se réclame par couple et non par appel.
-  assert.equal(REQUETES.length, 19);
+  // Seize **appels** pour quatorze clés distinctes : deux couples table/méthode
+  // sont écrits deux fois. Le décompte porte sur les appels parce que c'est ce
+  // que l'analyse parcourt ; la liste, elle, porte sur les clés, parce qu'une
+  // politique se réclame par couple et non par appel.
+  //
+  // Les deux appels excédentaires sont **tous les deux** `profiles.select`,
+  // écrit trois fois : le profil de l'appelant, les noms des auteurs d'une page,
+  // et la file des adhésions que le bureau décide. Aucun n'ajoute de clé, donc
+  // aucune politique nouvelle n'est réclamée — c'est la même politique qui sert
+  // les trois lectures. Mesuré, et non déduit : une première rédaction de ce
+  // commentaire attribuait le second doublon à `discussion_messages.select`, qui
+  // n'est écrit qu'une fois.
+  //
+  // Six clés sont **sorties** de cette liste avec l'accès public, et ce sont six
+  // retraits, pas six oublis : les trois de `cantine_reservations` venaient du
+  // bouton « Réserver », qui n'était relié à aucun service de restauration ;
+  // `messages.select` et `messages.insert` venaient de l'ancien contact, qui
+  // exigeait un compte ; `sondage_votes.select` relisait le vote par son auteur,
+  // or un vote d'appareil n'en a plus.
+  assert.equal(REQUETES.length, 16);
   assert.deepEqual(CLES_REQUETES, [
     'agenda_events.select',
     'annonces.select',
     'cantine_menus.select',
-    'cantine_reservations.delete',
-    'cantine_reservations.insert',
-    'cantine_reservations.select',
     'discussion_messages.insert',
     'discussion_messages.select',
     'documents.select',
-    'messages.insert',
-    'messages.select',
     'profiles.select',
+    'push_tokens.insert',
+    'push_tokens.update',
     'signalements.insert',
     'signalements.select',
     'sondage_choices.select',
     'sondage_votes.insert',
-    'sondage_votes.select',
     'sondages.select',
   ]);
 });
@@ -855,31 +1079,37 @@ test('tout appel à Storage est déclaré, avec sa raison', () => {
 });
 
 /**
- * La politique de compartiment telle que le **guide** la fait coller.
+ * Les politiques de compartiment telles que le **guide** les fait coller.
  *
- * Elle vit hors du dépôt — le schéma `storage` n'existe pas dans nos migrations —,
- * mais l'**instruction** qui la crée est dans le dépôt. C'est la même distinction
+ * Elles vivent hors du dépôt — le schéma `storage` n'existe pas dans nos migrations —,
+ * mais l'**instruction** qui les crée est dans le dépôt. C'est la même distinction
  * que pour la longueur minimale du mot de passe : le tableau de bord n'est pas
  * lisible, l'instruction qui le configure l'est. La raison ci-dessus affirmait
  * qu'« aucun test du dépôt ne peut la lire » : c'était une justification par une
  * propriété universelle, et elle était fausse du même défaut que celle du mot de
  * passe — la lecture est possible, il fallait la faire.
+ *
+ * Elles sont **deux** depuis que les familles lisent les documents sans compte :
+ * une pour le rôle anonyme, bornée par la table `documents`, une pour les porteurs
+ * d'un jeton. Le banc les lit donc **toutes**, et non la première venue : n'en lire
+ * qu'une aurait laissé passer la seconde, quelle qu'elle soit — y compris une
+ * politique qui ouvrirait le compartiment entier au rôle anonyme.
  */
-function compartimentDuGuide(guide) {
-  const politique =
-    /create policy (\w+)\s+on storage\.objects for (\w+)\s+to (\w+)\s+using \(bucket_id = '(\w+)'\)/.exec(
-      guide,
-    );
+function compartimentsDuGuide(guide) {
+  const politiques = [
+    ...guide.matchAll(
+      /create policy (\w+)\s+on storage\.objects for (\w+)\s+to (\w+)\s+using \(([\s\S]*?)\);/g,
+    ),
+  ].map(([, nom, operation, role, corps]) => ({ nom, operation, role, corps }));
 
   assert.notStrictEqual(
-    politique,
-    null,
+    politiques.length,
+    0,
     'le guide ne fait plus coller de politique de compartiment : l’écran Documents ' +
       'ne lirait plus rien, et rien ne le signalerait — un refus rend une liste vide',
   );
 
-  const [, nom, operation, role, bucket] = politique;
-  return { nom, operation, role, bucket };
+  return politiques;
 }
 
 test('le compartiment que le guide protège est celui que le code demande', () => {
@@ -888,29 +1118,47 @@ test('le compartiment que le guide protège est celui que le code demande', () =
   // ou si le code changeait de compartiment sans que le guide suive —, la lecture
   // serait refusée ; et un refus, ici, rend une **liste vide**, pas une erreur.
   // L'écran Documents afficherait « aucune donnée », sans rien dire de la cause.
-  const { operation, role, bucket } = compartimentDuGuide(lireFichier('MISE-EN-SERVICE.md'));
+  const politiques = compartimentsDuGuide(lireFichier('MISE-EN-SERVICE.md'));
   const demandes = [...new Set(STOCKAGES.map(({ bucket }) => bucket))];
+  const proteges = [
+    ...new Set(politiques.map(({ corps }) => /bucket_id = '(\w+)'/.exec(corps)?.[1] ?? null)),
+  ];
 
   assert.deepEqual(
+    proteges,
     demandes,
-    [bucket],
     `le code interroge ${JSON.stringify(demandes)} et le guide protège ` +
-      `${JSON.stringify(bucket)} : la lecture serait refusée sans le dire`,
+      `${JSON.stringify(proteges)} : la lecture serait refusée sans le dire`,
   );
 
-  assert.equal(
-    operation,
-    'select',
-    'la politique du guide n’autorise plus la lecture : l’écran Documents ne ' +
-      'recevrait aucune adresse signée',
+  assert.deepEqual(
+    [...new Set(politiques.map(({ operation }) => operation))],
+    ['select'],
+    'une politique du guide autorise autre chose que la lecture : aucun écran ' +
+      'n’écrit dans le compartiment, et une écriture ouverte au rôle anonyme ' +
+      'laisserait déposer n’importe quel fichier',
   );
 
-  assert.equal(
-    role,
-    'authenticated',
-    'la politique du guide n’est plus réservée aux utilisateurs connectés : elle ' +
-      'ouvrirait les documents à quiconque détient la clé publique, extraite d’un APK',
+  assert.ok(
+    politiques.some(({ role }) => role === 'authenticated'),
+    'plus aucune politique du guide ne couvre les utilisateurs connectés : le ' +
+      'bureau ne verrait plus ses propres documents',
   );
+
+  //  Le rôle anonyme n'obtient **pas** le compartiment : sa politique doit être
+  //  bornée par la table `documents`, comme l'est la politique de lecture de
+  //  cette table. Une politique `to anon using (bucket_id = 'documents')` — la
+  //  forme la plus simple à écrire, et la plus tentante — ouvrirait tous les
+  //  fichiers à quiconque détient la clé publique, extraite d'un APK.
+  for (const { nom, corps } of politiques.filter(({ role }) => role === 'anon')) {
+    assert.match(
+      corps,
+      /public\.documents/,
+      `la politique « ${nom} » ouvre le compartiment au rôle anonyme sans le borner ` +
+        'par la table `documents` : les documents du bureau seraient lisibles avec ' +
+        'la seule clé publique',
+    );
+  }
 });
 
 test('chaque exception déclarée dit pourquoi, et vers quoi se vérifier', () => {
@@ -928,6 +1176,9 @@ test('chaque exception déclarée dit pourquoi, et vers quoi se vérifier', () =
   for (const [liste, entrees] of [
     ['ALLOWANCES', ALLOWANCES],
     ['STOCKAGE_DOCUMENTE', STOCKAGE_DOCUMENTE],
+    ['SURFACE_PUBLIQUE', SURFACE_PUBLIQUE],
+    ['SANS_POLITIQUE', SANS_POLITIQUE],
+    ['TABLES_MODIFIEES', TABLES_MODIFIEES],
   ]) {
     for (const [cle, raison] of entrees) {
       assert.ok(
@@ -946,6 +1197,28 @@ test('chaque exception déclarée dit pourquoi, et vers quoi se vérifier', () =
   }
 });
 
+test('chaque allowance est encore inexercée', () => {
+  // Le contrôle qui empêche `ALLOWANCES` de devenir un cimetière. Une allowance
+  // dit : « cette politique existe, aucun écran ne l'exerce, voici pourquoi ».
+  // Le jour où un écran l'exerce, la seconde moitié de la phrase devient fausse
+  // — et rien ne le dirait : le test des politiques non exercées cesserait
+  // simplement de la citer, et la justification resterait, périmée, sous les
+  // yeux du prochain lecteur.
+  //
+  // C'est un défaut de la même famille que celui que le dépôt a déjà rencontré :
+  // une exception survit à la cause qu'elle décrivait. La seule façon de le
+  // tenir est de vérifier l'exception **par sa négation**.
+  const exercees = [...ALLOWANCES.keys()].filter((cle) => !NON_EXERCEES.includes(cle));
+
+  assert.deepEqual(
+    exercees,
+    [],
+    'ces politiques sont désormais exercées par `src/services/` : leur allowance ' +
+      'n’a plus d’objet, il faut la retirer d’ALLOWANCES plutôt que de la laisser ' +
+      'décrire une absence qui n’existe plus',
+  );
+});
+
 test('chaque requête de l’application est couverte par une politique', () => {
   // Le défaut que ce test surveille ne produit ni exception ni message : un
   // `select` refusé renvoie une liste vide, et l'écran affiche « aucune donnée »
@@ -960,10 +1233,11 @@ test('chaque requête de l’application est couverte par une politique', () => 
   );
 });
 
-test('l’application ne modifie aucune ligne', () => {
-  // Deux choses d'un coup : la phrase de SECURITY.md — « aucune modification » —
-  // et le refus d'une méthode non reconnue, qui serait comptée pour rien par
-  // l'analyse.
+test('l’application ne modifie que les tables qu’elle déclare modifier', () => {
+  // Deux choses d'un coup : le refus d'une méthode non reconnue, qui serait
+  // comptée pour rien par l'analyse — `upsert` exige `insert` **et** `update`, et
+  // le compter pour une seule ferait passer le contrôle à côté —, et la liste
+  // close des tables modifiées.
   const methodes = [...new Set(REQUETES.map(({ methode }) => methode))].sort();
 
   assert.deepEqual(
@@ -971,6 +1245,16 @@ test('l’application ne modifie aucune ligne', () => {
     [...METHODES.keys()].sort(),
     'une méthode hors de cette liste doit être tranchée : `upsert` exige `insert` ET ' +
       '`update`, et la compter pour une seule ferait passer le contrôle à côté',
+  );
+
+  assert.deepEqual(
+    [
+      ...new Set(REQUETES.filter(({ methode }) => methode === 'update').map(({ table }) => table)),
+    ].sort(),
+    [...TABLES_MODIFIEES.keys()].sort(),
+    'une modification touche une ligne qu’on n’a pas forcément créée : elle ne ' +
+      'doit pas passer inaperçue — soit la retirer, soit l’inscrire dans ' +
+      'TABLES_MODIFIEES avec sa raison',
   );
 });
 
@@ -990,6 +1274,9 @@ test('toute politique non exercée par l’application est nommée', () => {
       'cantine_menus.delete',
       'cantine_menus.insert',
       'cantine_menus.update',
+      'cantine_reservations.delete',
+      'cantine_reservations.insert',
+      'cantine_reservations.select',
       'discussion_messages.delete',
       'documents.delete',
       'documents.insert',
@@ -997,6 +1284,7 @@ test('toute politique non exercée par l’application est nommée', () => {
       'messages.delete',
       'messages.update',
       'profiles.insert',
+      'push_tokens.select',
       'signalements.update',
       'sondage_choices.delete',
       'sondage_choices.insert',

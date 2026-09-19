@@ -32,22 +32,24 @@ service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 
 ## Ce que vous faites, et ce que je fais ensuite
 
-| #   | Vous                                                                                    | Durée   | Moi, dès réception                                              |
-| --- | --------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------- |
-| 1   | Un projet Supabase, les deux fichiers SQL collés, le compartiment créé, l'URL et la clé | ~10 min | `.env.local`, variables EAS                                     |
-| 2   | Un compte Expo, et la connexion faite une fois                                          | ~5 min  | `eas init`, variables EAS, compilation de l'APK                 |
-| 3   | Un jeton Expo pour GitHub _(facultatif)_                                                | ~2 min  | le secret `EXPO_TOKEN`, qui réveille la compilation automatique |
-| 4   | Recopier les quatre identifiants SMTP                                                   | ~5 min  | ✅ les e-mails partent, jusqu'au clic sur le lien               |
-| 5   | Installer l'APK, ou signer l'IPA puis l'installer                                       | ~2 min  | les vérifications sur appareil réel                             |
-| 6   | Les quatre réglages du tableau de bord                                                  | ~5 min  | le contrôle des quatre valeurs                                  |
+| #   | Vous                                                                                         | Durée   | Moi, dès réception                                              |
+| --- | -------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------- |
+| 1   | Un projet Supabase, les **trois** fichiers SQL collés, le compartiment créé, l'URL et la clé | ~15 min | `.env.local`, variables EAS                                     |
+| 2   | Un compte Expo, et la connexion faite une fois                                               | ~5 min  | `eas init`, variables EAS, compilation de l'APK                 |
+| 3   | Un jeton Expo pour GitHub _(facultatif)_                                                     | ~2 min  | le secret `EXPO_TOKEN`, qui réveille la compilation automatique |
+| 4   | Recopier les quatre identifiants SMTP                                                        | ~5 min  | ✅ les e-mails partent, jusqu'au clic sur le lien               |
+| 5   | Installer l'APK, ou signer l'IPA puis l'installer                                            | ~2 min  | les vérifications sur appareil réel                             |
+| 6   | Les quatre réglages du tableau de bord                                                       | ~5 min  | le contrôle des quatre valeurs                                  |
 
 **Où en est la mise en service : la « liste à cocher », plus bas, fait foi.** À ce  
 jour, les étapes 2, 3 et 4 sont faites — les e-mails fonctionnent jusqu'au clic sur le  
-lien reçu. De l'**étape 1**, il reste **deux gestes** : le second fichier SQL (§1.3) et  
-le compartiment des documents (§1.4). Viennent ensuite, dans cet ordre : installer  
-l'application (§5), créer votre compte, **vous promouvoir administrateur** (§1.8 — une  
-commande à coller, qui ne peut pas être la mienne), puis les quatre réglages du tableau  
-de bord (§6).
+lien reçu. De l'**étape 1**, il reste **trois gestes** : les deux fichiers SQL qui  
+suivent le premier (§1.3) et le compartiment des documents avec ses deux politiques  
+(§1.4). Viennent ensuite, dans cet ordre : installer l'application (§5), créer votre  
+compte, **vous promouvoir administrateur** (§1.8 — une commande à coller, qui ne peut  
+pas être la mienne), **accepter votre propre adhésion** (§1.9 — sans elle, la  
+discussion vous répond une liste vide), puis les quatre réglages du tableau de bord  
+(§6).
 
 Les deux binaires, eux, sont à jour du code actuel : la page des versions nomme, pour  
 chacun, le commit dont il est né. Un binaire antérieur à la refonte vous montrerait  
@@ -55,16 +57,16 @@ l'ancienne application — c'est pourquoi cette page porte cette ligne.
 
 ---
 
-## Étape 1 — Supabase _(~10 min)_ — **presque faite : deux gestes restent** (§1.3, §1.4)
+## Étape 1 — Supabase _(~15 min)_ — **presque faite : trois gestes restent** (§1.3, §1.4)
 
 > **Faite, et vérifiée de l'extérieur le 18 septembre 2026** — pour les six tables de  
 > la première migration. Le projet que vous avez créé répond, et ces six tables  
 > **existent et refusent la clé publique** (`permission denied`). C'est exactement ce  
 > que la migration doit produire : une table qui existe et qui est fermée.
 >
-> **Restent à faire depuis ce guide : le deuxième fichier SQL (§1.3) et le  
-> compartiment des documents (§1.4).** Les étapes 2 et suivantes n'en dépendent pas :  
-> vous pouvez continuer sans attendre.
+> **Restent à faire depuis ce guide : les deux fichiers SQL suivants (§1.3) et le  
+> compartiment des documents avec ses deux politiques de lecture (§1.4).** Les étapes  
+> 2 et suivantes n'en dépendent pas : vous pouvez continuer sans attendre.
 
 Supabase, c'est la base de données et le service d'authentification. Le forfait  
 gratuit suffit.
@@ -105,11 +107,11 @@ gratuit suffit.
 > il est **irrécupérable**, et c'est le seul moyen de secours si un jour il faut  
 > accéder à la base directement.
 
-### 1.3 Créer les douze tables
+### 1.3 Créer les quinze tables
 
 Dans le menu de gauche, cliquez **SQL Editor**, puis **New query**.
 
-Vous allez coller **trois fichiers**, l'un après l'autre, dans cet ordre.
+Vous allez coller **quatre fichiers**, l'un après l'autre, dans cet ordre.
 
 **Premier collage** — ouvrez ce fichier du projet et copiez tout son contenu :
 
@@ -136,7 +138,21 @@ Ce qu'il ne fait pas : il ne réécrit pas la première migration, qui est **dé
 appliquée** sur votre base. C'est pour cela qu'il ajoute la colonne au lieu de
 modifier le fichier d'origine. Et le recoller ne crée pas de doublon.
 
-**Troisième collage** — même chose avec :
+**Troisième collage** — l'ouverture aux familles : les conversations avec le
+bureau, les sondages sans compte, les documents destinés aux familles :
+
+```
+supabase/migrations/20260920120000_acces_public.sql
+```
+
+Même geste, même message attendu. C'est le fichier qui fait fonctionner
+l'application pour un parent **qui n'a pas de compte**. Il ajoute trois tables
+(`conversations`, `conversation_messages`, `push_tokens`), une colonne à
+`documents` et une à `profiles`, puis il **remplace** plusieurs politiques de
+lecture. Il s'applique après les deux autres : collé en premier, il s'arrêterait
+sur une table inexistante.
+
+**Quatrième collage** — même chose avec :
 
 ```
 supabase/seed.sql
@@ -145,14 +161,14 @@ supabase/seed.sql
 **Attendu : `Success. No rows returned`** — un `insert` ne renvoie pas de lignes,  
 donc le message est le même. C'est normal.
 
-> **Les trois fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
+> **Les quatre fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
 > ce qu'il signale et relancez **le même fichier** : il ne créera pas de doublon, et  
 > il n'y a pas besoin de repartir de zéro.
 
-> **Le troisième est facultatif.** C'est un jeu d'essai : des annonces, des menus  
+> **Le dernier est facultatif.** C'est un jeu d'essai : des annonces, des menus  
 > et des messages fictifs, pour que l'application ne s'ouvre pas sur des écrans  
 > vides. Ne l'appliquez pas en production — les menus fictifs seraient pris pour  
-> de vrais menus. Il ne remplit que les tables du premier fichier.
+> de vrais menus. Il ne remplit que les tables des deux premiers fichiers.
 
 ### 1.4 Créer le compartiment des documents
 
@@ -170,27 +186,56 @@ Le compartiment se crée donc à la main, une fois.
    directement : elle demande une **adresse signée**, valable une heure. Un
    compartiment public rendrait tous les documents lisibles par quiconque
    possède l'adresse.
-4. Créez, puis ouvrez **Policies** sur ce compartiment et autorisez la lecture aux
-   utilisateurs connectés. Le plus sûr est de coller la politique dans l'éditeur
-   SQL, comme les deux fichiers ci-dessus — le tableau de bord la crée à
-   l'identique, mais par des cases à cocher qu'on peut mal remplir :
+4. Créez, puis ouvrez **Policies** sur ce compartiment, et collez-y **deux**
+   politiques de lecture dans l'éditeur SQL, comme les fichiers ci-dessus — le
+   tableau de bord les crée à l'identique, mais par des cases à cocher qu'on peut
+   mal remplir :
 
    ```sql
-   create policy storage_documents_select_authenticated
+   --  Les documents destinés aux familles : lisibles par un parent sans compte.
+   create policy storage_documents_select_familles
+   on storage.objects for select to anon
+   using (
+     bucket_id = 'documents'
+     and exists (
+       select 1 from public.documents d
+       where d.storage_path = storage.objects.name
+         and d.visibility = 'familles'
+     )
+   );
+
+   --  Tout le reste : réservé aux porteurs d'un jeton.
+   create policy storage_documents_select_bureau
    on storage.objects for select to authenticated
    using (bucket_id = 'documents');
    ```
 
-   Cette politique ne figure pas dans nos migrations : le schéma `storage`
+   **Les deux sont nécessaires, et pour deux raisons opposées.** Sans la
+   première, un parent sans compte voit la liste des documents et l'ouverture
+   échoue ; sans la seconde, l'adhérent connecté ne verrait plus les documents du
+   bureau.
+
+   Et la première **n'ouvre pas le compartiment** : elle exige que le fichier
+   demandé ait, dans la table `documents`, une ligne marquée `familles`. Un
+   document du bureau, ou un fichier déposé sans ligne correspondante, reste
+   refusé. C'est le même critère que celui de la table : `visibility`, une seule
+   fois écrit, lu aux deux endroits.
+
+   Un mot sur `storage.objects.name` : c'est le chemin du fichier **dans** le
+   compartiment, et c'est exactement ce que porte la colonne `storage_path`. C'est
+   cette égalité qui fait le lien entre le fichier et sa fiche.
+
+   Ces politiques ne figurent pas dans nos migrations : le schéma `storage`
    n'existe pas dans la doublure des tests, et une instruction le concernant
-   empêcherait les deux fichiers ci-dessus d'être rejouables. C'est pourquoi le
-   banc `check-rls-guards` exige que tout appel au stockage soit déclaré
-   nommément.
+   empêcherait les fichiers ci-dessus d'être rejouables. C'est pourquoi le banc
+   `check-rls-guards` lit **ce guide** : il vérifie que le compartiment protégé
+   est celui que le code interroge, que rien n'y autorise l'écriture, et que la
+   politique ouverte au rôle anonyme est bien bornée par la table `documents`.
 
 Tant que le compartiment n'existe pas, l'écran Documents affiche une erreur de
 chargement — les autres écrans ne sont pas affectés.
 
-### 1.5 Vérifier que les douze tables sont là
+### 1.5 Vérifier que les quinze tables sont là
 
 C'est la vraie vérification : le message `Success` ne dit pas que les tables  
 existent, il dit que le SQL n'a pas échoué.
@@ -200,15 +245,18 @@ la clé que vous m'avez envoyée : elles répondent, et chacune refuse la lectur
 avec `permission denied for table …`. Les deux moitiés comptent — une table
 absente répondrait `404`, une table ouverte aurait laissé passer la lecture.
 
-**Les six nouvelles, non** : elles n'existent pas encore tant que le deuxième
-fichier n'a pas été collé. Après l'avoir collé, la même vérification s'applique,
-et je la referai si vous me le demandez.
+**Les neuf autres, non** : elles n'existent pas encore tant que les trois
+fichiers de migration n'ont pas été collés. Après les avoir collés, la même
+vérification s'applique, et je la referai si vous me le demandez.
 
 1. Dans le menu de gauche, cliquez **Table Editor**.
-2. Vous devez voir les douze tables : `agenda_events`, `annonces`,
-   `cantine_menus`, `cantine_reservations`, `discussion_messages`, `documents`,
-   `messages`, `profiles`, `signalements`, `sondage_choices`, `sondage_votes`,
-   `sondages`.
+2. Vous devez voir les quinze tables : `agenda_events`, `annonces`,
+   `cantine_menus`, `cantine_reservations`, `conversation_messages`,
+   `conversations`, `discussion_messages`, `documents`, `messages`, `profiles`,
+   `push_tokens`, `signalements`, `sondage_choices`, `sondage_votes`, `sondages`.
+   Les trois dernières arrivées — `conversations`, `conversation_messages`,
+   `push_tokens` — sont celles du **troisième** fichier : si vous ne les voyez
+   pas, c'est qu'il n'a pas été collé.
 3. Cliquez sur **annonces** : vous devez voir **2 lignes**. Ce nombre ne bouge
    plus, même si vous relancez `seed.sql`.
 4. Cliquez sur **cantine_menus** : vous devez voir **8 lignes** la première fois.
@@ -297,6 +345,37 @@ Elle est encadrée par `disable trigger` / `enable trigger`, et ce n'est pas une
 précaution de style : le verrou lit `auth.uid()`, qui vaut `NULL` dans l'éditeur SQL.
 Sans cette parenthèse, la commande échoue sur « Seul un administrateur peut modifier le
 rôle d'un membre » — le message exact de ce que vous cherchez à faire.
+
+### 1.9 Accepter votre propre adhésion, puis celles des familles
+
+**Le piège, et il est silencieux.** Depuis la troisième migration, une inscription
+est une **demande** : un compte neuf naît `en_attente`. Vous promouvoir
+administrateur vous donne le droit de **décider** — pas d'être accepté. Votre
+propre compte reste donc `en_attente`, et l'écran de discussion vous répondra une
+**liste vide** : un refus, ici, ne dit jamais pourquoi.
+
+La promotion et l'acceptation sont deux gestes différents, et l'ordre est celui-ci :
+
+1. **Vous promouvoir** — la commande SQL de `supabase/README.md`, ci-dessus.
+2. **Accepter votre demande** — ouvrez l'application, onglet **Plus**, puis
+   **Adhésions**. Votre nom doit y figurer avec le statut « En attente ».
+   Appuyez sur **Accepter**.
+3. **Accepter les familles**, une par une, sur le même écran, à mesure qu'elles
+   s'inscrivent. Tant qu'une demande est « En attente », la famille peut lire les
+   annonces, les menus et l'agenda — mais pas écrire dans la discussion.
+
+Un mot sur les quatre statuts, parce qu'ils ne se devinent pas :
+
+| Statut         | Ce que la famille peut faire                                        |
+| -------------- | ------------------------------------------------------------------- |
+| **En attente** | lire le contenu public ; ni discussion, ni conversations            |
+| **Accepté**    | tout, comme un adhérent                                             |
+| **Refusé**     | comme « En attente » — la demande est tranchée, l'accès reste fermé |
+| **Suspendu**   | comme « En attente » — réversible à tout moment                     |
+
+Vous pouvez revenir sur une décision : l'écran propose, pour chaque ligne, les
+transitions possibles depuis son statut. Rien n'est définitif, et **aucune donnée
+n'est effacée** par un refus ou une suspension — seul l'accès change.
 
 ### Si quelque chose ne marche pas
 
@@ -572,11 +651,15 @@ lien utilisable. Les deux adresses sont recopiées du fichier
 - [ ] Mot de passe de la base noté
 - [x] `20260916120000_init.sql` collé et exécuté → les six premières tables existent
 - [ ] `20260919120000_rubriques.sql` collé et exécuté → les six tables des rubriques
-- [ ] Compartiment `documents` créé dans Storage, **privé** _(sans lui, l'écran  
-      Documents affiche une erreur de chargement)_
+- [ ] `20260920120000_acces_public.sql` collé et exécuté → l'application s'ouvre  
+      **sans compte** : conversations avec le bureau, sondages, documents des familles
+- [ ] Compartiment `documents` créé dans Storage, **privé**, et ses **deux**  
+      politiques de lecture collées _(sans elles, l'écran Documents est vide ou  
+      échoue : une politique manquante rend une liste vide, pas une erreur)_
 - [ ] `seed.sql` collé et exécuté → à confirmer : je ne peux pas compter les lignes  
       depuis l'extérieur, les tables étant fermées à la clé publique
 - [ ] Table Editor : `annonces` a 2 lignes
+- [ ] Table Editor : les quinze tables sont là, dont `conversations` et `push_tokens`
 - [x] Project URL et publishable key envoyées dans la conversation
 - [x] Compte Expo créé — nom d'utilisateur `mchiker`
 - [x] Jeton d'accès posé en secret du dépôt, et compilation lancée
@@ -590,8 +673,10 @@ pas.
 **Plus tard, après le premier essai :**
 
 - [ ] Créer votre compte dans l'application, puis **vous promouvoir administrateur** —
-      une commande à coller depuis `supabase/README.md` (§1.8) : c'est votre geste, je
-      n'ai que la clé publique
+      une commande à coller depuis `supabase/README.md` (section « Après
+      l'installation ») : c'est votre geste, je n'ai que la clé publique
+- [ ] Puis, **dans l'application**, accepter les demandes d'adhésion — l'écran
+      « Adhésions » du bureau
 - [ ] Les quatre réglages du tableau de bord
 - [x] Recopier les quatre valeurs SMTP dans Supabase — vérifié jusqu'au clic sur le lien
 - [ ] Le jeton Expo pour GitHub _(facultatif)_
@@ -600,10 +685,10 @@ pas.
 
 ## Ce qui est déjà fait
 
-Pour que vous sachiez ce que vous n'avez pas à faire : les treize écrans et leur  
-navigation, l'authentification et la réinitialisation de mot de passe, les douze tables  
+Pour que vous sachiez ce que vous n'avez pas à faire : les quatorze écrans et leur  
+navigation, l'authentification et la réinitialisation de mot de passe, les quinze tables  
 et leurs politiques de sécurité, les contrôles de schéma et de politiques, la chaîne  
-de vérification complète (`npm run verify`, **32 fichiers de test**), les  
+de vérification complète (`npm run verify`, **33 fichiers de test**), les  
 trois flux GitHub Actions, le dépôt public sans aucun secret, les deux binaires  
 compilés — l'APK Android et l'IPA non signé —, les e-mails vérifiés jusqu'au clic  
 sur le lien reçu, et la documentation.

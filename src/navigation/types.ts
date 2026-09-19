@@ -38,7 +38,29 @@ export type MainTabParamList = {
  */
 export type PlusStackParamList = {
   PlusHome: undefined;
+  /**
+   * L'accès à l'espace membres : connexion, inscription, mot de passe oublié.
+   *
+   * Cette route vit **dans la pile de « Plus »** et non à la racine, parce que
+   * c'est de là qu'on la demande. La racine ne garde que `Recuperation`, le seul
+   * cas où l'écran doit prendre toute la place.
+   */
+  AccesMembre: undefined;
   Discussion: undefined;
+  /**
+   * Les messages adressés au bureau par les familles.
+   *
+   * Elle vit ici, avec les autres rubriques de « Plus », et non à la racine :
+   * elle se consulte depuis ce menu, et le retour arrière de la pile suffit.
+   */
+  ConversationsBureau: undefined;
+  /**
+   * Les adhésions à décider : accepter, refuser, suspendre.
+   *
+   * Réservée au bureau, comme la précédente, et pour la même raison : c'est une
+   * décision d'association, pas une lecture.
+   */
+  AdhesionsBureau: undefined;
   Documents: undefined;
   Actualites: undefined;
   MesSignalements: undefined;
@@ -46,10 +68,20 @@ export type PlusStackParamList = {
   Reglages: undefined;
 };
 
-/** Pile racine : l'écran affiché dépend de l'état d'authentification. */
+/**
+ * Pile racine.
+ *
+ * `Application` occupe le fond, et `Recuperation` se pose dessus — c'est la
+ * route **subie**, celle qu'ouvre un lien de réinitialisation reçu par e-mail,
+ * et elle prend toute la place tant qu'elle dure.
+ *
+ * La connexion **demandée**, elle, vit dans la pile de « Plus » (`AccesMembre`) :
+ * c'est de là qu'un adhérent la demande, et elle se referme d'elle-même une fois
+ * la session ouverte.
+ */
 export type RootStackParamList = {
-  Connexion: undefined;
   Application: NavigatorScreenParams<MainTabParamList> | undefined;
+  Recuperation: undefined;
 };
 
 declare global {

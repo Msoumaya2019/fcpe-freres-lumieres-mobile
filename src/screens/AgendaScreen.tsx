@@ -10,7 +10,6 @@ import {
   type ListRenderItemInfo,
 } from 'react-native';
 
-import { useCurrentUserId } from '@/auth/AuthProvider';
 import {
   AppText,
   AsyncErrorBanner,
@@ -24,9 +23,9 @@ import {
 import { useAsyncData } from '@/hooks/useAsyncData';
 import type { AgendaOnglet, MainTabParamList } from '@/navigation/types';
 import { fetchAgendaEvents } from '@/services/agenda';
-import { castVote, fetchSondages } from '@/services/sondages';
+import { castVote, fetchResultats, fetchSondages } from '@/services/sondages';
 import { accents, colors, radius, spacing } from '@/theme';
-import type { AgendaEvent, SondageWithChoices } from '@/types/models';
+import type { AgendaEvent, SondageResultat, SondageWithChoices } from '@/types/models';
 import { formatLongDay, formatTime } from '@/utils/date';
 
 interface DonneesAgenda {
@@ -80,8 +79,6 @@ export function AgendaScreen({
   route,
   navigation,
 }: BottomTabScreenProps<MainTabParamList, 'Agenda'>) {
-  const userId = useCurrentUserId();
-
   const onglet: AgendaOnglet = route.params?.onglet ?? 'agenda';
 
   const choisirOnglet = useCallback(
@@ -95,10 +92,13 @@ export function AgendaScreen({
   );
 
   const loader = useCallback(async (): Promise<DonneesAgenda> => {
-    const [evenements, sondages] = await Promise.all([fetchAgendaEvents(), fetchSondages(userId)]);
+    // `fetchSondages()` ne prend plus d'identifiant d'adhérent : le vote se
+    // rattache à une clé d'appareil, et le choix de cet appareil est relu dans
+    // les préférences locales. Un parent sans compte vote donc comme un autre.
+    const [evenements, sondages] = await Promise.all([fetchAgendaEvents(), fetchSondages()]);
 
     return { evenements, sondages, maintenant: Date.now() };
-  }, [userId]);
+  }, []);
 
   const { status, data, errorMessage, refreshing, refresh, reload } = useAsyncData(loader);
 
@@ -112,7 +112,7 @@ export function AgendaScreen({
 
       void (async () => {
         try {
-          await castVote({ sondageId, choiceId, voterId: userId });
+          await castVote({ sondageId, choiceId });
           reload();
         } catch (caught) {
           setVoteError(caught);
@@ -121,7 +121,7 @@ export function AgendaScreen({
         }
       })();
     },
-    [reload, userId],
+    [reload],
   );
 
   const evenements = data?.evenements ?? [];
@@ -330,6 +330,41 @@ function CarteSondage({
     sondage.is_open && (sondage.closed_at === null || Date.parse(sondage.closed_at) > maintenant);
   const aVote = sondage.myChoiceId !== null;
 
+  /**
+   * Le résultat, chargé **à la demande** et non au montage.
+   *
+   * POURQUOI PAS DANS LE CHARGEUR DE L'ÉCRAN
+   * ----------------------------------------
+   * Il y a autant de sondages que le bureau en publie, et un décompte par
+   * sondage ferait autant d'allers-retours à chaque affichage de l'agenda —
+   * pour une information que la plupart des gens ne regardent pas. Un appui
+   * explicite coûte une requête, et seulement pour qui la demande.
+   *
+   * Le résultat est **public** dès lors que le sondage est clos ou qu'on a
+   * voté : `resultats_sondage()` rend des compteurs par réponse, jamais une
+   * ligne de vote. Le nom d'un votant ne sort donc pas de la base.
+   */
+  const [resultats, setResultats] = useState<readonly SondageResultat[] | null>(null);
+  const [erreurResultats, setErreurResultats] = useState<unknown>(null);
+  const [chargementResultats, setChargementResultats] = useState(false);
+
+  const voirResultats = useCallback(() => {
+    setChargementResultats(true);
+    setErreurResultats(null);
+
+    void (async () => {
+      try {
+        setResultats(await fetchResultats(sondage.id));
+      } catch (caught) {
+        setErreurResultats(caught);
+      } finally {
+        setChargementResultats(false);
+      }
+    })();
+  }, [sondage.id]);
+
+  const total = (resultats ?? []).reduce((somme, ligne) => somme + Number(ligne.voix), 0);
+
   return (
     <Card elevated style={[styles.carteSondage, { backgroundColor: accents.violet.soft }]}>
       <Badge
@@ -352,7 +387,7 @@ function CarteSondage({
               <Pressable
                 key={choix.id}
                 // Un sondage clos ou déjà voté ne se revote pas : la contrainte
-                // d'unicité `(sondage_id, voter_id)` le refuserait, et l'appui
+                // d'unicité `(sondage_id, voter_key)` le refuserait, et l'appui
                 // semblerait sans effet. Le bouton est donc inactif, et
                 // l'accessibilité le dit.
                 disabled={!ouvert || aVote || enCours}
@@ -389,6 +424,56 @@ function CarteSondage({
       )}
 
       {enCours ? <Button label="Enregistrement…" onPress={() => undefined} loading /> : null}
+
+      {resultats === null ? null : (
+        <View style={styles.resultats}>
+          {resultats.map((ligne) => (
+            <View key={ligne.choice_id} style={styles.resultatLigne}>
+              <AppText variant="caption" style={styles.titreCarte}>
+                {ligne.label}
+              </AppText>
+              <AppText variant="caption" bold>
+                {ligne.voix} voix
+                {total === 0 ? '' : ` · ${Math.round((Number(ligne.voix) / total) * 100)} %`}
+              </AppText>
+            </View>
+          ))}
+          {total === 0 ? (
+            <AppText variant="caption">Aucune réponse enregistrée pour l’instant.</AppText>
+          ) : null}
+        </View>
+      )}
+
+      {erreurResultats === null ? null : <ErrorNotice error={erreurResultats} />}
+
+      {/*  Le résultat ne se montre pas avant qu'il veuille dire quelque chose :
+          sur un sondage ouvert qu'on n'a pas encore voté, l'afficher
+          influencerait les suivants — et c'est aussi la règle que le bureau
+          attend d'un sondage. Il s'ouvre donc après avoir voté, ou une fois le
+          sondage clos. */}
+      {resultats === null && (aVote || !ouvert) ? (
+        <Button
+          label="Voir les résultats"
+          variant="ghost"
+          onPress={voirResultats}
+          loading={chargementResultats}
+        />
+      ) : null}
+
+      {/*  Ce que le décompte vaut, et ce qu'il ne vaut pas.
+
+          Un vote se rattache à une **clé d'appareil**, tirée par la base et
+          gardée sur le téléphone : un second vote est donc difficile depuis le
+          même appareil. Mais réinstaller l'application donne une nouvelle clé,
+          et aucun identifiant d'appareil ne peut empêcher cela. Écrire ici
+          « un vote par personne » serait faux, et c'est le genre de phrase
+          qu'on finit par croire. */}
+      {resultats === null ? null : (
+        <AppText variant="caption">
+          Un vote par appareil. Réinstaller l’application permet de voter de nouveau : ce résultat
+          donne une tendance, il n’est pas un vote certifié.
+        </AppText>
+      )}
     </Card>
   );
 }
@@ -439,6 +524,18 @@ const styles = StyleSheet.create({
   },
   carteSondage: {
     gap: spacing.sm,
+  },
+  resultats: {
+    gap: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.sm,
+  },
+  resultatLigne: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
   },
   choix: {
     gap: spacing.sm,

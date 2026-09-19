@@ -8,7 +8,6 @@ import {
   type ListRenderItemInfo,
 } from 'react-native';
 
-import { useCurrentUserId } from '@/auth/AuthProvider';
 import {
   AppText,
   AsyncErrorBanner,
@@ -21,30 +20,70 @@ import {
 } from '@/components';
 import { userMessage } from '@/errors';
 import { useAsyncData } from '@/hooks/useAsyncData';
-import { createMessage, fetchMyMessages } from '@/services/messages';
+import {
+  creerConversation,
+  lireConversation,
+  listerFils,
+  repondreConversation,
+  type FilLocal,
+} from '@/services/conversations';
 import { colors, radius, spacing } from '@/theme';
 import {
   MESSAGE_CATEGORIES,
   MESSAGE_CATEGORY_LABELS,
-  type MemberMessage,
+  type ConversationMessage,
   type MessageCategory,
 } from '@/types/models';
 import { formatDateTime } from '@/utils/date';
 
-const VIDE: readonly MemberMessage[] = [];
+/**
+ * Contacter le bureau — une conversation privée, et **sans compte**.
+ *
+ * CE QUE CET ÉCRAN N'EST PAS
+ * --------------------------
+ * Ce n'est pas la discussion. La discussion est un fil entre adhérents, où tout
+ * le monde lit tout le monde ; elle vit sous « Plus », et elle est réservée aux
+ * membres acceptés. Ici, le message part au bureau, et **personne d'autre** ne
+ * le lit.
+ *
+ * La distinction n'est pas cosmétique. Un parent qui signale une situation
+ * personnelle — un enfant harcelé, une difficulté de paiement — écrit ici parce
+ * qu'il croit s'adresser au bureau. Fusionner les deux écrans publierait ce
+ * message au vu de tous, et le dégât serait irréversible. L'écran le dit donc
+ * lui-même, en toutes lettres, avant le formulaire.
+ *
+ * POURQUOI LE PARENT N'A PAS DE COMPTE, ET CE QUE CELA COÛTE
+ * ----------------------------------------------------------
+ * L'ancienne version écrivait dans `messages`, une table dont l'auteur est une
+ * ligne de `auth.users` : il fallait donc un compte, et le parent sans compte ne
+ * pouvait pas écrire — il ne pouvait pas non plus **recevoir de réponse**, faute
+ * d'endroit où la lui adresser.
+ *
+ * Une conversation n'appartient à aucun compte. Elle est identifiée par un
+ * numéro et protégée par un **secret**, tous deux tirés par la base, et le
+ * secret n'est rendu qu'une fois — à la création. Le téléphone le garde, et
+ * c'est ce qui rouvre le fil.
+ *
+ * Le prix est réel et il est dit à l'écran : le secret ne vit que sur ce
+ * téléphone. Le perdre — réinstallation, changement d'appareil —, c'est perdre
+ * l'accès au fil, et l'application n'a aucun moyen de le rendre. C'est le prix
+ * d'un accès sans compte, et il vaut mieux l'annoncer que le découvrir.
+ */
+
+const VIDE_FILS: readonly FilLocal[] = [];
+const VIDE_MESSAGES: readonly ConversationMessage[] = [];
 
 /**
- * Bornes alignées sur les contraintes de la migration
- * (`char_length(btrim(subject)) between 1 and 160`, idem pour le corps à 4000).
+ * Bornes alignées sur les contraintes de la migration — `conversations_subject_length`,
+ * `conversation_messages_body_length`, `conversations_reply_to_length`.
  *
  * Sans elles, un objet trop long était refusé par le serveur et l'adhérent
  * lisait « La valeur envoyée n'est pas acceptée par le serveur » — sans savoir
- * quel champ ni quelle longueur.
+ * quel champ ni quelle longueur. Le banc `check-input-limits` compare les trois
+ * valeurs à celles des contraintes.
  */
-const MAX_SUBJECT_LENGTH = 160;
+const MAX_SUBJECT_LENGTH = 120;
 const MAX_BODY_LENGTH = 4000;
-
-/** Longueur d'une adresse, alignée sur `messages_reply_length`. */
 const MAX_EMAIL_LENGTH = 254;
 
 interface CategoryChipProps {
@@ -81,31 +120,38 @@ function CategoryChip({ category, selected, disabled, onSelect }: CategoryChipPr
   );
 }
 
+/** Le geste de rafraîchissement, écrit une fois et posé sur les deux listes. */
+function rafraichir(refreshing: boolean, refresh: () => void) {
+  return <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />;
+}
+
+/** La phrase qui rappelle ce que cet écran n'est pas. */
+function RappelDiscussion() {
+  return (
+    <AppText variant="caption">
+      Ceci est une conversation privée avec le bureau. Pour échanger avec les autres adhérents,
+      utilisez la discussion, sous « Plus » : tout le monde y lit tout le monde.
+    </AppText>
+  );
+}
+
+interface ListeFilsProps {
+  readonly onOuvrir: (fil: FilLocal) => void;
+}
+
 /**
- * Contacter le bureau.
+ * Les conversations retenues par ce téléphone, et le formulaire qui en ouvre une.
  *
- * CE QUE CET ÉCRAN N'EST PAS
- * --------------------------
- * Ce n'est pas la discussion. La discussion est un fil entre adhérents, où tout
- * le monde lit tout le monde. Ici, le message part au bureau, et **personne
- * d'autre** ne le voit : la politique de lecture de `messages` ne laisse passer
- * que l'auteur et les administrateurs.
- *
- * La distinction n'est pas cosmétique. Un parent qui signale une situation
- * personnelle — un enfant harcelé, une difficulté de paiement — écrit ici parce
- * qu'il croit s'adresser au bureau. Fusionner les deux écrans publierait ce
- * message au vu de tous, et le dégât serait irréversible.
- *
- * C'est pourquoi l'écran le dit lui-même, en une phrase, avant le formulaire :
- * l'adhérent doit savoir qui lira ce qu'il écrit.
+ * Le chargement passe par `useAsyncData` alors que la lecture est locale
+ * (`AsyncStorage`) : c'est ce qui donne à l'écran un état de chargement, une
+ * erreur et une relecture, au lieu d'une liste qui apparaît vide le temps d'une
+ * lecture de fichier.
  */
-export function ContactScreen() {
-  const userId = useCurrentUserId();
+function ListeFils({ onOuvrir }: ListeFilsProps) {
+  const charger = useCallback(() => listerFils(), []);
+  const { status, data, errorMessage, refreshing, refresh, reload } = useAsyncData(charger);
 
-  const loader = useCallback(() => fetchMyMessages(userId), [userId]);
-  const { status, data, errorMessage, refreshing, refresh, reload } = useAsyncData(loader);
-
-  const messages = data ?? VIDE;
+  const fils = data ?? VIDE_FILS;
 
   const [formOpen, setFormOpen] = useState(false);
   const [category, setCategory] = useState<MessageCategory>('vie_scolaire');
@@ -142,71 +188,71 @@ export function ContactScreen() {
 
     void (async () => {
       try {
-        await createMessage({
-          authorId: userId,
-          category,
+        const fil = await creerConversation({
           subject,
+          category,
           body,
           replyTo: replyTo.trim() === '' ? null : replyTo,
         });
-        closeForm();
-        // Le formulaire est refermé : l'action ne peut plus être rejouée, et
-        // `submitting` peut être relâché avant la fin de la relecture. Le
-        // bouton de réservation de cantine, lui, reste à l'écran et doit tenir
-        // son marqueur jusqu'au bout.
-        reload();
+        // On ouvre la conversation qui vient de naître, au lieu de revenir à la
+        // liste : le parent voit son message envoyé, et la réponse du bureau
+        // arrivera exactement là.
+        onOuvrir(fil);
       } catch (caught) {
         setFormError(caught);
       } finally {
         setSubmitting(false);
       }
     })();
-  }, [body, category, closeForm, reload, replyTo, subject, userId]);
+  }, [body, category, onOuvrir, replyTo, subject]);
 
   const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<MemberMessage>) => (
-      <Card elevated>
-        <View style={styles.itemHeader}>
-          <AppText variant="heading" style={styles.itemTitle}>
-            {item.subject}
+    ({ item }: ListRenderItemInfo<FilLocal>) => (
+      <Pressable
+        onPress={() => {
+          onOuvrir(item);
+        }}
+        accessibilityRole="button"
+        style={({ pressed }) => (pressed ? styles.pressed : undefined)}
+      >
+        <Card elevated>
+          <View style={styles.itemHeader}>
+            <AppText variant="heading" style={styles.itemTitle}>
+              {item.subject}
+            </AppText>
+            <AppText variant="caption" color={colors.primary}>
+              Ouvrir
+            </AppText>
+          </View>
+          <AppText variant="caption">
+            {MESSAGE_CATEGORY_LABELS[item.category]} · {formatDateTime(item.creeLe)}
           </AppText>
-          <AppText variant="caption" bold color={item.handled ? colors.success : colors.warning}>
-            {item.handled ? 'Traité' : 'Reçu'}
-          </AppText>
-        </View>
-        <AppText variant="caption">
-          {MESSAGE_CATEGORY_LABELS[item.category]} · {formatDateTime(item.created_at)}
-        </AppText>
-        <AppText>{item.body}</AppText>
-      </Card>
+        </Card>
+      </Pressable>
     ),
-    [],
+    [onOuvrir],
   );
 
   return (
     <Screen padded={false} edges={[]}>
       <FlatList
-        data={messages}
+        data={fils}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        contentContainerStyle={[styles.list, messages.length === 0 && styles.listEmpty]}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />
-        }
+        contentContainerStyle={[styles.list, fils.length === 0 && styles.listEmpty]}
+        refreshControl={rafraichir(refreshing, refresh)}
         ListHeaderComponent={
           <>
             <AsyncErrorBanner
               status={status}
-              hasData={messages.length > 0}
+              hasData={fils.length > 0}
               errorMessage={errorMessage}
             />
             <Card muted>
               {formOpen ? (
                 <>
                   <AppText variant="heading">Votre message au bureau</AppText>
-                  <AppText variant="caption">
-                    Seul le bureau de l’association lira ce message.
-                  </AppText>
+                  <RappelDiscussion />
 
                   <AppText variant="caption" bold>
                     Sujet
@@ -252,7 +298,7 @@ export function ContactScreen() {
                     autoCorrect={false}
                     maxLength={MAX_EMAIL_LENGTH}
                     editable={!submitting}
-                    hint="Laissez vide pour être recontacté dans l'application."
+                    hint="Laissez vide pour être recontacté dans l’application."
                   />
 
                   {formError === null ? null : <ErrorNotice error={formError} />}
@@ -268,10 +314,10 @@ export function ContactScreen() {
               ) : (
                 <>
                   <AppText variant="heading">Comment pouvons-nous vous aider ?</AppText>
+                  <RappelDiscussion />
                   <AppText variant="caption">
-                    Une question, un problème à signaler, une idée à proposer ? Écrivez au bureau de
-                    l’association : votre message lui parvient directement, et vous retrouverez sa
-                    réponse ici.
+                    Vous n’avez pas besoin de compte. Votre message part au bureau de l’association,
+                    et vous retrouverez sa réponse ici.
                   </AppText>
                   <Button
                     label="Écrire au bureau"
@@ -282,7 +328,163 @@ export function ContactScreen() {
                 </>
               )}
             </Card>
+            {fils.length === 0 ? null : (
+              <AppText variant="caption" bold>
+                Vos conversations
+              </AppText>
+            )}
           </>
+        }
+        ListEmptyComponent={
+          <AsyncFallback
+            status={status}
+            hasData={fils.length > 0}
+            errorMessage={errorMessage}
+            onRetry={reload}
+            emptyTitle="Aucune conversation"
+            emptyDescription="Écrivez au bureau : votre échange apparaîtra ici, et vous pourrez le poursuivre."
+            emptyIcon="chatbubble-ellipses-outline"
+            loadingMessage="Chargement de vos conversations…"
+          />
+        }
+      />
+    </Screen>
+  );
+}
+
+interface VueFilProps {
+  readonly fil: FilLocal;
+  readonly onRetour: () => void;
+}
+
+/**
+ * Un fil, ouvert : les messages échangés, et de quoi poursuivre.
+ *
+ * LE SECRET EST CE QUI OUVRE, ET LE NUMÉRO NE SUFFIT PAS
+ * -----------------------------------------------------
+ * `lireConversation` envoie les deux : la base compare l'empreinte du secret à
+ * celle qu'elle garde, et un mauvais secret rend **la même chose** qu'un
+ * identifiant inconnu — aucune ligne. Connaître le numéro d'une conversation ne
+ * permet donc pas d'en lire le contenu, et il n'y a rien à énumérer.
+ *
+ * Une liste vide est ambiguë par construction — « secret refusé » et
+ * « conversation sans message » se ressemblent —, mais le cas ne se produit pas :
+ * une conversation naît avec son premier message, dans la même transaction.
+ */
+function VueFil({ fil, onRetour }: VueFilProps) {
+  const charger = useCallback(() => lireConversation(fil), [fil]);
+  const { status, data, errorMessage, refreshing, refresh, reload } = useAsyncData(charger);
+
+  const messages = data ?? VIDE_MESSAGES;
+
+  const [reponse, setReponse] = useState('');
+  const [erreur, setErreur] = useState<unknown>(null);
+  const [envoi, setEnvoi] = useState(false);
+  const [refuse, setRefuse] = useState(false);
+
+  const envoyer = useCallback(() => {
+    if (reponse.trim() === '') {
+      setErreur(userMessage('Écrivez votre message.'));
+      return;
+    }
+
+    setErreur(null);
+    setEnvoi(true);
+
+    void (async () => {
+      try {
+        const accepte = await repondreConversation(fil, reponse);
+
+        // `false` n'est pas une panne : c'est un refus, et il se dit en
+        // français. Le confondre avec une erreur technique afficherait
+        // « Réessayez » à quelqu'un pour qui réessayer ne marchera jamais.
+        if (!accepte) {
+          setRefuse(true);
+          return;
+        }
+
+        setReponse('');
+        reload();
+      } catch (caught) {
+        setErreur(caught);
+      } finally {
+        setEnvoi(false);
+      }
+    })();
+  }, [fil, reponse, reload]);
+
+  const renderItem = useCallback(
+    ({ item }: ListRenderItemInfo<ConversationMessage>) => (
+      <Card elevated>
+        <View style={styles.itemHeader}>
+          <AppText variant="caption" bold color={item.from_bureau ? colors.primary : undefined}>
+            {item.from_bureau ? 'Le bureau' : 'Vous'}
+          </AppText>
+          <AppText variant="caption">{formatDateTime(item.created_at)}</AppText>
+        </View>
+        <AppText>{item.body}</AppText>
+      </Card>
+    ),
+    [],
+  );
+
+  return (
+    <Screen padded={false} edges={[]}>
+      <FlatList
+        data={messages}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={[styles.list, messages.length === 0 && styles.listEmpty]}
+        refreshControl={rafraichir(refreshing, refresh)}
+        ListHeaderComponent={
+          <>
+            <AsyncErrorBanner
+              status={status}
+              hasData={messages.length > 0}
+              errorMessage={errorMessage}
+            />
+            <Card muted>
+              <AppText variant="heading">{fil.subject}</AppText>
+              <AppText variant="caption">
+                {MESSAGE_CATEGORY_LABELS[fil.category]} · ouverte le {formatDateTime(fil.creeLe)}
+              </AppText>
+              <AppText variant="caption">
+                Cette conversation est gardée sur ce téléphone. Si vous réinstallez l’application ou
+                changez d’appareil, vous ne pourrez plus la rouvrir : notez l’objet et écrivez de
+                nouveau, ou passez par l’adresse du bureau.
+              </AppText>
+              <Button label="Retour à mes conversations" variant="ghost" onPress={onRetour} />
+            </Card>
+            {refuse ? (
+              <Card>
+                <ErrorNotice
+                  error={userMessage(
+                    'Cette conversation ne s’ouvre plus depuis ce téléphone. Écrivez de nouveau au bureau : votre nouveau message créera une conversation.',
+                  )}
+                />
+              </Card>
+            ) : null}
+          </>
+        }
+        ListFooterComponent={
+          messages.length === 0 ? null : (
+            <Card muted>
+              <AppText variant="heading">Poursuivre</AppText>
+              <TextField
+                label="Votre message"
+                value={reponse}
+                onChangeText={setReponse}
+                placeholder="Ajoutez une précision, répondez au bureau."
+                multiline
+                numberOfLines={4}
+                maxLength={MAX_BODY_LENGTH}
+                editable={!envoi}
+                inputStyle={styles.multiline}
+              />
+              {erreur === null ? null : <ErrorNotice error={erreur} />}
+              <Button label="Envoyer" onPress={envoyer} loading={envoi} />
+            </Card>
+          )
         }
         ListEmptyComponent={
           <AsyncFallback
@@ -290,15 +492,42 @@ export function ContactScreen() {
             hasData={messages.length > 0}
             errorMessage={errorMessage}
             onRetry={reload}
-            emptyTitle="Aucun message envoyé"
-            emptyDescription="Vos échanges avec le bureau apparaîtront ici."
+            emptyTitle="Aucun message"
+            emptyDescription="Le premier message de cette conversation n’a pas pu être relu."
             emptyIcon="chatbubble-ellipses-outline"
-            loadingMessage="Chargement de vos messages…"
+            loadingMessage="Ouverture de la conversation…"
           />
         }
       />
     </Screen>
   );
+}
+
+/**
+ * L'écran de contact, et son aiguillage.
+ *
+ * DEUX COMPOSANTS, ET NON UN SEUL AVEC UNE CONDITION
+ * --------------------------------------------------
+ * Le fil est monté **à la place** de la liste, pas à côté : c'est ce qui repart
+ * d'un état de chargement franc. Avec un seul composant, le changement de fil
+ * laissait la liste affichée pendant la lecture de la conversation — un
+ * clignotement qui montre le mauvais contenu au mauvais moment.
+ *
+ * Le `key` rend la garantie explicite : ouvrir un autre fil remonte le composant
+ * plutôt que de le mettre à jour.
+ */
+export function ContactScreen() {
+  const [fil, setFil] = useState<FilLocal | null>(null);
+
+  const retour = useCallback(() => {
+    setFil(null);
+  }, []);
+
+  if (fil === null) {
+    return <ListeFils onOuvrir={setFil} />;
+  }
+
+  return <VueFil key={fil.id} fil={fil} onRetour={retour} />;
 }
 
 const styles = StyleSheet.create({
@@ -340,6 +569,9 @@ const styles = StyleSheet.create({
   },
   chipDisabled: {
     opacity: 0.5,
+  },
+  pressed: {
+    opacity: 0.85,
   },
   multiline: {
     minHeight: 110,

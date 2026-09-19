@@ -8,7 +8,7 @@
 
 import { requireSupabase } from '@/config/supabase';
 import { toAppError } from '@/errors';
-import type { Profile } from '@/types/models';
+import type { MemberStatus, Profile } from '@/types/models';
 
 /** Profil de l'utilisateur connecté, ou `null` si la ligne n'existe pas encore. */
 export async function fetchProfile(userId: string): Promise<Profile | null> {
@@ -63,4 +63,73 @@ export async function fetchAuthorNames(
   }
 
   return new Map(data.map((row) => [row.id, row.display_name] as const));
+}
+
+/** Une adhésion qui attend la décision du bureau. */
+export interface DemandeAdhesion {
+  readonly id: string;
+  readonly display_name: string;
+  readonly status: MemberStatus;
+  readonly created_at: string;
+}
+
+/**
+ * La borne de la liste des demandes.
+ *
+ * `check-read-bounds` exige une borne **explicite** sur toute lecture de liste,
+ * et un `.eq('status', …)` n'en est pas une : il filtre, il ne limite pas. La
+ * constante **est** donc la borne, et elle est exportée pour que l'écran puisse
+ * la nommer quand elle mord — sans quoi la troncature serait silencieuse, et le
+ * bureau croirait avoir tout vu.
+ *
+ * Deux cents est très au-dessus de ce qu'une association reçoit, et c'est
+ * voulu : la borne est un garde-fou contre une croissance imprévue, pas un
+ * choix d'affichage.
+ */
+export const MAX_DEMANDES = 200;
+
+/**
+ * Les comptes d'un statut donné, du plus ancien au plus récent — l'ordre dans
+ * lequel le bureau veut les traiter.
+ *
+ * Le statut est un **paramètre** et non une constante : l'écran du bureau
+ * filtre, parce qu'une adhésion acceptée se rouvre, qu'une adhésion refusée se
+ * revoit, et qu'une suspension se lève. Quatre statuts, quatre listes, une
+ * seule requête.
+ */
+export async function listerAdhesions(statut: MemberStatus): Promise<DemandeAdhesion[]> {
+  const { data, error } = await requireSupabase()
+    .from('profiles')
+    .select('id, display_name, status, created_at')
+    .eq('status', statut)
+    .order('created_at', { ascending: true })
+    .limit(MAX_DEMANDES);
+
+  if (error !== null) {
+    throw toAppError(error);
+  }
+
+  return data;
+}
+
+/**
+ * Décider d'une adhésion : accepter, refuser, ou suspendre.
+ *
+ * Passe par la fonction `decider_adhesion()` plutôt que par une écriture
+ * directe, parce que `profiles` n'a **aucune politique de modification** — et
+ * c'est délibéré : une politique `for update` porterait sur toutes les colonnes,
+ * pour tout administrateur, alors que la capacité voulue est « un statut, par le
+ * bureau ». La fonction est `security definer` et vérifie `is_admin()` dans son
+ * corps ; un membre ordinaire reçoit « Réservé au bureau. », un refus explicite
+ * et non un silence.
+ */
+export async function deciderAdhesion(id: string, statut: MemberStatus): Promise<void> {
+  const { error } = await requireSupabase().rpc('decider_adhesion', {
+    p_id: id,
+    p_statut: statut,
+  });
+
+  if (error !== null) {
+    throw toAppError(error);
+  }
 }

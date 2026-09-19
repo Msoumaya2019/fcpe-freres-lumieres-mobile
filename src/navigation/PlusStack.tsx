@@ -2,6 +2,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import type { PlusStackParamList } from '@/navigation/types';
 import { ActualitesScreen } from '@/screens/ActualitesScreen';
+import { AdhesionsBureauScreen } from '@/screens/AdhesionsBureauScreen';
+import { ConnexionScreen } from '@/screens/ConnexionScreen';
+import { ConversationsBureauScreen } from '@/screens/ConversationsBureauScreen';
 import { DiscussionMembresScreen } from '@/screens/DiscussionMembresScreen';
 import { DocumentsScreen } from '@/screens/DocumentsScreen';
 import { MesSignalementsScreen } from '@/screens/MesSignalementsScreen';
@@ -17,7 +20,7 @@ const Stack = createNativeStackNavigator<PlusStackParamList>();
  *
  * POURQUOI UNE PILE, ET NON DES ONGLETS
  * -------------------------------------
- * Ces sept écrans se consultent de temps en temps, et plusieurs se suivent :
+ * Ces routes se consultent de temps en temps, et plusieurs se suivent :
  * on ouvre la discussion, puis le profil ; on lit une actualité, puis on
  * revient. Une pile donne le retour arrière gratuitement, et son en-tête porte
  * le titre de l'écran courant. Sept onglets de plus ne tiendraient de toute
@@ -30,8 +33,8 @@ const Stack = createNativeStackNavigator<PlusStackParamList>();
  * politiques sont inchangés. C'est la barre qui a changé, pas elles.
  *
  * L'en-tête est déclaré ici plutôt que dans chaque écran : c'est la seule
- * manière d'avoir une apparence unique pour les sept, et d'éviter que l'un
- * d'eux, écrit plus tard, en oublie les couleurs.
+ * manière d'avoir une apparence unique pour toutes, et d'éviter que l'une
+ * d'elles, écrite plus tard, en oublie les couleurs.
  */
 export function PlusStack() {
   return (
@@ -43,10 +46,35 @@ export function PlusStack() {
       }}
     >
       <Stack.Screen name="PlusHome" component={PlusScreen} options={{ title: 'Plus' }} />
+      {/*  « Espace membres » est le seul écran de cette pile **sans en-tête**, et
+          c'est pour l'encoche : `ConnexionScreen` protège lui-même la zone sûre
+          (`edges = ['top']`), parce qu'il sert aussi bien ici que plein écran
+          pendant une récupération. Un en-tête ajouterait sa propre protection et
+          le contenu descendrait d'une hauteur de barre d'état.
+
+          Le retour n'est pas perdu pour autant : l'écran offre un bouton
+          « Retour » quand `canGoBack()` est vrai, ce qui est le cas ici. */}
+      <Stack.Screen
+        name="AccesMembre"
+        component={ConnexionScreen}
+        options={{ headerShown: false }}
+      />
       <Stack.Screen
         name="Discussion"
         component={DiscussionMembresScreen}
         options={{ title: 'Discussion' }}
+      />
+      {/*  L'en-tête est déclaré ici comme pour les autres : l'écran passe donc
+          `edges = []`, et l'encoche est protégée une seule fois. */}
+      <Stack.Screen
+        name="ConversationsBureau"
+        component={ConversationsBureauScreen}
+        options={{ title: 'Messages des familles' }}
+      />
+      <Stack.Screen
+        name="AdhesionsBureau"
+        component={AdhesionsBureauScreen}
+        options={{ title: 'Adhésions' }}
       />
       <Stack.Screen
         name="Documents"

@@ -72,9 +72,11 @@ updates:
     #   /v2/versions/latest              → `sdkVersions["57.0.0"].expoVersion`
     #                                      et `.relatedPackages`
     #
-    # **Seize** paquets installés ici y figurent. La liste ci-dessous les nomme
+    # **Dix-sept** paquets installés ici y figurent. La liste ci-dessous les nomme
     # tous, et `scripts/check-sdk-pins.test.mjs` tient l'accord : les deux listes
-    # doivent nommer les mêmes paquets, dans les deux sens.
+    # doivent nommer les mêmes paquets, dans les deux sens. Le même banc refuse
+    # désormais un paquet de l'écosystème installé sans y figurer — c'est ainsi
+    # qu'`expo-notifications` a été rattrapé.
     #
     # Sans elle, Dependabot propose des montées qui **passent npm** et divergent en
     # silence de ce que le SDK attend : `react-native@0.86.3` accepte
@@ -99,6 +101,8 @@ updates:
       - dependency-name: expo-font
         update-types: ['version-update:semver-minor', 'version-update:semver-major']
       - dependency-name: expo-linking
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']
+      - dependency-name: expo-notifications
         update-types: ['version-update:semver-minor', 'version-update:semver-major']
       - dependency-name: expo-secure-store
         update-types: ['version-update:semver-minor', 'version-update:semver-major']

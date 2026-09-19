@@ -70,6 +70,22 @@ export const RUBRIQUES = readFileSync(
   'utf8',
 );
 
+/**
+ * Le texte de la troisième migration — l'accès public, l'espace membre et les
+ * conversations avec les familles.
+ *
+ * Elle porte le renversement le plus lourd du projet : jusqu'ici, `anon` n'avait
+ * **aucun** privilège, et l'application ne montrait rien avant une connexion.
+ * Ce fichier ouvre six tables en lecture au rôle anonyme et referme la
+ * discussion derrière un statut d'adhésion. Un banc qui l'exécute est donc la
+ * seule chose qui distingue « la politique est écrite » de « la lecture
+ * aboutit » — un refus rend une liste vide, jamais une erreur.
+ */
+export const ACCES_PUBLIC = readFileSync(
+  new URL('supabase/migrations/20260920120000_acces_public.sql', racine),
+  'utf8',
+);
+
 /** Le texte du jeu de données d'essai. */
 export const SEED = readFileSync(new URL('supabase/seed.sql', racine), 'utf8');
 

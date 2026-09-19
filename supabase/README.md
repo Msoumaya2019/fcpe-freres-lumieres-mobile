@@ -8,8 +8,9 @@ sont les politiques Row Level Security écrites ici.
 ```
 supabase/
 ├── migrations/
-│   ├── 20260916120000_init.sql       Schéma, déclencheurs, RLS
-│   └── 20260919120000_rubriques.sql  Agenda, documents, sondages, messages
+│   ├── 20260916120000_init.sql           Schéma, déclencheurs, RLS
+│   ├── 20260919120000_rubriques.sql      Agenda, documents, sondages, messages
+│   └── 20260920120000_acces_public.sql   Familles sans compte, adhésions, notifications
 ├── seed.sql                      Jeu d'essai — développement uniquement
 └── README.md
 ```
@@ -92,33 +93,49 @@ cette liste de réglages n'existe qu'à un seul endroit.
 
 ## Ce que font les politiques
 
+**« Tout le monde » veut dire sans compte** : la table porte une politique `to anon`
+en plus de celle des porteurs d'un jeton. Ces six tables sont les seules dans ce
+cas, et elles ne contiennent que du contenu public — annonces, menus, agenda,
+sondages, documents destinés aux familles.
+
 | Table | Lire | Écrire |
 | --- | --- | --- |
-| `profiles` | tout membre connecté | sa propre ligne ; `role` réservé aux administrateurs |
-| `annonces` | tout membre connecté | administrateurs |
-| `cantine_menus` | tout membre connecté | administrateurs |
+| `profiles` | tout porteur d'un jeton — nom et rôle, **jamais l'e-mail** | sa propre ligne ; `role` réservé aux administrateurs ; `status` par `decider_adhesion()` |
+| `annonces` | tout le monde | administrateurs |
+| `cantine_menus` | tout le monde | administrateurs |
 | `cantine_reservations` | la sienne, ou toutes si administrateur | la sienne uniquement |
 | `signalements` | les siens, ou tous si administrateur | les siens ; le `status` est réservé aux administrateurs |
-| `discussion_messages` | tout membre connecté | publier en son nom ; supprimer le sien, ou n'importe lequel si administrateur |
-| `agenda_events` | tout membre connecté | administrateurs |
-| `documents` | tout membre connecté | administrateurs |
-| `sondages` | tout membre connecté | administrateurs |
-| `sondage_choices` | tout membre connecté | administrateurs |
-| `sondage_votes` | le sien, ou tous si administrateur | le sien uniquement |
-| `messages` | les siens, ou tous si administrateur | les siens ; seul un administrateur peut les modifier |
+| `discussion_messages` | **membre accepté** | publier en son nom si accepté ; supprimer le sien, ou n'importe lequel si administrateur |
+| `agenda_events` | tout le monde | administrateurs |
+| `documents` | tout le monde, **ceux marqués `familles`** | administrateurs |
+| `sondages` | tout le monde | administrateurs |
+| `sondage_choices` | tout le monde | administrateurs |
+| `sondage_votes` | **personne** — les résultats passent par `resultats_sondage()` | un vote par appareil, sans compte |
+| `messages` | personne | personne : l'ancien formulaire de contact est remplacé par les conversations |
+| `conversations` | par `lister_conversations()` et `lire_conversation_bureau()` | par `creer_conversation()` |
+| `conversation_messages` | par les fonctions de conversation, et par elles seules | idem |
+| `push_tokens` | administrateurs | l'appareil qui se déclare, via `cle_appareil()` |
+
+Les trois dernières tables, et les deux colonnes `status` et `visibility`, viennent
+de `20260920120000_acces_public.sql`. Elles n'ont **aucun privilège direct** : tout
+passe par des fonctions `security definer`, parce que le numéro d'une conversation
+ne doit jamais suffire à en lire le contenu — il faut le secret tiré à sa création.
 
 Le **compartiment de stockage** `documents` n'apparaît pas dans ce tableau : ses
 politiques se règlent dans le tableau de bord (Storage > Policies), pas en SQL ici.
-La marche à suivre est au [`README.md`](../README.md) principal, §4.
+La marche à suivre est au [`README.md`](../README.md) principal, §4, et
+`MISE-EN-SERVICE.md` §1.4 donne les deux politiques exactes.
 
 Trois points méritent d'être connus avant de modifier ce fichier :
 
-**`authenticated` ne veut pas dire « adhérent vérifié ».** C'est « porteur d'un
+**`authenticated` ne veut pas dire « adhérent accepté ».** C'est « porteur d'un
 jeton de session valide ». Une politique `to authenticated` ouvre donc la table à
 quiconque a créé un compte — ce qui est le cas de toute personne disposant de
-l'application, l'inscription étant libre. Pour restreindre aux membres validés
-par le bureau, il faudrait ajouter une colonne `validated_at` et la tester dans
-chaque politique.
+l'application, l'inscription étant libre. Pour restreindre aux membres acceptés par
+le bureau, la table `profiles` porte un `status`, et la fonction `is_member()` le
+teste : `discussion_messages` s'en sert. Les six tables ouvertes au rôle anonyme,
+elles, sont plus larges encore — c'est délibéré, et c'est ce qui permet à un parent
+d'utiliser l'application sans compte.
 
 **`security definer` doit toujours venir avec `set search_path = ''`.** Les
 fonctions `is_admin`, `handle_new_user` et les deux verrous de cohérence

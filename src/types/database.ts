@@ -24,6 +24,7 @@ export type Database = {
           id: string;
           display_name: string;
           role: Database['public']['Enums']['member_role'];
+          status: Database['public']['Enums']['member_status'];
           created_at: string;
           updated_at: string;
         };
@@ -31,6 +32,7 @@ export type Database = {
           id: string;
           display_name?: string;
           role?: Database['public']['Enums']['member_role'];
+          status?: Database['public']['Enums']['member_status'];
           created_at?: string;
           updated_at?: string;
         };
@@ -38,6 +40,7 @@ export type Database = {
           id?: string;
           display_name?: string;
           role?: Database['public']['Enums']['member_role'];
+          status?: Database['public']['Enums']['member_status'];
           created_at?: string;
           updated_at?: string;
         };
@@ -229,6 +232,7 @@ export type Database = {
           title: string;
           description: string | null;
           category: Database['public']['Enums']['document_category'];
+          visibility: Database['public']['Enums']['document_visibility'];
           storage_path: string;
           size_bytes: number | null;
           published_at: string;
@@ -241,6 +245,7 @@ export type Database = {
           title: string;
           description?: string | null;
           category?: Database['public']['Enums']['document_category'];
+          visibility?: Database['public']['Enums']['document_visibility'];
           storage_path: string;
           size_bytes?: number | null;
           published_at?: string;
@@ -253,6 +258,7 @@ export type Database = {
           title?: string;
           description?: string | null;
           category?: Database['public']['Enums']['document_category'];
+          visibility?: Database['public']['Enums']['document_visibility'];
           storage_path?: string;
           size_bytes?: number | null;
           published_at?: string;
@@ -324,21 +330,24 @@ export type Database = {
           id: string;
           sondage_id: string;
           choice_id: string;
-          voter_id: string;
+          voter_id: string | null;
+          voter_key: string | null;
           created_at: string;
         };
         Insert: {
           id?: string;
           sondage_id: string;
           choice_id: string;
-          voter_id: string;
+          voter_id?: string | null;
+          voter_key?: string | null;
           created_at?: string;
         };
         Update: {
           id?: string;
           sondage_id?: string;
           choice_id?: string;
-          voter_id?: string;
+          voter_id?: string | null;
+          voter_key?: string | null;
           created_at?: string;
         };
         Relationships: [];
@@ -379,20 +388,188 @@ export type Database = {
         };
         Relationships: [];
       };
+      conversations: {
+        Row: {
+          id: string;
+          secret_hash: string;
+          subject: string;
+          category: Database['public']['Enums']['message_category'];
+          reply_to: string | null;
+          status: Database['public']['Enums']['conversation_status'];
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          secret_hash: string;
+          subject: string;
+          category?: Database['public']['Enums']['message_category'];
+          reply_to?: string | null;
+          status?: Database['public']['Enums']['conversation_status'];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          secret_hash?: string;
+          subject?: string;
+          category?: Database['public']['Enums']['message_category'];
+          reply_to?: string | null;
+          status?: Database['public']['Enums']['conversation_status'];
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      conversation_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          from_bureau: boolean;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          from_bureau?: boolean;
+          body: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          from_bureau?: boolean;
+          body?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      push_tokens: {
+        Row: {
+          token: string;
+          platform: string;
+          created_at: string;
+          last_seen_at: string;
+        };
+        Insert: {
+          token: string;
+          platform: string;
+          created_at?: string;
+          last_seen_at?: string;
+        };
+        Update: {
+          token?: string;
+          platform?: string;
+          created_at?: string;
+          last_seen_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
     };
+    /**
+     * Les fonctions appelées par l'application, et leurs signatures.
+     *
+     * POURQUOI ELLES SONT DÉCLARÉES ICI
+     * ---------------------------------
+     * `requireSupabase()` rend un client typé par ce fichier. Sans cette section,
+     * `client.rpc('lire_conversation', …)` ne compilerait pas — et c'est
+     * exactement ce qu'on veut : un nom de fonction mal orthographié, ou un
+     * paramètre dans le mauvais ordre, échoue à la compilation plutôt qu'à
+     * l'exécution, sur un écran vide que personne ne saurait expliquer.
+     *
+     * Les types de retour sont ceux que `supabase gen types` produirait : une
+     * fonction `returns table (…)` rend une ligne par message, et `Args` porte
+     * les paramètres nommés — l'ordre n'y compte pas, ce qui est la raison même
+     * pour laquelle on les nomme.
+     */
     Functions: {
-      [_ in never]: never;
+      cle_appareil: {
+        Args: Record<string, never>;
+        Returns: string;
+      };
+      /**
+       * Accepte, refuse ou suspend une adhésion. Réservée au bureau.
+       *
+       * `Returns: undefined` et non `void` : `void` est le type d'une fonction
+       * qui ne rend rien **à l'appelant**, et une signature de retour doit être
+       * un type. Les autres fonctions du fichier qui ne rendent pas de ligne
+       * sont écrites de la même façon.
+       */
+      decider_adhesion: {
+        Args: {
+          p_id: string;
+          p_statut: Database['public']['Enums']['member_status'];
+        };
+        Returns: undefined;
+      };
+      creer_conversation: {
+        Args: {
+          p_subject: string;
+          p_category: Database['public']['Enums']['message_category'];
+          p_body: string;
+          p_reply_to: string;
+        };
+        Returns: { conversation_id: string; conversation_secret: string }[];
+      };
+      lire_conversation: {
+        Args: { p_id: string; p_secret: string };
+        Returns: {
+          message_id: string;
+          from_bureau: boolean;
+          body: string;
+          created_at: string;
+        }[];
+      };
+      repondre_conversation: {
+        Args: { p_id: string; p_secret: string; p_body: string };
+        Returns: boolean;
+      };
+      lister_conversations: {
+        Args: Record<string, never>;
+        Returns: {
+          id: string;
+          subject: string;
+          category: Database['public']['Enums']['message_category'];
+          status: Database['public']['Enums']['conversation_status'];
+          reply_to: string | null;
+          created_at: string;
+          updated_at: string;
+          message_count: number;
+          last_body: string | null;
+        }[];
+      };
+      lire_conversation_bureau: {
+        Args: { p_id: string };
+        Returns: {
+          message_id: string;
+          from_bureau: boolean;
+          body: string;
+          created_at: string;
+        }[];
+      };
+      repondre_conversation_bureau: {
+        Args: { p_id: string; p_body: string };
+        Returns: undefined;
+      };
+      resultats_sondage: {
+        Args: { p_sondage_id: string };
+        Returns: { choice_id: string; label: string; rang: number; voix: number }[];
+      };
     };
     Enums: {
       member_role: 'membre' | 'admin';
+      member_status: 'en_attente' | 'accepte' | 'refuse' | 'suspendu';
       signalement_category: 'cantine' | 'transport' | 'vie_scolaire' | 'autre';
       signalement_status: 'nouveau' | 'en_cours' | 'traite';
       annonce_category: 'information' | 'important' | 'cantine' | 'evenement' | 'reunion';
       document_category: 'administratif' | 'scolarite' | 'cantine' | 'activites' | 'autre';
+      document_visibility: 'familles' | 'bureau';
       message_category: 'cantine' | 'transport' | 'vie_scolaire' | 'activites' | 'autre';
+      conversation_status: 'nouveau' | 'en_cours' | 'clos';
     };
     CompositeTypes: {
       [_ in never]: never;
