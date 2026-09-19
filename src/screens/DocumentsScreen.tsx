@@ -62,10 +62,12 @@ function tailleLisible(octets: number | null): string | null {
  *
  * POURQUOI LE LIEN EST SIGNÉ, ET NON PUBLIC
  * -----------------------------------------
- * Le fichier vit dans un bucket **privé**. Un bucket public rendrait la
- * politique de la table `documents` décorative : la liste serait réservée aux
- * adhérents, mais l'adresse du fichier, une fois connue, fonctionnerait pour
- * tout le monde — y compris après la fermeture d'un compte.
+ * Le fichier vit dans un bucket **privé**. Un bucket public rendrait les deux
+ * politiques de la table `documents` décoratives : le rôle anonyme n'y lit que
+ * `visibility = 'familles'`, et un porteur de jeton y lit aussi ceux du bureau —
+ * mais l'adresse du fichier, une fois connue, fonctionnerait pour tout le
+ * monde, y compris après la fermeture d'un compte. C'est précisément ce que la
+ * colonne `visibility` ne peut pas empêcher si le compartiment est ouvert.
  *
  * L'adresse est donc signée et valable une heure. Elle se demande au moment de
  * l'ouverture, jamais à l'affichage de la liste : signer cent documents pour en

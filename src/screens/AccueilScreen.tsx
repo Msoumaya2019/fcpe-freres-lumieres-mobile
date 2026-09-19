@@ -52,7 +52,11 @@ const RACCOURCIS = [
   {
     cle: 'cantine',
     titre: 'Cantine',
-    sousTitre: 'Menus et réservations',
+    // « Menus et réservations » jusqu'ici, et c'était devenu faux : l'écran de
+    // cantine ne réserve plus rien, et il le dit lui-même. Un sous-titre qui
+    // annonce une action que l'écran refuse est la pire des promesses — celle
+    // qui ne se voit que sur l'appareil, après avoir appuyé.
+    sousTitre: 'Menus publiés',
     icone: 'restaurant-outline',
     accent: 'vert',
   },

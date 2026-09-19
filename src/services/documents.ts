@@ -22,11 +22,13 @@ export async function fetchDocuments(limit: number = MAX_DOCUMENTS): Promise<Doc
 }
 
 /**
- * Adresse publique d'un document.
+ * Adresse **signée** d'un document.
  *
- * Le bucket est **privé**, et c'est la politique de la table `documents` qui
- * réserve la liste aux adhérents. Un lien public rendrait cette politique
- * décorative : le fichier resterait lisible par quiconque possède son adresse.
+ * Le compartiment est **privé**, et ce sont les politiques de la table
+ * `documents` qui bornent ce qu'on peut lire : `visibility = 'familles'` pour un
+ * parent sans compte, la totalité pour un porteur de jeton. Un compartiment
+ * public rendrait ces deux politiques décoratives — le fichier resterait lisible
+ * par quiconque possède son adresse, y compris après la fermeture d'un compte.
  *
  * D'où une adresse **signée**, valable une heure. Elle n'est pas devinable, et
  * elle expire — ce qui laisse le temps d'ouvrir un PDF, sans laisser derrière

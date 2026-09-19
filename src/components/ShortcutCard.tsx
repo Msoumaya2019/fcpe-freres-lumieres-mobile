@@ -20,8 +20,8 @@ export interface ShortcutCardProps {
  * Ces cartes naviguent dans l'application sans changer d'adresse : un lecteur
  * d'écran qui annonce « lien » promet un comportement que l'appui ne produit
  * pas. Le libellé réunit le titre et le sous-titre, sans quoi l'annonce se
- * limiterait à « Cantine » et perdrait « Menus et réservations » — qui est
- * justement ce qui distingue cette carte d'une autre.
+ * limiterait à « Cantine » et perdrait « Menus publiés » — qui est justement ce
+ * qui distingue cette carte d'une autre.
  *
  * POURQUOI LA TAILLE MINIMALE EST POSÉE
  * -------------------------------------

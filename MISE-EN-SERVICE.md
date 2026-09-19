@@ -398,6 +398,68 @@ apparaît dans la liste, et l'ouverture échoue. C'est le symptôme à reconnaî
 vient jamais de la politique du compartiment, qui est binaire, mais toujours du lien
 entre le fichier et sa fiche.
 
+### 1.11 Publier une annonce, un menu, un sondage
+
+**Pourquoi il n'y a pas d'écran pour cela.** Aucun écran de l'application n'écrit ces
+contenus : les politiques de la base réservent l'écriture au bureau, et quatre
+formulaires de saisie représenteraient plus de code que tout le reste réuni. Vous
+publiez donc depuis le **Table Editor**, et l'application se remplit au prochain
+tirer-pour-rafraîchir. Ce n'est pas un pis-aller : du contenu publié une fois par
+semaine n'a pas besoin d'un écran dédié.
+
+Ce qui suit donne, pour chaque table, les colonnes **obligatoires**. Les autres ont une
+valeur par défaut, ou peuvent rester vides.
+
+**Une annonce** — Table Editor → `annonces` → **Insert row**
+
+| Colonne    | À remplir                                                       |
+| ---------- | --------------------------------------------------------------- |
+| `title`    | le titre, **160 caractères au plus**                            |
+| `body`     | le texte, jamais vide                                           |
+| `category` | `information`, `important`, `cantine`, `evenement` ou `reunion` |
+
+`published_at` se remplit seule à l'instant de l'insertion. Laissez `author_id` vide :
+elle désigne un compte, et la renseigner à la main est le seul moyen de se tromper ici.
+
+**Un menu de cantine** — `cantine_menus`
+
+| Colonne                                      | À remplir                                 |
+| -------------------------------------------- | ----------------------------------------- |
+| `service_date`                               | le **jour servi**, au format `2026-09-22` |
+| `starter`, `main_course`, `dessert`, `notes` | ce que vous voulez, ou vide               |
+
+`service_date` est **unique** : une seconde ligne pour le même jour est refusée avec
+« duplicate key value violates unique constraint ». C'est une protection, pas une
+panne — corrigez la ligne existante plutôt que d'en ajouter une. Une date passée ne
+s'affiche plus : l'écran ne montre que le jour et les semaines à venir.
+
+**Un événement d'agenda** — `agenda_events`
+
+| Colonne                   | À remplir                                      |
+| ------------------------- | ---------------------------------------------- |
+| `title`                   | le titre, **160 caractères au plus**           |
+| `start_at`                | le début, par exemple `2026-09-22 18:30:00+02` |
+| `end_at`                  | la fin, ou vide — **jamais avant** le début    |
+| `location`, `description` | ou vide                                        |
+| `all_day`                 | `true` pour une journée entière                |
+
+**Un sondage** — deux tables, dans cet ordre.
+
+1. `sondages` : `question` (**300 caractères au plus**), `details` si vous voulez
+   préciser, `is_open` laissé à `true`. **Notez l'`id` de la ligne créée** — c'est un
+   identifiant long, et il sert à l'étape suivante.
+2. `sondage_choices` : une ligne **par réponse** — `sondage_id` (l'`id` noté),
+   `label`, et `position` (0, 1, 2… dans l'ordre d'affichage).
+
+Un sondage sans réponse ne s'affiche pas : l'écran n'a rien à proposer. Pour le clore,
+mettez `is_open` à `false` — les votes déjà reçus restent comptés, et `closed_at` garde
+la date de clôture prévue si vous en aviez fixé une.
+
+**Ce qui ne se publie pas ici.** Les messages de la discussion et les conversations
+privées viennent des familles, pas de vous : aucune des deux tables n'a de politique
+d'écriture pour le bureau, et c'est voulu. Vous y répondez **depuis l'application**,
+écran « Discussion » et écran « Messages des familles ».
+
 ### Si quelque chose ne marche pas
 
 | Ce que vous voyez                                          | Ce qui se passe                                                                                                                                                                                               |
@@ -698,6 +760,9 @@ pas.
       l'installation ») : c'est votre geste, je n'ai que la clé publique
 - [ ] Puis, **dans l'application**, accepter les demandes d'adhésion — l'écran
       « Adhésions » du bureau
+- [ ] **Publier un premier contenu** — une annonce, un menu, un sondage (§1.11). Sans
+      eux, l'application s'ouvre sur des listes vides, et rien ne distingue « le
+      bureau n'a rien publié » de « l'application ne marche pas »
 - [ ] Les quatre réglages du tableau de bord
 - [x] Recopier les quatre valeurs SMTP dans Supabase — vérifié jusqu'au clic sur le lien
 - [ ] Le jeton Expo pour GitHub _(facultatif)_
