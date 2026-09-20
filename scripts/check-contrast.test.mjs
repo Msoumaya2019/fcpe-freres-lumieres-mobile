@@ -266,15 +266,21 @@ const TEXTES = [
 const NON_TEXTUELS = [
   ['bordure d’un champ', 'borderInteractive', 'surface'],
   ['bordure d’un bouton secondaire', 'primary', 'surface'],
-  //  L'icône d'un raccourci est posée sur le carré `tint`, et **non** sur le fond
-  //  `soft` de la carte : le carré est un ton plus soutenu que la carte, et
-  //  mesurer l'icône contre `soft` aurait décrit un écran qui n'existe pas. Le
-  //  couple `soft`/`tint` n'est donc pas un détail de dessin — c'est lui qui
-  //  décide de quel fond on parle.
-  ['icône d’un raccourci vert', 'success', 'successTint'],
-  ['icône d’un raccourci ambre', 'warning', 'warningTint'],
-  ['icône d’un raccourci violet', 'violet', 'violetTint'],
-  ['icône d’un raccourci bleu', 'primary', 'primaryTint'],
+  //  Une icône posée sur un carré est mesurée contre le carré — `tint` —, et
+  //  **non** contre le fond `soft` de la carte qui le porte : le carré est un
+  //  ton plus soutenu que la carte, et mesurer l'icône contre `soft` aurait
+  //  décrit un écran qui n'existe pas. Le couple `soft`/`tint` n'est donc pas un
+  //  détail de dessin — c'est lui qui décide de quel fond on parle.
+  //
+  //  Le libellé ne nomme plus le raccourci seul : **deux** écrans portent
+  //  désormais ces carrés — les quatre raccourcis de l'accueil, et le jour d'un
+  //  menu de cantine. Ce qui est tenu ici est la **paire**, pas l'écran qui
+  //  l'emploie ; un libellé qui nommerait un seul des deux laisserait croire que
+  //  le second n'est pas couvert.
+  ['icône sur un carré vert', 'success', 'successTint'],
+  ['icône sur un carré ambre', 'warning', 'warningTint'],
+  ['icône sur un carré violet', 'violet', 'violetTint'],
+  ['icône sur un carré bleu', 'primary', 'primaryTint'],
   //  L'icône d'un badge, elle, est bien posée sur `soft`, le fond qui porte
   //  aussi son libellé. Elle est donc **dominée** par la paire textuelle du
   //  même badge, plus stricte — 4,5:1 contre 3:1. La mesurer une seconde fois
