@@ -1607,41 +1607,8 @@ test('toute politique non exercée par l’application est nommée', () => {
   );
 });
 
-/**
- * Les prédicats qui ouvrent une politique **par décision écrite**.
- *
- * POURQUOI UNE TROISIÈME FAMILLE, ET CE QU'ELLE COÛTE
- * --------------------------------------------------
- * Le tri ne connaissait que deux familles : une politique que l'application
- * n'exerce pas était soit réservée au bureau (`is_admin()`, `is_super_admin()`),
- * soit une exception à justifier dans `ALLOWANCES`. La dixième migration en crée
- * une troisième, et elle est délibérée : le bureau a demandé que les membres
- * puissent **publier**, donc quatre politiques d'insertion s'ouvrent à
- * `peut_publier()` — un administrateur, ou un membre dont l'adhésion est
- * acceptée.
- *
- * Les verser dans `ALLOWANCES` aurait marché, et aurait dit le contraire de la
- * vérité : `ALLOWANCES` est la liste des cas qui **ne rentrent dans aucune
- * règle**. Ici il y a une règle, elle porte un nom, et ce nom se lit dans le
- * corps de la politique — ce qui est exactement ce qu'on veut relire dans six
- * mois.
- *
- * Chaque prédicat est déclaré **avec sa raison**, et la déclaration est vérifiée
- * dans les deux sens : un prédicat qui n'ouvrirait plus aucune politique fait
- * tomber le test — une déclaration périmée décrit une capacité qui n'existe
- * pas —, et un prédicat que nulle migration ne définit aussi.
- */
-const OUVERTURES = new Map([
-  [
-    'public.peut_publier()',
-    'dixième migration : un membre dont l’adhésion est acceptée publie une ' +
-      'actualité, un menu de cantine, un événement d’agenda et un sondage — ' +
-      'ajouter seulement, jamais corriger ni retirer',
-  ],
-]);
-
-test('les politiques non exercées sont des chemins d’administration, des ouvertures décidées, ou des exceptions nommées', () => {
-  // Le tri qui distingue les familles : le bureau écrit les annonces et les
+test('les politiques non exercées sont des chemins d’administration, ou des exceptions nommées', () => {
+  // Le tri qui distingue les deux familles : le bureau écrit les annonces et les
   // menus, pose le statut d'un signalement, retire un message. `profiles.insert`
   // n'est pas de celles-là — c'est le filet de sécurité de `handle_new_user`, et
   // il doit sa présence à une raison, pas à une ressemblance.
@@ -1658,50 +1625,15 @@ test('les politiques non exercées sont des chemins d’administration, des ouve
   const administration = (corps) =>
     corps.includes('public.is_admin()') || corps.includes('public.is_super_admin()');
 
-  //  La troisième famille : ni « réservé au bureau », ni « exception ». Une
-  //  capacité ouverte, et ouverte exprès — voir `OUVERTURES`.
-  const ouverteParDecision = (corps) =>
-    [...OUVERTURES.keys()].some((predicat) => corps.includes(predicat));
-
-  const inattendues = NON_EXERCEES.filter((cle) => {
-    const corps = POLITIQUES.get(cle).corps;
-
-    return !administration(corps) && !ouverteParDecision(corps) && !ALLOWANCES.has(cle);
-  });
+  const inattendues = NON_EXERCEES.filter(
+    (cle) => !administration(POLITIQUES.get(cle).corps) && !ALLOWANCES.has(cle),
+  );
 
   assert.deepEqual(
     inattendues,
     [],
-    'une politique que le code n’exerce pas et qui n’est ni réservée au bureau ni ouverte ' +
-      'par une décision déclarée ouvre une capacité que personne n’a relue : soit la ' +
-      'retirer, soit l’inscrire dans ALLOWANCES, soit nommer son prédicat dans OUVERTURES ' +
+    'une politique que le code n’exerce pas et qui n’est pas réservée au bureau ouvre ' +
+      'une capacité à tout membre : soit la retirer, soit l’inscrire dans ALLOWANCES ' +
       'avec sa raison',
   );
-
-  //  Le premier sens : une ouverture déclarée qui n'ouvre plus rien.
-  const declarees = [...OUVERTURES.keys()].filter((predicat) =>
-    NON_EXERCEES.some((cle) => POLITIQUES.get(cle).corps.includes(predicat)),
-  );
-
-  assert.deepEqual(
-    declarees.sort(),
-    [...OUVERTURES.keys()].sort(),
-    'une ouverture déclarée qui n’ouvre plus aucune politique est une déclaration périmée : ' +
-      'elle décrit une capacité qui n’existe pas, et le prochain lecteur la croira',
-  );
-
-  //  Le second sens : une ouverture déclarée qui n'existe pas. Un prédicat
-  //  absent du schéma ne refuse pas — il **lève**, et la politique entière tombe
-  //  avec lui. Une déclaration qui nomme une fonction inexistante décrit donc
-  //  exactement l'inverse de ce qu'elle annonce.
-  for (const predicat of OUVERTURES.keys()) {
-    const nom = predicat.replace('public.', '').replace('()', '');
-
-    assert.match(
-      SQL,
-      new RegExp(`create or replace function public\\.${nom}\\(\\)`),
-      `« ${predicat} » est déclaré comme ouvrant des politiques, mais aucune migration ne ` +
-        'définit cette fonction',
-    );
-  }
 });
