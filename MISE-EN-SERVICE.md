@@ -1020,15 +1020,19 @@ lien utilisable. Les deux adresses sont recopiées du fichier
       `est_super_admin` refuse la clé publiable (`42501`), ce qui **prouve
       qu'elle est là** — PostgreSQL détecte une colonne inconnue avant de
       vérifier les privilèges
-- [ ] `20260921180000_commentaires_trois_cibles.sql` collé et exécuté → un
+- [x] `20260921180000_commentaires_trois_cibles.sql` collé et exécuté → un
       commentaire peut porter sur une actualité, un **sondage** ou un **jour de
       cantine** _(à coller **après** le précédent, et jamais seul : il modifie la
-      table `commentaires`, donc collé seul il est refusé sur `relation
-"public.commentaires" does not exist`. **Non mesurable** depuis
-      l'extérieur, comme le cinquième : la clé publiable ne lit que les
-      commentaires **publiés**, et il n'y en a aucun avant votre première
-      validation. Le recoller est sans risque — les deux colonnes sont posées en
-      `if not exists` et la contrainte est retirée puis reposée)_
+      table `commentaires`, donc collé seul il est refusé sur
+      `relation "public.commentaires" does not exist`. **Mesuré présent le
+      20 septembre 2026** : la sonde « colonnes commentaires.sondage_id et
+      menu_id » de `scripts/sonder-base.mjs` répond `200`, là où elle rendait
+      `42703` avant le collage. La phrase « non mesurable depuis l'extérieur »
+      figurait ici, et elle était vraie **avant** que cette sonde existe ; elle
+      ne l'est plus. Le cinquième, lui, reste non mesurable — la clé publiable
+      ne distingue pas sa politique avant et après. Le recoller est sans risque :
+      les deux colonnes sont posées en `if not exists` et la contrainte est
+      retirée puis reposée)_
 - [x] Compartiment `documents` **privé** dans Storage — **mesuré** : l'adresse  
       publique du compartiment répond `Bucket not found`, et sa liste répond `200`  
       _(il existe donc, et n'est pas public)_
@@ -1036,10 +1040,16 @@ lien utilisable. Les deux adresses sont recopiées du fichier
       liste anonyme du compartiment répond `200` et laisse voir un document
       destiné aux familles (`menu.pdf`), tandis qu'un dépôt anonyme est refusé.
       La première porte la branche des **photos d'actualité** : sans elle, une
-      photo ne s'afficherait que pour les adhérents connectés
-- [x] `seed.sql` collé et exécuté → **mesuré** : `annonces` a 2 lignes lues par la  
-      clé publique, et `cantine_menus` en a 10 — huit, plus deux d'une seconde  
-      exécution un autre jour, ce qui est le comportement décrit en §1.5
+      photo ne s'afficherait que pour les adhérents connectés. **Et le dépôt
+      lui-même a été mesuré, le 20 septembre 2026 à 21 h 43** : l'annonce
+      « Test » porte `annonces/1789933382028-…png`, un nom que **seul** le
+      tableau de bord sait fabriquer (il préfixe l'horodatage de l'instant),
+      et cette image se relit sans aucun jeton : `200 image/png`,
+      4 047 185 octets
+- [x] `seed.sql` collé et exécuté → **mesuré** : `cantine_menus` a 10 lignes sur  
+      **10 dates distinctes** (du 18 au 28 septembre, sans le 24) — **aucun  
+      doublon**, relevé le 20 septembre 2026. `annonces` en compte quatre à cette  
+      date : les deux du jeu d'essai, plus deux publiées par le bureau
 - [x] Table Editor : `annonces` a les 2 lignes du jeu d'essai — plus, depuis, celles
       que le bureau a publiées
 - [x] Table Editor : les quinze tables de l'époque sont là — **mesuré depuis
