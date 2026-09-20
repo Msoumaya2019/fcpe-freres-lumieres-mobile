@@ -973,21 +973,25 @@ lien utilisable. Les deux adresses sont recopiées du fichier
 - [ ] `20260921120000_vote_connecte.sql` collé et exécuté → un adhérent **connecté**
       peut répondre à un sondage _(sans lui, la politique d'insertion des votes ne
       vise que le rôle anonyme, et le refus dit « vous n'avez pas les droits
-      nécessaires » — quelle que soit la réponse choisie)_
-- [ ] `20260921150000_super_admin.sql` collé et exécuté → le rôle **super
+      nécessaires » — quelle que soit la réponse choisie. **Non mesurable** : la
+      clé publiable ne distingue pas cette politique avant et après. Le recoller
+      est sans risque — il **remplace** la politique au lieu d'en ajouter une
+      seconde)_
+- [x] `20260921150000_super_admin.sql` collé et exécuté → le rôle **super
       administrateur**, la table `commentaires` (la seizième), et la colonne
-      `image_path` des actualités _(sans lui : pas de validation des commentaires,
-      pas de photo sous un article, et les adhésions restent décidées par tout
-      administrateur — **mesuré absent le 20 septembre 2026**, la colonne
-      `est_super_admin` répond `42703`)_
+      `image_path` des actualités — **mesuré présent le 20 septembre 2026** :
+      `commentaires` répond, `is_super_admin()` existe, et la colonne
+      `est_super_admin` refuse la clé publiable (`42501`), ce qui **prouve
+      qu'elle est là** — PostgreSQL détecte une colonne inconnue avant de
+      vérifier les privilèges
 - [x] Compartiment `documents` **privé** dans Storage — **mesuré** : l'adresse  
       publique du compartiment répond `Bucket not found`, et sa liste répond `200`  
       _(il existe donc, et n'est pas public)_
-- [ ] Ses **cinq** politiques collées _(sans elles, l'écran Documents est vide ou  
-      échoue : une politique manquante rend une liste vide, pas une erreur)_ —  
-      les trois d'écriture sont celles dont le tableau de bord a besoin, et la
-      première porte désormais la branche des **photos d'actualité** : sans elle,
-      une photo ne s'affiche que pour les adhérents connectés
+- [x] Ses **cinq** politiques collées — **mesuré le 20 septembre 2026** : la
+      liste anonyme du compartiment répond `200` et laisse voir un document
+      destiné aux familles (`menu.pdf`), tandis qu'un dépôt anonyme est refusé.
+      La première porte la branche des **photos d'actualité** : sans elle, une
+      photo ne s'afficherait que pour les adhérents connectés
 - [x] `seed.sql` collé et exécuté → **mesuré** : `annonces` a 2 lignes lues par la  
       clé publique, et `cantine_menus` en a 10 — huit, plus deux d'une seconde  
       exécution un autre jour, ce qui est le comportement décrit en §1.5
