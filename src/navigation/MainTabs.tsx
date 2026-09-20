@@ -164,13 +164,25 @@ function WeakPasswordGate({
  * retouche de couleur serait faite au mauvais endroit. Les couleurs de la barre
  * vivent maintenant dans `TabBar`.
  *
- * L'EN-TÊTE DE L'ACCUEIL PORTE LE NOM DE L'ÉCOLE
- * ----------------------------------------------
- * La maquette place « École Frères Lumières » en haut de l'écran d'accueil, et
- * la barre de titre dirait la même chose juste au-dessus. Le titre de l'onglet
- * **est** donc le nom de l'école : la coque reste celle qui existe — en-tête
- * visible, encoche gérée, bandeau de mot de passe faible sous l'en-tête —, et
- * rien n'est écrit deux fois.
+ * LE NOM DE L'ÉCOLE A DÉMÉNAGÉ DANS LE BANDEAU DE L'ACCUEIL
+ * ---------------------------------------------------------
+ * Il était ici, en `title` de l'onglet — donc dans la barre de titre, juste
+ * au-dessus de l'écran. Il est maintenant écrit **sur le bandeau de l'accueil**,
+ * par-dessus la photographie de l'école : c'est ce que la maquette demande, et
+ * c'est le seul endroit de l'application où il se lit comme une identité plutôt
+ * que comme un titre de page.
+ *
+ * L'écrire aux deux endroits l'aurait affiché deux fois à deux centimètres
+ * d'écart. La barre de titre dit donc « Accueil », qui est le nom de la
+ * rubrique — et c'est aussi ce que porte l'onglet.
+ *
+ * CE QUE CE CHANGEMENT A CORRIGÉ SANS LE CHERCHER
+ * -----------------------------------------------
+ * `title` ne nomme pas seulement la barre de titre : c'est aussi le **libellé de
+ * l'onglet**, que `TabBar` lit faute de `tabBarLabel` explicite. L'onglet
+ * affichait donc « École Frères Lumières » dans un cinquième de largeur d'écran,
+ * où le libellé se tronque à `numberOfLines={1}`. Le défaut ne se voyait que sur
+ * un appareil, et il tenait à une ligne que rien ne reliait à la barre du bas.
  *
  * SEUL L'ONGLET « PLUS » MASQUE SON EN-TÊTE
  * -----------------------------------------
@@ -198,11 +210,7 @@ export function MainTabs() {
         headerRight: () => <SignOutButton />,
       }}
     >
-      <Tab.Screen
-        name="Accueil"
-        component={AccueilScreen}
-        options={{ title: 'École Frères Lumières' }}
-      />
+      <Tab.Screen name="Accueil" component={AccueilScreen} options={{ title: 'Accueil' }} />
       <Tab.Screen name="Cantine" component={CantineScreen} options={{ title: 'Cantine' }} />
       <Tab.Screen name="Agenda" component={AgendaScreen} options={{ title: 'Agenda' }} />
       <Tab.Screen name="Contact" component={ContactScreen} options={{ title: 'Contact' }} />

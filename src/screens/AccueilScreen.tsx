@@ -3,6 +3,7 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { useCallback } from 'react';
 import {
   FlatList,
+  Image,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -27,11 +28,25 @@ import { useAsyncData } from '@/hooks/useAsyncData';
 import { useNonLus } from '@/hooks/useNonLus';
 import type { MainTabParamList } from '@/navigation/types';
 import { fetchAnnonces, photosDesAnnonces } from '@/services/annonces';
+import { photoDuBandeau } from '@/services/documents';
 import { fetchSondages, sondageOuvert } from '@/services/sondages';
 import { accents, colors, radius, spacing, type TintedAccent } from '@/theme';
 import type { AnnonceWithAuthor } from '@/types/models';
 
 const VIDE: readonly AnnonceWithAuthor[] = [];
+
+/**
+ * Hauteur du bandeau de l'école, en points.
+ *
+ * Assez haute pour qu'une photographie se voie — c'est le premier écran, et
+ * c'est là que passe le regard —, assez courte pour que la salutation et la
+ * première actualité restent visibles sans faire défiler. Sur un téléphone de
+ * 800 points de haut, elle en occupe un peu plus du cinquième.
+ *
+ * Elle est écrite ici plutôt que dans le tableau de styles parce qu'elle ne sert
+ * qu'à cet endroit, et qu'un nombre isolé dans un `StyleSheet` se cherche.
+ */
+const BANDEAU = 172;
 
 /**
  * Aucune photo, et la même table pour tous les rendus.
@@ -54,6 +69,16 @@ interface DonneesAccueil {
    * `photosDesAnnonces`.
    */
   readonly photos: ReadonlyMap<string, string>;
+  /**
+   * L'adresse signée de la photographie de l'école, ou `null`.
+   *
+   * `null` tant que le bureau n'en a pas déposé, et c'est le cas courant : le
+   * bandeau de l'accueil est alors **dessiné** — la même mise en page, le même
+   * emplacement, la même hauteur. Une photographie prend sa place sans que rien
+   * d'autre ne bouge, ce qui évite le saut de mise en page qu'une hauteur
+   * différente produirait à l'arrivée de la photo.
+   */
+  readonly bandeau: string | null;
   readonly sondage: ReturnType<typeof sondageOuvert>;
 }
 
@@ -147,17 +172,21 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
     //  parallèle : il faut connaître les chemins pour les demander. C'est un
     //  second aller-retour, mais un seul pour toute la liste — et il est nul
     //  quand aucune actualité n'est illustrée, ce qui reste le cas courant.
-    return {
-      annonces,
-      photos: await photosDesAnnonces(annonces),
-      sondage: sondageOuvert(sondages),
-    };
+    //
+    //  Le bandeau part **avec** les photos, dans le même `Promise.all` : deux
+    //  attentes menées de front valent mieux qu'une troisième à la suite, et le
+    //  bandeau n'a besoin de rien de ce que les annonces rapportent — son chemin
+    //  est convenu, il n'est pas lu en base.
+    const [photos, bandeau] = await Promise.all([photosDesAnnonces(annonces), photoDuBandeau()]);
+
+    return { annonces, photos, bandeau, sondage: sondageOuvert(sondages) };
   }, []);
 
   const { status, data, errorMessage, refreshing, refresh, reload } = useAsyncData(loader);
 
   const annonces = data?.annonces ?? VIDE;
   const photos = data?.photos ?? AUCUNE_PHOTO;
+  const bandeau = data?.bandeau ?? null;
   const sondage = data?.sondage ?? null;
   const prenom = profile?.display_name ?? '';
   const nonLus = useNonLus(userId);
@@ -211,6 +240,7 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
             <Hero
               prenom={prenom}
               nonLus={nonLus}
+              photoUrl={bandeau}
               onNotifications={() => {
                 navigation.navigate('Plus', { screen: 'Discussion' });
               }}
@@ -283,27 +313,41 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
 }
 
 /**
- * L'en-tête de l'accueil.
+ * L'en-tête de l'accueil : le bandeau de l'école, puis la salutation.
  *
- * POURQUOI PAS DE PHOTO D'ÉCOLE
- * -----------------------------
- * La maquette place une photographie de l'école dans l'en-tête de l'accueil.
- * Aucune photographie n'est disponible dans le dépôt, et en inventer une
- * reviendrait à illustrer l'application avec un bâtiment qui n'est pas le sien —
- * sur une application destinée aux familles d'une école précise, c'est un détail
- * qui se remarque.
+ * LE BANDEAU EST DESSINÉ TANT QU'AUCUNE PHOTO N'EST DÉPOSÉE
+ * ---------------------------------------------------------
+ * La maquette place une photographie de l'école en tête de l'accueil. Aucune
+ * photographie n'est disponible dans le dépôt, et en inventer une reviendrait à
+ * illustrer l'application avec un bâtiment qui n'est pas le sien — sur une
+ * application destinée aux familles d'une école précise, c'est un détail qui se
+ * remarque.
  *
- * La place est donc tenue par un bandeau dessiné : une icône d'école et la
- * devise de l'établissement, sur un fond bleu pâle. Une photographie peut
- * prendre sa place le jour où elle sera fournie, sans changer la mise en page —
- * le bandeau a exactement les mêmes dimensions.
+ * Le bandeau est donc **dessiné** tant que le bureau n'a rien déposé : l'icône
+ * de l'école, le nom de l'établissement et sa devise, sur le bleu pâle de la
+ * marque. Dès qu'une photographie existe au chemin convenu
+ * (`CHEMIN_BANDEAU`), elle prend la place du dessin **sans que la mise en page
+ * change d'un point** — même hauteur, mêmes rayons, même place pour le texte.
+ * C'est ce qui rend le dépôt depuis le tableau de bord invisible pour
+ * l'application : rien n'est à recompiler, rien n'est à modifier.
  *
- * POURQUOI LE NOM DE L'ÉCOLE N'EST PAS ICI
- * ---------------------------------------
- * « École Frères Lumières » est le **titre de l'onglet**, donc écrit par
- * l'en-tête de navigation, juste au-dessus. L'écrire aussi dans la carte
- * l'afficherait deux fois, à deux centimètres d'écart. La carte garde ce qui
- * n'est dit nulle part ailleurs : la ville, la salutation et la devise.
+ * POURQUOI LE TEXTE EST POSÉ SUR LA PHOTO, ET COMMENT IL RESTE LISIBLE
+ * --------------------------------------------------------------------
+ * La maquette veut le nom de l'école **par-dessus** la photographie. Un texte
+ * blanc sur une photographie quelconque n'a aucune lisibilité garantie : le
+ * bureau peut déposer une photo de cour enneigée, où le blanc sur blanc
+ * disparaît. Deux voiles sombres sont donc posés entre la photo et le texte —
+ * un léger sur toute l'image, qui unifie, et un plus dense sous le texte, qui
+ * porte la lecture.
+ *
+ * Les valeurs sont **mesurées sur le pire cas**, et le pire cas est une
+ * photographie entièrement blanche : les deux voiles s'y composent en un fond
+ * `#6D7179`, sur lequel le blanc vaut **4,90:1** — au-dessus des 4,5:1 qu'exige
+ * une légende de 13 points. Sur une photographie sombre, le rapport ne peut
+ * qu'être meilleur. Les voiles sont écrits en clair plutôt que pris dans la
+ * palette : ce ne sont pas des couleurs de l'application, ce sont des
+ * **opacités posées sur une image inconnue**, et leur valeur n'a de sens qu'avec
+ * le calcul ci-dessus.
  *
  * POURQUOI LE MESSAGE D'ACCUEIL EST ICI ET NON DANS UNE DONNÉE
  * -----------------------------------------------------------
@@ -319,19 +363,21 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
  * bien-être de nos enfants », suivie d'un cœur. La maquette met à cette place
  * deux autres phrases, et elles **disent davantage** : la première explique ce
  * que contient l'application, la seconde souhaite la rentrée. La devise, elle,
- * n'est pas perdue — elle est la même intention que celle du panneau, qui
- * affiche « Grandir · Apprendre · S'épanouir ensemble ». Écrire les deux
- * revenait à dire deux fois la même chose à deux centimètres d'écart.
+ * n'est pas perdue — elle est passée dans le bandeau, sous le nom de l'école,
+ * qui est l'endroit où elle se lit comme une signature plutôt que comme une
+ * phrase de plus.
  *
  * Le cœur, enfin, n'a pas disparu non plus : le bandeau du bas le porte.
  */
 function Hero({
   prenom,
   nonLus,
+  photoUrl,
   onNotifications,
 }: {
   readonly prenom: string;
   readonly nonLus: number;
+  readonly photoUrl: string | null;
   readonly onNotifications: () => void;
 }) {
   const initiales = prenom
@@ -343,6 +389,8 @@ function Hero({
 
   return (
     <Card elevated style={styles.hero}>
+      <Bandeau photoUrl={photoUrl} />
+
       <View style={styles.heroHaut}>
         <View style={styles.heroTexte}>
           <AppText variant="caption">Montmagny</AppText>
@@ -351,7 +399,7 @@ function Hero({
           {/*
             La phrase de la maquette, et elle dit quelque chose que rien d'autre
             ne dit : ce que cette application contient. Le titre au-dessus
-            salue, la devise du panneau en dessous est une intention — aucune
+            salue, la devise du bandeau au-dessus est une intention — aucune
             des deux n'apprend à un parent qui ouvre l'application pour la
             première fois ce qu'il va y trouver.
           */}
@@ -401,14 +449,68 @@ function Hero({
           </View>
         </View>
       </View>
+    </Card>
+  );
+}
 
-      <View style={styles.panneau} accessibilityElementsHidden>
-        <Ionicons name="school" size={22} color={colors.primary} />
-        <AppText variant="caption" style={styles.deviseEcole}>
+/**
+ * Le bandeau de l'école : une photographie si le bureau en a déposé une, un
+ * dessin sinon.
+ *
+ * LES DEUX FONDS, UN SEUL TEXTE
+ * -----------------------------
+ * Le texte est écrit **une fois**, et seule sa couleur change selon le fond :
+ * blanc sur la photographie, bleu de marque sur le dessin. Deux blocs de texte
+ * auraient été deux occasions de corriger l'un sans l'autre — et c'est le genre
+ * d'écart qui ne se voit que sur un appareil, dans un seul des deux états.
+ *
+ * La couleur est choisie par une variable et non par un ternaire répété trois
+ * fois : le sur-titre, le nom et la devise doivent basculer **ensemble**, sinon
+ * un blanc se retrouverait sur le bleu pâle, où il vaut 1,1:1.
+ *
+ * LE TEXTE EST MASQUÉ AUX LECTEURS D'ÉCRAN
+ * ----------------------------------------
+ * Le nom de l'école est déjà porté par l'en-tête de navigation, juste au-dessus,
+ * et la devise est une signature. Les énoncer ici doublerait chaque annonce de
+ * la page pour une information que l'adhérent a déjà entendue. L'image, elle,
+ * est décorative : son contenu est le nom de l'école, écrit juste à côté.
+ */
+function Bandeau({ photoUrl }: { readonly photoUrl: string | null }) {
+  const surPhoto = photoUrl !== null;
+  const encre = surPhoto ? colors.textOnPrimary : colors.primary;
+
+  return (
+    <View style={styles.bandeauEcole} accessibilityElementsHidden>
+      {photoUrl === null ? null : (
+        <>
+          <Image
+            source={{ uri: photoUrl }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+            accessibilityElementsHidden
+          />
+          {/*
+            Le voile léger, sur toute l'image. Il ne porte pas la lecture : il
+            empêche une photographie très claire de paraître surexposée à côté
+            du blanc de la carte.
+          */}
+          <View style={[StyleSheet.absoluteFill, styles.voileLeger]} />
+        </>
+      )}
+
+      {photoUrl === null ? (
+        <Ionicons name="school" size={54} color={colors.primaryTint} style={styles.ecole} />
+      ) : null}
+
+      <View style={[styles.legende, surPhoto ? styles.legendeSurPhoto : null]}>
+        <AppText variant="title" bold color={encre}>
+          École Frères Lumières
+        </AppText>
+        <AppText variant="caption" color={encre} style={styles.deviseEcole}>
           Grandir · Apprendre · S’épanouir ensemble
         </AppText>
       </View>
-    </Card>
+    </View>
   );
 }
 
@@ -517,7 +619,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   heroSousTitre: {
-    // Deux lignes au plus avant que le panneau ne prenne toute la carte : la
+    // Deux lignes au plus avant que le bloc ne prenne toute la carte : la
     // phrase est courte, et sur un écran étroit elle se replie d'elle-même.
     flexShrink: 1,
   },
@@ -532,21 +634,57 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     fontSize: 14,
   },
-  panneau: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
+  /**
+   * Le bandeau de l'école.
+   *
+   * La hauteur est **fixe**, et c'est ce qui permet à la photographie de
+   * remplacer le dessin sans que rien ne bouge : une hauteur déduite du contenu
+   * — `aspectRatio` sur l'image, ou la place du texte — ferait sauter toute la
+   * page le jour du dépôt, et le décalage se produirait une seule fois, sur
+   * l'appareil du bureau, au moment précis où personne ne regarde.
+   *
+   * `overflow: 'hidden'` est indispensable avec `StyleSheet.absoluteFill` : sans
+   * lui, la photographie déborde des coins arrondis et le bandeau se lit comme
+   * un rectangle posé sur une carte arrondie.
+   *
+   * Le fond bleu pâle est celui du dessin. Il ne se voit pas quand une photo est
+   * là — elle le recouvre entièrement —, mais il tient la place pendant le
+   * chargement de l'image, et il est le seul fond visible si la photo échoue à
+   * s'afficher.
+   */
+  bandeauEcole: {
+    height: BANDEAU,
     borderRadius: radius.lg,
     backgroundColor: accents.bleu.soft,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+  },
+  ecole: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+  },
+  voileLeger: {
+    //  Vingt pour cent de noir bleuté sur toute la photographie. Voir le calcul
+    //  du pire cas dans le commentaire de `Hero`.
+    backgroundColor: 'rgba(11, 18, 32, 0.2)',
+  },
+  legende: {
+    gap: 2,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  legendeSurPhoto: {
+    //  Cinquante pour cent, sous le texte. Composés avec les vingt pour cent
+    //  ci-dessus, ils donnent soixante pour cent sur le pire cas — une
+    //  photographie blanche —, et 4,90:1 pour le blanc posé dessus.
+    backgroundColor: 'rgba(11, 18, 32, 0.5)',
+    paddingTop: spacing.sm,
   },
   deviseEcole: {
     flexShrink: 1,
     fontSize: 12,
     lineHeight: 16,
-    color: colors.primary,
   },
   raccourcis: {
     // Deux rangées de deux cartes, empilées. Une seule rangée de quatre

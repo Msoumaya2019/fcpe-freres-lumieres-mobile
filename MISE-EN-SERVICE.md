@@ -286,14 +286,21 @@ Le compartiment se crée donc à la main, une fois.
 
    ```sql
    --  Ce que les familles peuvent lire : les documents qui leur sont destinés,
-   --  et les photos des actualités publiées.
+   --  les photos des actualités publiées, et la photographie de l'école.
    drop policy if exists storage_documents_select_familles on storage.objects;
    create policy storage_documents_select_familles
    on storage.objects for select to anon
    using (
      bucket_id = 'documents'
      and (
-       exists (
+       --  La photographie de l'école : un chemin **convenu**, pas une colonne.
+       --  C'est ce qui permet au bureau de la changer depuis le tableau de bord
+       --  sans qu'aucune table ne soit écrite ni lue — et c'est le seul objet du
+       --  compartiment que le rôle anonyme atteint sans qu'une ligne de la base
+       --  le désigne. Le chemin est donc écrit ici, et dans les deux dépôts :
+       --  une faute d'une lettre laisse le bandeau dessiné, sans autre signal.
+       storage.objects.name = 'accueil/bandeau.jpg'
+       or exists (
          select 1 from public.documents d
          where d.storage_path = storage.objects.name
            and d.visibility = 'familles'
@@ -1128,7 +1135,7 @@ Ensuite, **c'est mon travail, et il ne demande rien de vous** :
 
 - je place le fichier à la racine et je déclare `expo.android.googleServicesFile` dans  
   `app.json` ;
-- je relance la chaîne complète — `npm run verify`, les 36 fichiers de test ;
+- je relance la chaîne complète — `npm run verify`, les 37 fichiers de test ;
 - je recompile l'APK et l'IPA, et je les redépose dans la page des versions.
 
 **Il faudra alors réinstaller l'APK.** L'APK que vous avez aujourd'hui a été compilé  
@@ -1244,7 +1251,7 @@ pas.
 Pour que vous sachiez ce que vous n'avez pas à faire : les quatorze écrans et leur  
 navigation, l'authentification et la réinitialisation de mot de passe, les seize tables  
 et leurs politiques de sécurité, les contrôles de schéma et de politiques, la chaîne  
-de vérification complète (`npm run verify`, **36 fichiers de test**), les  
+de vérification complète (`npm run verify`, **37 fichiers de test**), les  
 trois flux GitHub Actions, le dépôt public sans aucun secret, les deux binaires  
 compilés — l'APK Android et l'IPA non signé —, les e-mails vérifiés jusqu'au clic  
 sur le lien reçu, et la documentation.

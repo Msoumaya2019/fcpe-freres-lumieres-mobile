@@ -591,6 +591,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-non-lus.test.mjs     un chiffre affiché trois fois, et sa seule source
 │   ├── check-safe-area.test.mjs   l'encoche, selon que l'écran a un en-tête ou non
 │   ├── check-acces-public.test.mjs  la surface publiée, jouée sous le rôle anonyme
+│   ├── check-vignettes.test.mjs   les vignettes d'une actualité, et le chemin du bandeau
 │   └── check-notifications.test.mjs  les deux moitiés d'une notification, et le canal tenu des deux côtés
 └── .github/workflows/             CI, build EAS, IPA non signé
 ```
@@ -1989,7 +1990,7 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Trente-six fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Trente-sept fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-effacement`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
@@ -2000,7 +2001,8 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   `check-migration-rejouable`, `check-migration-applicable`,
   `check-rls-comportement`, `check-sdk-pins`, `check-scripts-executables`,
   `check-markdown-listes`, `check-audit-scope`, `check-parser-surface`,
-  `check-non-lus`, `check-safe-area`, `check-commentaires`, `check-acces-public` et
+  `check-non-lus`, `check-safe-area`, `check-commentaires`, `check-acces-public`,
+  `check-vignettes` et
   `check-notifications`
   couvrent les
   gardes, les

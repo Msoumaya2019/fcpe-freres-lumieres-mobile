@@ -203,7 +203,7 @@ const MOTS = new Map([
   [33, 'Trente-trois'],
   [34, 'Trente-quatre'],
   [35, 'Trente-cinq'],
-  [36, 'Trente-six'],
+  [37, 'Trente-sept'],
 ]);
 
 test('tout fichier qui importe `node:test` est nommé pour être découvert', () => {

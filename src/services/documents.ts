@@ -111,3 +111,51 @@ export async function documentsUrls(
 
   return adresses;
 }
+
+/**
+ * Le chemin de la photographie de l'école, dans le compartiment.
+ *
+ * POURQUOI UN CHEMIN FIXE PLUTÔT QU'UNE COLONNE EN BASE
+ * -----------------------------------------------------
+ * Le bureau doit pouvoir changer cette photo **sans toucher au code**, et c'est
+ * la seule contrainte. Deux façons de la satisfaire : une colonne quelque part,
+ * ou un chemin convenu. Le chemin convenu a été retenu, et il coûte moins cher
+ * pour la même garantie — pas de table, pas de migration, pas de lecture
+ * supplémentaire, et un dépôt qui **remplace** la photo au lieu d'en créer une
+ * seconde. Une colonne aurait aussi demandé une politique de lecture anonyme de
+ * plus, là où la politique du compartiment se contente d'une ligne.
+ *
+ * LE NOM EST ÉCRIT DEUX FOIS DANS LE PROJET, ET C'EST ASSUMÉ
+ * ---------------------------------------------------------
+ * Une fois ici, une fois dans le tableau de bord (`src/lib/stockage.ts`), parce
+ * que les deux dépôts ne peuvent pas se lire. Les deux commentaires se nomment
+ * l'un l'autre : c'est la même règle que partout ailleurs dans ce dépôt — une
+ * valeur recopiée n'est tenable que si chaque copie dit où est l'autre.
+ *
+ * Ce qui les tient ensemble n'est pas un test mais la **politique du
+ * compartiment**, qui compare des chaînes au caractère près : un chemin
+ * légèrement différent d'un côté et de l'autre ne casse rien à la compilation,
+ * ne lève rien à l'exécution, et laisse simplement le bandeau dessiné à la place
+ * de la photo. C'est le repli qui rend l'erreur supportable — et c'est pourquoi
+ * le repli n'est pas une décoration.
+ */
+export const CHEMIN_BANDEAU = 'accueil/bandeau.jpg';
+
+/**
+ * L'adresse signée de la photographie de l'école, ou `null` si elle n'existe
+ * pas encore.
+ *
+ * `null` est le cas **courant**, pas le cas d'erreur : tant que le bureau n'a
+ * rien déposé, il n'y a pas de fichier à ce chemin, et l'accueil affiche son
+ * bandeau dessiné. Un dépôt, un remplacement, un retrait : les trois se
+ * traduisent par la même chose ici, et aucun n'est une panne.
+ */
+export async function photoDuBandeau(): Promise<string | null> {
+  try {
+    const adresses = await documentsUrls([CHEMIN_BANDEAU]);
+
+    return adresses.get(CHEMIN_BANDEAU) ?? null;
+  } catch {
+    return null;
+  }
+}
