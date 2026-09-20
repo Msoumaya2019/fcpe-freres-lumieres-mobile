@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { PlusStackParamList } from '@/navigation/types';
 import { ActualitesScreen } from '@/screens/ActualitesScreen';
 import { AdhesionsBureauScreen } from '@/screens/AdhesionsBureauScreen';
+import { AnnonceDetailScreen } from '@/screens/AnnonceDetailScreen';
 import { ConnexionScreen } from '@/screens/ConnexionScreen';
 import { ConversationsBureauScreen } from '@/screens/ConversationsBureauScreen';
 import { DiscussionMembresScreen } from '@/screens/DiscussionMembresScreen';
@@ -85,6 +86,15 @@ export function PlusStack() {
         name="Actualites"
         component={ActualitesScreen}
         options={{ title: 'Actualités' }}
+      />
+      {/*  Le titre est générique à dessein : celui de l'actualité est dans son
+          texte, en grand, juste sous l'en-tête. Le répéter ici le tronquerait à
+          la largeur d'une barre, et deux titres pour un seul article font
+          douter de celui qu'on lit. */}
+      <Stack.Screen
+        name="Annonce"
+        component={AnnonceDetailScreen}
+        options={{ title: 'Actualité' }}
       />
       <Stack.Screen
         name="MesSignalements"

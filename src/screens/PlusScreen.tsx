@@ -10,8 +10,22 @@ import type { PlusStackParamList } from '@/navigation/types';
 import { accents, colors, radius, spacing, type AccentName } from '@/theme';
 import type { MemberStatus } from '@/types/models';
 
+/**
+ * Les routes de la pile qu'on atteint **sans rien leur passer**.
+ *
+ * `keyof PlusStackParamList` ne convient plus : depuis que la pile porte
+ * `Annonce: { id: string }`, ce type nommerait une route qu'une entrée de menu
+ * ne peut pas décrire — et `navigate(cle)` cesserait de compiler, ce qui est
+ * exactement ce qui est arrivé. Le défaut était utile : il a dit qu'une entrée
+ * de menu n'est pas « une route », mais « une destination qu'on ouvre sans
+ * paramètre ». C'est ce que ce type écrit.
+ */
+type RouteSansParametre = {
+  [Cle in keyof PlusStackParamList]: PlusStackParamList[Cle] extends undefined ? Cle : never;
+}[keyof PlusStackParamList];
+
 interface Entree {
-  readonly cle: keyof PlusStackParamList;
+  readonly cle: RouteSansParametre;
   readonly titre: string;
   readonly sousTitre: string;
   readonly icone: keyof typeof Ionicons.glyphMap;

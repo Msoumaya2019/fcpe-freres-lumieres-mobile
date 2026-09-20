@@ -63,6 +63,19 @@ export type PlusStackParamList = {
   AdhesionsBureau: undefined;
   Documents: undefined;
   Actualites: undefined;
+  /**
+   * Une actualité, entière.
+   *
+   * Elle vit ici, avec la liste qui la précède, plutôt qu'à la racine : c'est
+   * depuis « Actualités » et depuis les cartes de l'accueil qu'on l'ouvre, et
+   * l'en-tête de cette pile donne le retour arrière et le titre sans qu'aucun
+   * écran ait à s'en occuper.
+   *
+   * Elle porte un **identifiant**, jamais le texte de l'article : un paramètre
+   * de route est recopié dans l'état de navigation, et y faire passer plusieurs
+   * paragraphes figerait le contenu au moment de l'appui.
+   */
+  Annonce: { id: string };
   MesSignalements: undefined;
   Profil: undefined;
   Reglages: undefined;

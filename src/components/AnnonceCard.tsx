@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { Badge } from '@/components/Badge';
@@ -26,13 +26,22 @@ export interface AnnonceCardProps {
    * d'un mot, et compterait les caractères accentués de travers.
    */
   readonly lines?: number;
+  /**
+   * Ouvre l'actualité entière. **Sans elle, la carte n'est pas touchable** — et
+   * c'est ce qui distingue une carte qu'on lit d'une carte qu'on ouvre.
+   *
+   * Le repère « Lire la suite » n'apparaît que si les deux sont donnés : une
+   * carte déjà entière (`lines === undefined`) n'a rien à ouvrir, et le
+   * promettre serait un mensonge visible — le texte entier est sous les yeux.
+   */
+  readonly onPress?: () => void;
 }
 
 /** Une actualité : badge de catégorie, titre, repère de date, texte. */
-export function AnnonceCard({ annonce, lines = 3 }: AnnonceCardProps) {
+export function AnnonceCard({ annonce, lines = 3, onPress }: AnnonceCardProps) {
   const style = annonceCategoryStyle(annonce.category);
 
-  return (
+  const carte = (
     <Card elevated style={styles.carte}>
       <Badge
         label={ANNONCE_CATEGORY_LABELS[annonce.category] ?? 'Information'}
@@ -55,7 +64,31 @@ export function AnnonceCard({ annonce, lines = 3 }: AnnonceCardProps) {
       <AppText variant="body" numberOfLines={lines}>
         {annonce.body}
       </AppText>
+
+      {onPress === undefined || lines === undefined ? null : (
+        <View style={styles.suite}>
+          <AppText variant="caption" style={styles.suiteTexte}>
+            Lire la suite
+          </AppText>
+          <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+        </View>
+      )}
     </Card>
+  );
+
+  if (onPress === undefined) {
+    return carte;
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Lire l’actualité : ${annonce.title}`}
+      style={({ pressed }) => (pressed ? styles.pressee : undefined)}
+    >
+      {carte}
+    </Pressable>
   );
 }
 
@@ -73,5 +106,19 @@ const styles = StyleSheet.create({
     // la date qui doit rester lisible, et un nom long la pousserait hors du
     // cadre.
     flexShrink: 1,
+  },
+  suite: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  suiteTexte: {
+    color: colors.primary,
+  },
+  pressee: {
+    // L'appui doit se voir : sans retour visuel, une carte qui n'ouvre rien et
+    // une carte qui ouvre se ressemblent, et l'adhérent appuie deux fois.
+    opacity: 0.7,
   },
 });

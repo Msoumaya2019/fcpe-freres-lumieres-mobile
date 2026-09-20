@@ -129,9 +129,18 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
     [navigation],
   );
 
+  //  La carte coupée à trois lignes ouvre l'article, et le repère « Lire la
+  //  suite » le dit. C'est le seul endroit de l'application où la carte est
+  //  touchable : la rubrique « Actualités » montre déjà le texte entier, et y
+  //  promettre une suite qui est sous les yeux serait un mensonge visible.
   const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<AnnonceWithAuthor>) => <AnnonceCard annonce={item} />,
-    [],
+    ({ item }: ListRenderItemInfo<AnnonceWithAuthor>) => (
+      <AnnonceCard
+        annonce={item}
+        onPress={() => navigation.navigate('Plus', { screen: 'Annonce', params: { id: item.id } })}
+      />
+    ),
+    [navigation],
   );
 
   return (

@@ -301,7 +301,20 @@ test('les politiques d’insertion hors motif sont nommées, et aucune autre', (
   // d'insertion ouverte au rôle anonyme pourrait être ajoutée sans que rien ne
   // le dise — et la liste close des douze continuerait d'affirmer le contraire.
   const toutes = politiquesDInsertion(SQL);
-  const horsMotif = toutes.filter(({ roles }) => roles !== 'authenticated');
+
+  //  La dernière déclaration d'un nom l'emporte, et pour les deux listes.
+  //
+  //  PostgreSQL remplace une politique redéclarée : c'est ce que fait déjà
+  //  `INSERTIONS` plus bas, en ne gardant que la dernière. Le filtre des
+  //  exceptions, lui, gardait **toutes** les occurrences — et la cinquième
+  //  migration, qui reprend `sondage_votes_insert_public` pour l'ouvrir au rôle
+  //  `authenticated`, l'a fait apparaître deux fois. Le contrôle annonçait alors
+  //  une exception de plus qu'il n'y en a.
+  const derniereDeclarations = toutes.filter(
+    (politique, rang, liste) =>
+      liste.findLastIndex((autre) => autre.nom === politique.nom) === rang,
+  );
+  const horsMotif = derniereDeclarations.filter(({ roles }) => roles !== 'authenticated');
 
   assert.deepEqual(
     horsMotif.map(({ nom }) => nom).sort(),
@@ -1080,23 +1093,29 @@ const ALLOWANCES = new Map([
   ],
 ]);
 
-test('l’analyse des requêtes trouve les seize appels attendus', () => {
+test('l’analyse des requêtes trouve les dix-sept appels attendus', () => {
   // Contrôle, et invariant en même temps : le nombre est celui que SECURITY.md
   // annonce. Une expression régulière trop stricte qui ne trouverait rien ferait
   // passer les quatre tests suivants sur zéro cas.
   //
-  // Seize **appels** pour quatorze clés distinctes : deux couples table/méthode
-  // sont écrits deux fois. Le décompte porte sur les appels parce que c'est ce
+  // Dix-sept **appels** pour quatorze clés distinctes : trois appels s'ajoutent
+  // à une clé déjà comptée. Le décompte porte sur les appels parce que c'est ce
   // que l'analyse parcourt ; la liste, elle, porte sur les clés, parce qu'une
   // politique se réclame par couple et non par appel.
   //
-  // Les deux appels excédentaires sont **tous les deux** `profiles.select`,
-  // écrit trois fois : le profil de l'appelant, les noms des auteurs d'une page,
-  // et la file des adhésions que le bureau décide. Aucun n'ajoute de clé, donc
-  // aucune politique nouvelle n'est réclamée — c'est la même politique qui sert
-  // les trois lectures. Mesuré, et non déduit : une première rédaction de ce
-  // commentaire attribuait le second doublon à `discussion_messages.select`, qui
-  // n'est écrit qu'une fois.
+  // Les trois appels excédentaires se répartissent en deux clés, et aucune
+  // n'ajoute de clé — donc aucune politique nouvelle n'est réclamée, c'est la
+  // même politique qui sert chaque lecture :
+  //
+  //   - `profiles.select`, écrit **trois** fois : le profil de l'appelant, les
+  //     noms des auteurs d'une page, et la file des adhésions que le bureau
+  //     décide.
+  //   - `annonces.select`, écrit **deux** fois depuis l'écran qui ouvre une
+  //     actualité entière : la liste, puis l'article par son identifiant.
+  //
+  // Mesuré, et non déduit : une première rédaction de ce commentaire attribuait
+  // le second doublon à `discussion_messages.select`, qui n'est écrit qu'une
+  // fois.
   //
   // Six clés sont **sorties** de cette liste avec l'accès public, et ce sont six
   // retraits, pas six oublis : les trois de `cantine_reservations` venaient du
@@ -1104,7 +1123,7 @@ test('l’analyse des requêtes trouve les seize appels attendus', () => {
   // `messages.select` et `messages.insert` venaient de l'ancien contact, qui
   // exigeait un compte ; `sondage_votes.select` relisait le vote par son auteur,
   // or un vote d'appareil n'en a plus.
-  assert.equal(REQUETES.length, 16);
+  assert.equal(REQUETES.length, 17);
   assert.deepEqual(CLES_REQUETES, [
     'agenda_events.select',
     'annonces.select',

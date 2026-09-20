@@ -181,10 +181,11 @@ noms affichés et des rôles, jamais les adresses e-mail.
 
 ## Ce que la relecture des politiques a établi
 
-Les **seize** appels de `src/services/` ont été croisés un par un avec les
-politiques des trois migrations. Quatorze clés distinctes — deux appels
-partagent une même clé —, et **une seule écrit une ligne existante** :
-`push_tokens.update`, par laquelle un appareil déjà connu rafraîchit sa date.
+Les **dix-sept** appels de `src/services/` ont été croisés un par un avec les
+politiques des migrations. Quatorze clés distinctes — trois appels s'ajoutent à
+une clé déjà comptée : `profiles.select` est écrit trois fois, `annonces.select`
+deux —, et **une seule écrit une ligne existante** : `push_tokens.update`, par
+laquelle un appareil déjà connu rafraîchit sa date.
 
 Le relevé ci-dessous n'est pas la source : la source est
 `scripts/check-rls-guards.test.mjs`, qui tient la liste **close** et tombe dès
@@ -195,6 +196,7 @@ c'est ce banc qu'il faut relire en cas de désaccord.
 | ---------------------------- | ---------------------- | ----------------- | ----------------------------------------------------------------------- |
 | `fetchAgendaEvents`          | `agenda_events`        | select            | `agenda_events_select_public` · `…_select_authenticated`                |
 | `fetchAnnonces`              | `annonces`             | select            | `annonces_select_public` · `…_select_authenticated`                     |
+| `fetchAnnonce`               | `annonces`             | select            | `annonces_select_public` · `…_select_authenticated`                     |
 | `fetchUpcomingMenus`         | `cantine_menus`        | select            | `cantine_menus_select_public` · `…_select_authenticated`                |
 | `fetchDiscussionMessages`    | `discussion_messages`  | select            | `discussion_messages_select_member`                                     |
 | `postDiscussionMessage`      | `discussion_messages`  | insert            | `discussion_messages_insert_member`                                     |

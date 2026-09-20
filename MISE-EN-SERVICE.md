@@ -3,7 +3,8 @@
 > **En résumé.** Les étapes 1 à 4 sont faites : Supabase répond, le projet Expo est
 > créé, le jeton est posé, et **les e-mails partent** — vérifié jusqu'au clic sur le
 > lien reçu. **Les deux binaires se recompilent** — l'APK Android et l'IPA non signé.
-> Ce qui reste tient en trois gestes : **le compartiment des documents et ses cinq
+> Ce qui reste tient en quatre gestes : **le cinquième fichier SQL** (§1.3, celui du
+> vote des membres connectés), **le compartiment des documents et ses cinq
 > politiques** (§1.4), les quatre réglages du tableau de bord (§6), et installer
 > l'application sur un téléphone.
 >
@@ -114,7 +115,7 @@ gratuit suffit.
 
 Dans le menu de gauche, cliquez **SQL Editor**, puis **New query**.
 
-Vous allez coller **cinq fichiers**, l'un après l'autre, dans cet ordre.
+Vous allez coller **six fichiers**, l'un après l'autre, dans cet ordre.
 
 **Premier collage** — ouvrez ce fichier du projet et copiez tout son contenu :
 
@@ -172,7 +173,21 @@ en dernier, et se recolle sans doublon. **Il est appliqué** — mesuré depuis
 l'extérieur le 20 septembre 2026 : la colonne `is_draft` existe, et les deux
 fonctions répondent.
 
-**Cinquième collage** — même chose avec :
+**Cinquième collage** — le vote des membres connectés :
+
+```
+supabase/migrations/20260921120000_vote_connecte.sql
+```
+
+Même geste, même message attendu. Ce fichier ne crée rien non plus : il
+**remplace** la politique d'insertion des votes, qui était déclarée pour le
+seul rôle anonyme, et l'ouvre au membre connecté. **Sans lui**, un adhérent
+qui a un compte ne peut pas répondre à un sondage : le refus dit « vous n'avez
+pas les droits nécessaires », et il ne vient ni du sondage ni de la réponse
+choisie. Il s'applique après le troisième fichier, qui déclare cette
+politique, et se recolle sans doublon.
+
+**Sixième collage** — le jeu d'essai, et il est facultatif :
 
 ```
 supabase/seed.sql
@@ -181,7 +196,7 @@ supabase/seed.sql
 **Attendu : `Success. No rows returned`** — un `insert` ne renvoie pas de lignes,  
 donc le message est le même. C'est normal.
 
-> **Les cinq fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
+> **Les six fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
 > ce qu'il signale et relancez **le même fichier** : il ne créera pas de doublon, et  
 > il n'y a pas besoin de repartir de zéro.
 
@@ -352,12 +367,19 @@ Elle ne dit pas la même chose de toutes, et c'est ce qui la rend utile :
   accepte l'écriture d'un appareil sans compte, mais sa lecture est réservée au
   bureau. Le rôle anonyme n'y voit rien, exactement comme la politique le décrit.
 
-**Les quatre migrations sont appliquées**, et c'est mesuré aussi — le
+**Les quatre premières migrations sont appliquées**, et c'est mesuré aussi — le
 20 septembre 2026, depuis l'extérieur : la colonne `is_draft` répond `200`, et les
 sept fonctions qu'appelle le tableau de bord existent. Chacune refuse la clé
 publiable (`401`, `permission denied`), sauf `resultats_sondage`, qui l'accepte
 (`200`) — ouverte à `anon` par décision écrite, parce qu'elle rend des compteurs
 par réponse et jamais une ligne de votant.
+
+**La cinquième, elle, n'est pas encore appliquée** — et c'est mesuré aussi : en
+rôle anonyme, un vote franchit le privilège et la politique, et c'est le
+déclencheur qui refuse une réponse étrangère au sondage (`23514`, « Le choix ne
+fait pas partie de ce sondage »). Le chemin anonyme fonctionne donc, et c'est le
+rôle `authenticated` qui n'avait aucune politique d'insertion : le seul compte
+existant — celui du bureau — ne pouvait pas voter.
 
 1. Dans le menu de gauche, cliquez **Table Editor**.
 2. Vous devez voir les quinze tables : `agenda_events`, `annonces`,
@@ -859,7 +881,11 @@ lien utilisable. Les deux adresses sont recopiées du fichier
       peut enregistrer un brouillon, changer un rôle et clore une conversation  
       _(**mesuré présent le 20 septembre 2026** : `is_draft` répond `200`, et les  
       sept fonctions appelées par le tableau de bord existent, refusant toutes la  
-      clé publiable sauf `resultats_sondage`)_
+      clé publiable sauf `resultats_sondage`)
+- [ ] `20260921120000_vote_connecte.sql` collé et exécuté → un adhérent **connecté**
+      peut répondre à un sondage _(sans lui, la politique d'insertion des votes ne
+      vise que le rôle anonyme, et le refus dit « vous n'avez pas les droits
+      nécessaires » — quelle que soit la réponse choisie)_
 - [x] Compartiment `documents` **privé** dans Storage — **mesuré** : l'adresse  
       publique du compartiment répond `Bucket not found`, et sa liste répond `200`  
       _(il existe donc, et n'est pas public)_
