@@ -321,6 +321,14 @@ const NON_SAISIES = [
       'l’ancien écran de contact n’écrit plus dans `messages` : la table garde les ' +
       'messages déjà reçus, et plus aucun champ ne les saisit',
   },
+  {
+    table: 'reglages',
+    colonne: 'valeur',
+    raison:
+      'l’application mobile **lit** ces deux textes et ne les écrit jamais : c’est le ' +
+      'tableau de bord qui les règle, et c’est là que la borne de 160 est tenue — le champ ' +
+      'y porte `maxLength`, et son action serveur refuse au-delà',
+  },
 ];
 
 const BORNEES = contraintesBornees();
@@ -387,6 +395,7 @@ test('l’extraction lit bien la migration et les écrans', () => {
       'messages_subject_length',
       'profiles_display_name_length',
       'push_tokens_token_length',
+      'reglages_valeur_longueur',
       'signalements_subject_not_blank',
       'sondage_choices_label_length',
       'sondages_question_length',

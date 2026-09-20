@@ -223,8 +223,8 @@ même chose et dans le même ordre.
 
 ## Ce que la relecture des politiques a établi
 
-Les **dix-neuf** appels de `src/services/` ont été croisés un par un avec les
-politiques des migrations. Seize clés distinctes — trois appels s'ajoutent à
+Les **vingt** appels de `src/services/` ont été croisés un par un avec les
+politiques des migrations. Dix-sept clés distinctes — trois appels s'ajoutent à
 une clé déjà comptée : `profiles.select` est écrit trois fois, `annonces.select`
 deux —, et **une seule écrit une ligne existante** : `push_tokens.update`, par
 laquelle un appareil déjà connu rafraîchit sa date.
@@ -252,20 +252,28 @@ c'est ce banc qu'il faut relire en cas de désaccord.
 | `fetchProfile`               | `profiles`             | select             | `profiles_select_authenticated`                                         |
 | `fetchAuthorNames`           | `profiles`             | select             | `profiles_select_authenticated`                                         |
 | `listerAdhesions`            | `profiles`             | select             | `profiles_select_authenticated`                                         |
+| `fetchReglagesBandeau`       | `reglages`             | select             | `reglages_select_public`                                                |
 | `fetchMySignalements`        | `signalements`         | select             | `signalements_select_own_or_admin`                                      |
 | `createSignalement`          | `signalements`         | insert             | `signalements_insert_own`                                               |
 | `fetchSondages` (sondages)   | `sondages`             | select             | `sondages_select_public` · `…_select_authenticated`                     |
 | `fetchSondages` (choix)      | `sondage_choices`      | select             | `sondage_choices_select_public` · `…_select_authenticated`              |
 | `castVote`                   | `sondage_votes`        | insert             | `sondage_votes_insert_public` · `sondage_votes_insert_own`              |
 
-Deux remarques que le tableau seul ne dirait pas. Les **sept** tables publiques
+Trois remarques que le tableau seul ne dirait pas. Les **sept** tables publiques
 portent **deux** politiques de lecture et non une : `*_select_public` pour le
 rôle `anon`, `*_select_authenticated` pour un porteur de jeton. Un parent sans
 compte et un adhérent lisent les mêmes lignes par deux chemins distincts, et
 retirer l'une des deux ne se verrait pas à l'écriture — d'où les deux noms.
 `profiles.select` est écrit **trois fois** (le profil de l'appelant, les noms des
-auteurs d'une page, la file des adhésions du bureau) et ne réclame qu'une
-politique : c'est le même couple table/opération.
+auteurs, la file des adhésions du bureau) et ne réclame qu'une politique : c'est
+le même couple table/opération.
+
+`reglages` est la **huitième** table publique, et elle ne suit pas ce modèle :
+une seule politique de lecture, `reglages_select_public`, nomme **les deux
+rôles** à la fois. C'est ce que le titre du bandeau demande — un visiteur sans
+compte et un adhérent lisent le même texte, et deux politiques auraient été deux
+occasions d'en oublier une. Le commentaire de la migration dit pourquoi le
+raisonnement est le même et la forme différente.
 
 `commentaires` est la septième, et sa politique de lecture anonyme porte un nom
 qui dit ce qu'elle fait : `commentaires_select_publies_anon` filtre sur

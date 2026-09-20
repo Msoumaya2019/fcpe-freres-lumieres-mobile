@@ -112,6 +112,7 @@ const MIGRATIONS_ATTENDUES = [
   '20260921120000_vote_connecte.sql',
   '20260921150000_super_admin.sql',
   '20260921180000_commentaires_trois_cibles.sql',
+  '20260921210000_reglages_et_moderation.sql',
 ];
 
 /**

@@ -1076,3 +1076,62 @@ test('une lecture réservée au porteur d’un jeton se garde, ou dit pourquoi e
     '`SANS_GARDE_DE_LECTURE` nomme une fonction qui se garde déjà : l’exception est périmée',
   );
 });
+
+/* -------------------------------------------------------------------------- *
+ *  Le chemin public des actualités ne demande plus aucun nom
+ *
+ *  LA PREMIÈRE BARRIÈRE, ET CELLE QUI COMPTE
+ *  -----------------------------------------
+ *  Le contrôle ci-dessus protège la **fonction** qui lit `profiles` : il exige
+ *  qu'elle se garde. Mais la correction de fond est en amont, et c'est une autre
+ *  propriété : **le chemin des actualités ne lit plus `profiles` du tout**. Une
+ *  actualité est signée par une constante, `AUTEUR_COLLECTIF`, et une constante
+ *  ne se refuse pas.
+ *
+ *  C'est plus fort qu'une garde, et c'est pour cela que les deux sont écrites :
+ *  un défaut ne peut pas se produire là où il n'y a pas de requête. La garde
+ *  couvre ce qui reste — la discussion collective —, et cette propriété-ci
+ *  couvre ce qui est **public**.
+ *
+ *  CE QUE CE CONTRÔLE FERAIT TOMBER
+ *  --------------------------------
+ *  Le jour où quelqu'un rebrancherait la résolution des noms d'auteur sur les
+ *  actualités — par exemple pour afficher le nom réel d'un auteur —, la table
+ *  `profiles` rentrerait dans la liste, et le visiteur sans compte se verrait de
+ *  nouveau refuser la lecture de l'accueil **entier**. C'est le défaut qui a été
+ *  mesuré sur l'appareil ; ce test est là pour qu'il ne revienne pas par une
+ *  porte dérobée.
+ *
+ *  Ce que ce contrôle ne peut pas voir : qu'un appelant passe par un **autre**
+ *  service pour lire `profiles`. Il tient un fichier, et il le dit.
+ * -------------------------------------------------------------------------- */
+
+test('le chemin public des actualités ne lit que sa propre table', () => {
+  const chemin = join(RACINE, 'src', 'services', 'annonces.ts');
+  const source = sansCommentaires(lireFichier(chemin));
+
+  const tables = [
+    ...new Set([...source.matchAll(/from\(\s*['"`]([a-z_]+)['"`]\s*\)/g)].map((t) => t[1])),
+  ].sort();
+
+  //  Le témoin de l'extracteur : sans cette liste, un motif périmé rendrait
+  //  `tables` vide, et l'égalité ci-dessous passerait en ne mesurant rien.
+  assert.ok(tables.length > 0, 'aucune lecture relevée dans `annonces.ts` : le motif est périmé');
+
+  assert.deepEqual(
+    tables,
+    ['annonces'],
+    'le chemin public des actualités lit une autre table que la sienne. `profiles` n’est ' +
+      'lisible que par un porteur de jeton : une requête sur elle depuis un écran public ' +
+      'refuse la lecture à tout visiteur sans compte, et c’est l’accueil entier qui tombe — ' +
+      'mesuré sur l’appareil. Une actualité est signée par `AUTEUR_COLLECTIF`, une constante',
+  );
+
+  assert.match(
+    source,
+    /export const AUTEUR_COLLECTIF = '/,
+    'la signature des actualités doit être une constante exportée : c’est elle qui dispense ' +
+      'ce chemin de toute lecture de noms, et c’est par elle qu’on saura, plus tard, où ' +
+      'décider d’un autre choix',
+  );
+});

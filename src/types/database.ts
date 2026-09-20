@@ -543,6 +543,49 @@ export type Database = {
         };
         Relationships: [];
       };
+      /**
+       * Les textes courts que le bureau publie et que l'application affiche.
+       *
+       * POURQUOI UNE TABLE CLÉ/VALEUR
+       * -----------------------------
+       * Deux réglages aujourd'hui — le titre et la devise du bandeau d'accueil.
+       * Un réglage de plus aurait demandé une migration de plus si chaque
+       * réglage avait eu sa colonne ; c'est la **liste** qui bougera, pas la
+       * forme, et c'est la forme qu'une table fixe.
+       *
+       * Ce n'est pas un endroit où ranger de la configuration technique. Un
+       * chemin de compartiment, une clé d'envoi, un seuil n'ont rien à y faire :
+       * une valeur qui décide du comportement d'un programme ne doit pas pouvoir
+       * être changée depuis une page web.
+       *
+       * LA LECTURE EST PUBLIQUE, L'ÉCRITURE NON
+       * ---------------------------------------
+       * Un visiteur sans compte lit le titre du bandeau, comme il lit les
+       * actualités : la politique de lecture nomme `anon` **et** `authenticated`,
+       * parce qu'une politique `to anon` ne couvrirait pas le membre connecté.
+       * L'écriture est réservée au super administrateur.
+       *
+       * `valeur` est un texte **borné** : ce sont des titres, pas des
+       * paragraphes, et le bandeau a une hauteur fixe.
+       */
+      reglages: {
+        Row: {
+          cle: string;
+          valeur: string;
+          updated_at: string;
+        };
+        Insert: {
+          cle: string;
+          valeur: string;
+          updated_at?: string;
+        };
+        Update: {
+          cle?: string;
+          valeur?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -656,6 +699,21 @@ export type Database = {
         Args: {
           p_id: string;
           p_statut: Database['public']['Enums']['conversation_status'];
+        };
+        Returns: undefined;
+      };
+      /**
+       * Le retrait d'un message écrit par une famille, dans une conversation.
+       *
+       * Elle est appelée par le **tableau de bord**, jamais par l'application :
+       * une famille ne retire pas son propre message — elle n'a aucun écran pour
+       * le faire, et le fil qu'elle a ouvert se poursuit par la réponse du
+       * bureau. C'est un geste de modération, réservé au super administrateur,
+       * et la fonction le vérifie elle-même.
+       */
+      supprimer_message_conversation: {
+        Args: {
+          p_id: string;
         };
         Returns: undefined;
       };

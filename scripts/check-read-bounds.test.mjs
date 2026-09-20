@@ -168,6 +168,10 @@ test('l’extraction lit bien les services, et rien d’autre', () => {
   // se verrait qu'au bout de plusieurs années — un article très commenté
   // finirait par être tronqué par un plafond du serveur, et la page afficherait
   // silencieusement une conversation incomplète.
+  // `reglages` est **entrée** dans la liste avec la huitième migration, et sa
+  // lecture est bornée par construction : `.in('cle', …)`, une clé par texte
+  // affiché. Il n'y a pas de « tous les réglages » à lire, et il n'y en aura
+  // pas — c'est ce qui la dispense d'un `limit`.
   assert.deepEqual(tablesLues(), [
     'agenda_events',
     'annonces',
@@ -176,6 +180,7 @@ test('l’extraction lit bien les services, et rien d’autre', () => {
     'discussion_messages',
     'documents',
     'profiles',
+    'reglages',
     'signalements',
     'sondage_choices',
     'sondages',

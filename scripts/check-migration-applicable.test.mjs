@@ -579,7 +579,7 @@ test('les migrations s’appliquent toutes, dans l’ordre, et se rejouent', () 
   assert.equal(toursComplets, 2, 'la suite n’a pas été jouée deux fois');
 });
 
-test('la suite complète produit les seize tables attendues, et aucune autre', async () => {
+test('la suite complète produit les dix-sept tables attendues, et aucune autre', async () => {
   exigerLaSuite();
   assert.deepEqual(await tablesDeLaSuite(), [
     'agenda_events',
@@ -594,6 +594,7 @@ test('la suite complète produit les seize tables attendues, et aucune autre', a
     'messages',
     'profiles',
     'push_tokens',
+    'reglages',
     'signalements',
     'sondage_choices',
     'sondage_votes',

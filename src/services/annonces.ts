@@ -3,30 +3,56 @@
 import { requireSupabase } from '@/config/supabase';
 import { toAppError } from '@/errors';
 import { documentsUrls } from '@/services/documents';
-import { fetchAuthorNames } from '@/services/profiles';
 import type { Annonce, AnnonceWithAuthor } from '@/types/models';
 
 const DEFAULT_LIMIT = 30;
 
 /**
- * Les noms d'auteurs d'un lot de lignes, résolus en une requête.
+ * Le nom sous lequel une actualité est signée.
  *
- * Une seule requête groupée pour tout un écran, et non une par annonce : c'est
- * ce que faisait la version précédente, et l'accueil affichait trois annonces
- * pour trois allers-retours.
+ * POURQUOI CE N'EST PAS LE NOM DU COMPTE QUI L'A PUBLIÉE
+ * ------------------------------------------------------
+ * Les actualités sont écrites par une personne, et signées par le **bureau**.
+ * C'est une décision de l'association, et elle a une raison de fond : un
+ * article publié sous un nom personnel engage la personne qui le signe, alors
+ * qu'il engage le bureau — c'est le bureau qui décide de publier, et c'est à lui
+ * que les familles répondent.
  *
- * Le nom est résolu par une seconde requête plutôt que par un `select` imbriqué
- * de PostgREST : ce dernier dépend des métadonnées de clés étrangères, dont une
- * divergence avec `src/types/database.ts` ne se verrait qu'à l'exécution.
+ * CE QUE CELA CHANGE POUR LA LECTURE, ET CE QUE CELA LUI ÉPARGNE
+ * --------------------------------------------------------------
+ * Le nom affiché était auparavant résolu par une **seconde requête** sur
+ * `profiles`, à partir de `author_id`. Cette requête n'existe plus sur le chemin
+ * des actualités : `public.profiles` n'est lisible que par un porteur de jeton,
+ * et un visiteur sans compte se voyait refuser la lecture — ce qui faisait
+ * tomber l'accueil **entier** pour un nom d'auteur, photographie et bandeau
+ * compris. Un nom fixe ne demande rien à personne, et le défaut ne peut plus se
+ * reproduire : il n'y a plus de requête à refuser.
+ *
+ * `author_id` reste en base et continue de servir à ce qu'il sert vraiment —
+ * savoir qui peut **modifier** son article. Seul le nom affiché ne le lit plus.
+ *
+ * POURQUOI UNE SEULE SIGNATURE POUR TOUTES LES ACTUALITÉS
+ * -------------------------------------------------------
+ * Si le bureau souhaite un jour signer au nom de leur auteur, c'est ici que cela
+ * se décide, et la colonne `author_id` est toujours là pour le permettre. Le
+ * choix d'aujourd'hui est l'inverse, et il est explicite plutôt que deviné : une
+ * actualité sans auteur (`author_id` nul, ce qu'une suppression de compte
+ * produit) reste sans signature, et rien ne lui en invente une.
  */
-async function avecAuteurs(rows: readonly Annonce[]): Promise<AnnonceWithAuthor[]> {
-  const authorNames = await fetchAuthorNames(
-    rows.flatMap((row) => (row.author_id === null ? [] : [row.author_id])),
-  );
+export const AUTEUR_COLLECTIF = 'Membre de parents d’élèves';
 
+/**
+ * Les noms d'auteurs d'un lot de lignes.
+ *
+ * Le nom est **le même pour tout le monde**, et c'est pourquoi cette fonction
+ * n'a plus rien à demander à la base : voir `AUTEUR_COLLECTIF`. Elle garde sa
+ * forme — un lot de lignes entre, un lot de lignes enrichies sort — pour que les
+ * écrans qui l'appellent n'aient pas à connaître la règle.
+ */
+function avecAuteurs(rows: readonly Annonce[]): AnnonceWithAuthor[] {
   return rows.map((row) => ({
     ...row,
-    authorName: row.author_id === null ? null : (authorNames.get(row.author_id) ?? null),
+    authorName: row.author_id === null ? null : AUTEUR_COLLECTIF,
   }));
 }
 
@@ -42,7 +68,7 @@ export async function fetchAnnonces(limit: number = DEFAULT_LIMIT): Promise<Anno
     throw toAppError(error);
   }
 
-  return await avecAuteurs(data);
+  return avecAuteurs(data);
 }
 
 /**
@@ -132,6 +158,6 @@ export async function fetchAnnonce(id: string): Promise<AnnonceWithAuthor | null
     return null;
   }
 
-  const [annonce] = await avecAuteurs([data]);
+  const [annonce] = avecAuteurs([data]);
   return annonce ?? null;
 }

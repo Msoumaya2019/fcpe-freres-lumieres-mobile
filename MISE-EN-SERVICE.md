@@ -114,11 +114,11 @@ gratuit suffit.
 > il est **irrécupérable**, et c'est le seul moyen de secours si un jour il faut  
 > accéder à la base directement.
 
-### 1.3 Créer les seize tables
+### 1.3 Créer les dix-sept tables
 
 Dans le menu de gauche, cliquez **SQL Editor**, puis **New query**.
 
-Vous allez coller **sept fichiers**, l'un après l'autre, dans cet ordre.
+Vous allez coller **huit fichiers**, l'un après l'autre, dans cet ordre.
 
 **Premier collage** — ouvrez ce fichier du projet et copiez tout son contenu :
 
@@ -230,11 +230,35 @@ distinguer, et « le jeudi, mon enfant est allergique » ne se dit pas d'une
 semaine entière. Une contrainte garantit qu'un commentaire a **exactement une**
 cible, et chacune des trois clés étrangères efface le fil avec sa cible.
 
-> **À coller après le sixième collage**, jamais avant. C'est le seul des sept qui
+> **À coller après le sixième collage**, jamais avant. C'est le seul des huit qui
 > dépende du précédent par une **modification** de table, et non par une simple
 > lecture.
 
-**Huitième collage** — le jeu d'essai, et il est facultatif :
+**Huitième collage** — le titre du bandeau d'accueil, et le retrait d'un message
+de conversation :
+
+```
+supabase/migrations/20260921210000_reglages_et_moderation.sql
+```
+
+Même geste, même message attendu. Il apporte deux choses, réunies dans un seul
+fichier pour qu'un seul collage suffise :
+
+- la table `reglages` — la **dix-septième** —, où le tableau de bord écrit le
+  **titre** et la **devise** qui s'affichent sous la photographie de l'école.
+  Elle est lisible par tout le monde, y compris les familles sans compte, et
+  modifiable par le **bureau** — le même droit que la photographie, à côté de
+  laquelle ce titre s'affiche ;
+- la fonction `supprimer_message_conversation()`, qui permet au tableau de bord
+  de retirer un message écrit par une famille dans une conversation privée. Les
+  deux tables de conversation n'ont **aucune politique** — c'est délibéré —, donc
+  ce retrait ne peut pas être un `delete` ordinaire : il passe par une fonction
+  qui vérifie le droit elle-même, comme la réponse et le rangement.
+
+> **À coller après le sixième collage**, pour la même raison que le septième : la
+> fonction s'appuie sur `is_super_admin()`, que le sixième crée.
+
+**Neuvième collage** — le jeu d'essai, et il est facultatif :
 
 ```
 supabase/seed.sql
@@ -243,7 +267,7 @@ supabase/seed.sql
 **Attendu : `Success. No rows returned`** — un `insert` ne renvoie pas de lignes,  
 donc le message est le même. C'est normal.
 
-> **Les huit fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
+> **Les neuf fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
 > ce qu'il signale et relancez **le même fichier** : il ne créera pas de doublon, et  
 > il n'y a pas besoin de repartir de zéro.
 
@@ -1200,6 +1224,18 @@ y changer.
       ne distingue pas sa politique avant et après. Le recoller est sans risque :
       les deux colonnes sont posées en `if not exists` et la contrainte est
       retirée puis reposée)_
+- [ ] `20260921210000_reglages_et_moderation.sql` collé et exécuté → le titre du
+      **bandeau d'accueil** se règle depuis le tableau de bord, et un message
+      écrit par une famille se retire depuis la page « Messagerie »
+      _(à coller **après** `20260921150000_super_admin.sql` : la fonction
+      `supprimer_message_conversation()` s'appuie sur `is_super_admin()`, que le
+      sixième collage crée. **Mesurable depuis l'extérieur** : la sonde
+      « lecture publique de `reglages` » de `scripts/sonder-base.mjs` répond
+      `200` avec la seule clé publiable, là où elle rend `42P01` avant le
+      collage. Sans ce collage, l'accueil garde son titre d'avant — la lecture
+      est repliée —, et c'est le tableau de bord qui le dit : la page
+      « Accueil » refuse alors d'enregistrer, avec le message qui nomme la
+      migration manquante)_
 - [x] Compartiment `documents` **privé** dans Storage — **mesuré** : l'adresse  
       publique du compartiment répond `Bucket not found`, et sa liste répond `200`  
       _(il existe donc, et n'est pas public)_
@@ -1270,7 +1306,7 @@ pas.
 Pour que vous sachiez ce que vous n'avez pas à faire : les quatorze écrans et leur  
 navigation, l'authentification et la réinitialisation de mot de passe, les seize tables  
 et leurs politiques de sécurité, les contrôles de schéma et de politiques, la chaîne  
-de vérification complète (`npm run verify`, **37 fichiers de test**), les  
+de vérification complète (`npm run verify`, **38 fichiers de test**), les  
 trois flux GitHub Actions, le dépôt public sans aucun secret, les deux binaires  
 compilés — l'APK Android et l'IPA non signé —, les e-mails vérifiés jusqu'au clic  
 sur le lien reçu, et la documentation.

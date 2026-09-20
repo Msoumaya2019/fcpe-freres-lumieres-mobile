@@ -242,14 +242,15 @@ test('la condition d’insertion des signalements laisse le bureau décider du s
 });
 
 test('aucune politique d’insertion n’est perdue à la lecture', () => {
-  // Douze tables ont une politique d'insertion **réservée aux porteurs d'un
-  // jeton**, et elles se partagent en deux familles égales. Six sont insérables
-  // par un **membre** — `profiles`, `cantine_reservations`, `signalements`,
-  // `discussion_messages`, `sondage_votes`, `messages` — et six par le **bureau**
-  // — `annonces`, `cantine_menus`, `agenda_events`, `documents`, `sondages`,
-  // `sondage_choices`. L'analyse doit donc en trouver douze : sinon une
-  // expression régulière trop stricte aurait laissé passer une table, et
-  // l'invariant avec elle.
+  // Treize tables ont une politique d'insertion **réservée aux porteurs d'un
+  // jeton**, et elles se partagent en deux familles égales plus une. Six sont
+  // insérables par un **membre** — `profiles`, `cantine_reservations`,
+  // `signalements`, `discussion_messages`, `sondage_votes`, `messages` — et
+  // **sept** par le **bureau** — `annonces`, `cantine_menus`, `agenda_events`,
+  // `documents`, `sondages`, `sondage_choices`, et `reglages` depuis la huitième
+  // migration. L'analyse doit donc en trouver treize : sinon une expression
+  // régulière trop stricte aurait laissé passer une table, et l'invariant avec
+  // elle.
   assert.deepEqual([...INSERTIONS.keys()].sort(), [
     'agenda_events',
     'annonces',
@@ -259,6 +260,7 @@ test('aucune politique d’insertion n’est perdue à la lecture', () => {
     'documents',
     'messages',
     'profiles',
+    'reglages',
     'signalements',
     'sondage_choices',
     'sondage_votes',
@@ -500,6 +502,13 @@ const SURFACE_PUBLIQUE = new Map([
       '`commentaires_select_publies_anon` ne lui rend que les commentaires **publiés** — un ' +
       'commentaire en attente de validation est muet, y compris pour son auteur',
   ],
+  [
+    'reglages',
+    'le titre et la devise du bandeau d’accueil : `reglages_select_public` les ouvre ' +
+      'en lecture seule, et l’écriture est réservée au bureau par trois politiques ' +
+      'distinctes — un visiteur sans compte doit lire le nom de l’école, et seuls ' +
+      'ceux qui peuvent déposer sa photographie doivent pouvoir la renommer',
+  ],
 ]);
 
 /**
@@ -539,7 +548,7 @@ const PROMOTION = [
   'README.md',
 ];
 
-test('les migrations déclarent les seize tables attendues', () => {
+test('les migrations déclarent les dix-sept tables attendues', () => {
   // Contrôle : sans lui, une analyse qui ne lirait rien ferait passer les trois
   // invariants suivants sur zéro table. La liste est **close** : une table
   // ajoutée sans être déclarée ici fait tomber le test, et l'ajouter est une
@@ -562,6 +571,7 @@ test('les migrations déclarent les seize tables attendues', () => {
     'conversation_messages',
     'push_tokens',
     'commentaires',
+    'reglages',
   ]);
 });
 
@@ -1212,7 +1222,7 @@ test('l’analyse des requêtes trouve les dix-neuf appels attendus', () => {
   // annonce. Une expression régulière trop stricte qui ne trouverait rien ferait
   // passer les quatre tests suivants sur zéro cas.
   //
-  // Dix-neuf **appels** pour seize clés distinctes : trois appels s'ajoutent
+  // Vingt **appels** pour dix-sept clés distinctes : trois appels s'ajoutent
   // à une clé déjà comptée. Le décompte porte sur les appels parce que c'est ce
   // que l'analyse parcourt ; la liste, elle, porte sur les clés, parce qu'une
   // politique se réclame par couple et non par appel.
@@ -1222,8 +1232,12 @@ test('l’analyse des requêtes trouve les dix-neuf appels attendus', () => {
   // même politique qui sert chaque lecture :
   //
   //   - `profiles.select`, écrit **trois** fois : le profil de l'appelant, les
-  //     noms des auteurs d'une page, et la file des adhésions que le bureau
-  //     décide.
+  //     noms des auteurs, et la file des adhésions que le bureau décide. Ce qui a
+  //     changé avec la correction du nom d'auteur n'est pas ce compte — les trois
+  //     lectures existent toujours —, mais le fait qu'**aucun écran public ne les
+  //     atteint plus** : les noms des auteurs ne sont plus demandés pour une page
+  //     d'actualités, et c'est cette demande-là qui refusait la lecture à un
+  //     visiteur sans compte.
   //   - `annonces.select`, écrit **deux** fois depuis l'écran qui ouvre une
   //     actualité entière : la liste, puis l'article par son identifiant.
   //
@@ -1244,7 +1258,11 @@ test('l’analyse des requêtes trouve les dix-neuf appels attendus', () => {
   // que l'application exerce sur cette table — la décision de modération et le
   // retrait vivent dans le tableau de bord, et figurent donc, nommés, dans
   // `NON_EXERCEES`.
-  assert.equal(REQUETES.length, 19);
+  //
+  // Une clé entre avec les réglages : `reglages.select`, pour le titre et la
+  // devise du bandeau. L'écriture, elle, n'est pas exercée ici — elle vit dans le
+  // tableau de bord, et ses trois politiques sont nommées dans `NON_EXERCEES`.
+  assert.equal(REQUETES.length, 20);
   assert.deepEqual(CLES_REQUETES, [
     'agenda_events.select',
     'annonces.select',
@@ -1257,6 +1275,7 @@ test('l’analyse des requêtes trouve les dix-neuf appels attendus', () => {
     'profiles.select',
     'push_tokens.insert',
     'push_tokens.update',
+    'reglages.select',
     'signalements.insert',
     'signalements.select',
     'sondage_choices.select',
@@ -1568,6 +1587,9 @@ test('toute politique non exercée par l’application est nommée', () => {
       'messages.update',
       'profiles.insert',
       'push_tokens.select',
+      'reglages.delete',
+      'reglages.insert',
+      'reglages.update',
       'signalements.update',
       'sondage_choices.delete',
       'sondage_choices.insert',

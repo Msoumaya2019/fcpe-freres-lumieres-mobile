@@ -29,6 +29,11 @@ import { useNonLus } from '@/hooks/useNonLus';
 import type { MainTabParamList } from '@/navigation/types';
 import { fetchAnnonces, photosDesAnnonces } from '@/services/annonces';
 import { photoDuBandeau } from '@/services/documents';
+import {
+  REGLAGES_PAR_DEFAUT,
+  fetchReglagesBandeau,
+  type ReglagesBandeau,
+} from '@/services/reglages';
 import { fetchSondages, sondageOuvert } from '@/services/sondages';
 import { accents, colors, radius, spacing, type TintedAccent } from '@/theme';
 import type { AnnonceWithAuthor } from '@/types/models';
@@ -79,6 +84,15 @@ interface DonneesAccueil {
    * différente produirait à l'arrivée de la photo.
    */
   readonly bandeau: string | null;
+  /**
+   * Le titre et la devise affichés sous la photographie de l'école.
+   *
+   * Ils ne viennent plus du code : le bureau les règle depuis le tableau de bord,
+   * et `fetchReglagesBandeau` rend les textes d'avant quand la base n'a rien à
+   * dire. Voir `src/services/reglages.ts` — c'est le seul endroit du dépôt où une
+   * lecture avale son erreur, et la raison y est écrite.
+   */
+  readonly reglages: ReglagesBandeau;
   readonly sondage: ReturnType<typeof sondageOuvert>;
 }
 
@@ -177,9 +191,17 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
     //  attentes menées de front valent mieux qu'une troisième à la suite, et le
     //  bandeau n'a besoin de rien de ce que les annonces rapportent — son chemin
     //  est convenu, il n'est pas lu en base.
-    const [photos, bandeau] = await Promise.all([photosDesAnnonces(annonces), photoDuBandeau()]);
+    //
+    //  Le titre et la devise du bandeau, eux, **sont** lus en base, et ils
+    //  rejoignent cette attente plutôt que d'en ouvrir une quatrième. La lecture
+    //  ne peut pas échouer : elle rend les textes d'avant si la table manque.
+    const [photos, bandeau, reglages] = await Promise.all([
+      photosDesAnnonces(annonces),
+      photoDuBandeau(),
+      fetchReglagesBandeau(),
+    ]);
 
-    return { annonces, photos, bandeau, sondage: sondageOuvert(sondages) };
+    return { annonces, photos, bandeau, reglages, sondage: sondageOuvert(sondages) };
   }, []);
 
   const { status, data, errorMessage, refreshing, refresh, reload } = useAsyncData(loader);
@@ -187,6 +209,7 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
   const annonces = data?.annonces ?? VIDE;
   const photos = data?.photos ?? AUCUNE_PHOTO;
   const bandeau = data?.bandeau ?? null;
+  const reglages = data?.reglages ?? REGLAGES_PAR_DEFAUT;
   const sondage = data?.sondage ?? null;
   const prenom = profile?.display_name ?? '';
   const nonLus = useNonLus(userId);
@@ -241,6 +264,7 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
               prenom={prenom}
               nonLus={nonLus}
               photoUrl={bandeau}
+              reglages={reglages}
               onNotifications={() => {
                 navigation.navigate('Plus', { screen: 'Discussion' });
               }}
@@ -357,6 +381,16 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
  * modifiables par erreur, et obligerait à une requête de plus pour afficher une
  * phrase qui ne change pas.
  *
+ * LE NOM DE L'ÉCOLE ET SA DEVISE, EUX, ONT CHANGÉ DE CAMP
+ * ------------------------------------------------------
+ * Ils étaient rangés du même côté que les phrases ci-dessus, et c'était cohérent
+ * tant que personne ne demandait à les changer. Le bureau l'a demandé — et une
+ * phrase que le bureau change est, par définition, une information **publiée**.
+ * Le titre et la devise sont donc devenus des données (`public.reglages`), lus
+ * une fois avec le reste de l'accueil et repliés sur les textes d'avant si la
+ * base n'a rien à dire. La frontière n'a pas bougé : ce que le bureau publie
+ * vient de la base, ce que l'application dit d'elle-même reste ici.
+ *
  * CE QUI A CHANGÉ, ET POURQUOI RIEN N'A ÉTÉ PERDU
  * ----------------------------------------------
  * L'ancienne carte portait la devise « Ensemble pour la réussite et le
@@ -373,11 +407,13 @@ function Hero({
   prenom,
   nonLus,
   photoUrl,
+  reglages,
   onNotifications,
 }: {
   readonly prenom: string;
   readonly nonLus: number;
   readonly photoUrl: string | null;
+  readonly reglages: ReglagesBandeau;
   readonly onNotifications: () => void;
 }) {
   const initiales = prenom
@@ -389,7 +425,7 @@ function Hero({
 
   return (
     <Card elevated style={styles.hero}>
-      <Bandeau photoUrl={photoUrl} />
+      <Bandeau photoUrl={photoUrl} titre={reglages.titre} devise={reglages.devise} />
 
       <View style={styles.heroHaut}>
         <View style={styles.heroTexte}>
@@ -475,7 +511,15 @@ function Hero({
  * la page pour une information que l'adhérent a déjà entendue. L'image, elle,
  * est décorative : son contenu est le nom de l'école, écrit juste à côté.
  */
-function Bandeau({ photoUrl }: { readonly photoUrl: string | null }) {
+function Bandeau({
+  photoUrl,
+  titre,
+  devise,
+}: {
+  readonly photoUrl: string | null;
+  readonly titre: string;
+  readonly devise: string;
+}) {
   const surPhoto = photoUrl !== null;
   const encre = surPhoto ? colors.textOnPrimary : colors.primary;
 
@@ -504,10 +548,10 @@ function Bandeau({ photoUrl }: { readonly photoUrl: string | null }) {
 
       <View style={[styles.legende, surPhoto ? styles.legendeSurPhoto : null]}>
         <AppText variant="title" bold color={encre}>
-          École Frères Lumières
+          {titre}
         </AppText>
         <AppText variant="caption" color={encre} style={styles.deviseEcole}>
-          Grandir · Apprendre · S’épanouir ensemble
+          {devise}
         </AppText>
       </View>
     </View>

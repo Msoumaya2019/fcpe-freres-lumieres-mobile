@@ -59,9 +59,7 @@ export async function fetchAuthorNames(
   //  ------------------------------------------------
   //  `profiles` n'est lisible que par un **porteur de jeton** : le rôle anonyme
   //  y est refusé (`42501 permission denied`, mesuré le 20 septembre 2026 avec
-  //  la seule clef publique). Or cette fonction est appelée par deux écrans
-  //  **publics** — les actualités et les commentaires de cantine —, que la
-  //  rubrique se lit sans compte.
+  //  la seule clef publique).
   //
   //  Ce qui se produisait alors n'était pas une absence de nom, c'était **la
   //  page entière qui tombait** : la requête refusée levait, l'erreur remontait
@@ -69,6 +67,21 @@ export async function fetchAuthorNames(
   //  droits nécessaires pour cette action » à la place des actualités. Le
   //  défaut ne se voyait que sans compte — c'est-à-dire dans le seul mode que
   //  l'équipe ne teste jamais en étant connectée.
+  //
+  //  DEUX BARRIÈRES SE SUCCÈDENT, ELLES NE SE REMPLACENT PAS
+  //  ------------------------------------------------------
+  //  La première est **en amont** : le chemin des actualités ne passe plus ici.
+  //  Une actualité est signée « Membre de parents d'élèves », une constante, et
+  //  `annonces.ts` ne lit donc plus `profiles` du tout. C'est la correction de
+  //  fond — le défaut ne peut plus se reproduire, puisqu'il n'y a plus de
+  //  requête à refuser.
+  //
+  //  La seconde est cette garde, et elle couvre ce qui reste : `fetchAuthorNames`
+  //  est aujourd'hui appelée par la **discussion collective**, dont l'écran rend
+  //  « Réservé aux adhérents » avant de charger quoi que ce soit. La garde n'y
+  //  est donc jamais franchie par un visiteur — et c'est bien pourquoi elle
+  //  reste : elle protège la **fonction**, pas l'écran d'aujourd'hui. Un futur
+  //  appelant public la trouverait ici plutôt que de la réinventer.
   //
   //  La garde est **avant** la lecture, et non un `catch` autour d'elle : on ne
   //  demande pas ce qu'on sait ne pas pouvoir lire, et un refus qui
