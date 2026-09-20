@@ -367,13 +367,26 @@ Le compartiment se crée donc à la main, une fois.
    le tableau d'administration ne pourrait **rien déposer** — et l'échec serait un
    refus de Storage, donc visible, mais seulement à la première tentative.
 
+   Le refus à reconnaître s'écrit **« new row violates row-level security
+   policy »**. Mesuré avec la clé publiable — donc sans session —, il est rendu
+   **au mot près** : c'est le refus par défaut du compartiment, et il ne dit pas
+   _quelle_ politique manque. Le tableau de bord le complète donc en nommant la
+   cause : **« Votre session a bien été envoyée : le refus vient donc des
+   politiques du compartiment, qui n'ont pas été installées »** veut dire
+   exactement « revenez ici et collez le bloc ci-dessus ». Si le message dit au
+   contraire que **le navigateur n'a envoyé aucune session**, le bloc est en
+   place et c'est la connexion qu'il faut refaire.
+
    Les trois d'écriture sont réservées au **bureau**, et la borne est
    `public.is_admin()`, pas `authenticated` : ce dernier est **tout compte créé**,
    y compris une adhésion encore en attente, refusée ou suspendue. Sans cette
    borne, n'importe qui s'inscrivant déposerait un fichier dans le compartiment
-   des documents de l'école. La fonction `is_admin()` est celle du schéma, et elle
-   exige un statut `accepte` : elle est donc à la fois la condition d'écriture et
-   la condition d'accès au tableau de bord.
+   des documents de l'école. `is_admin()` est celle du schéma : elle est vraie
+   pour un profil dont le rôle est `admin` **ou** qui est super administrateur,
+   et c'est elle qui borne à la fois l'écriture dans le compartiment et l'accès
+   au tableau de bord. Le **statut** de l'adhésion n'y entre pas — il commande
+   `is_member()`, donc la lecture des rubriques réservées aux adhérents, et il
+   est affiché dans la coque ; il ne décide d'aucun droit d'écriture.
 
    Le `update` porte **deux** conditions, et ce n'est pas une redondance : `using`
    désigne la ligne qu'on remplace, `with check` la ligne qui en résulte. Une
