@@ -18,6 +18,7 @@ import {
   Button,
   Card,
   ErrorNotice,
+  FilCommentaires,
   Screen,
 } from '@/components';
 import { useAsyncData } from '@/hooks/useAsyncData';
@@ -365,6 +366,22 @@ function CarteSondage({
 
   const total = (resultats ?? []).reduce((somme, ligne) => somme + Number(ligne.voix), 0);
 
+  /**
+   * Le fil de commentaires du sondage, déplié sur demande.
+   *
+   * Pourquoi **pas** chargé avec le reste : les sondages d'un même écran
+   * partagent une seule requête, et y ajouter les commentaires de chacun ferait
+   * autant d'allers-retours à chaque affichage de l'agenda — pour une
+   * information que la plupart des gens ne regardent pas. C'est le même
+   * raisonnement que pour les résultats, juste au-dessus.
+   *
+   * L'état vit dans la carte, comme celui des résultats : deux sondages peuvent
+   * donc être dépliés en même temps, et refermer l'un ne referme pas l'autre.
+   * Ce qui compte ici, c'est qu'un sondage ne charge **rien** tant qu'on ne l'a
+   * pas demandé.
+   */
+  const [filOuvert, setFilOuvert] = useState(false);
+
   return (
     <Card elevated style={[styles.carteSondage, { backgroundColor: accents.violet.soft }]}>
       <Badge
@@ -474,6 +491,20 @@ function CarteSondage({
           donne une tendance, il n’est pas un vote certifié.
         </AppText>
       )}
+
+      {/*  Un sondage se discute autant qu'il se vote : la question est posée à
+          toutes les familles, et la réponse appelle souvent une précision. Le
+          fil est ici, sous le sondage, et non dans un écran séparé — c'est le
+          même geste que « Voir les résultats », juste au-dessus. */}
+      <Button
+        label={filOuvert ? 'Masquer les commentaires' : 'Commentaires'}
+        variant="ghost"
+        onPress={() => {
+          setFilOuvert(!filOuvert);
+        }}
+      />
+
+      {filOuvert ? <FilCommentaires cible={{ type: 'sondage', id: sondage.id }} /> : null}
     </Card>
   );
 }

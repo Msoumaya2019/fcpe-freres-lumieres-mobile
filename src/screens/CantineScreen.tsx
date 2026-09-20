@@ -1,7 +1,15 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, type ListRenderItemInfo } from 'react-native';
 
-import { AppText, AsyncErrorBanner, AsyncFallback, Card, Screen } from '@/components';
+import {
+  AppText,
+  AsyncErrorBanner,
+  AsyncFallback,
+  Button,
+  Card,
+  FilCommentaires,
+  Screen,
+} from '@/components';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { fetchUpcomingMenus } from '@/services/cantine';
 import { colors, spacing } from '@/theme';
@@ -36,6 +44,24 @@ export function CantineScreen() {
 
   const menus = data ?? EMPTY_MENUS;
 
+  /**
+   * Le jour dont le fil de commentaires est déplié, ou `null`.
+   *
+   * UN SEUL FIL À LA FOIS, ET C'EST LE CŒUR DU CHOIX
+   * ------------------------------------------------
+   * Chaque jour de cantine porte son propre fil — c'est ce qu'un parent veut
+   * distinguer, et « le jeudi, mon enfant est allergique » ne se dit pas d'une
+   * semaine entière. Mais les fils ne se chargent **pas** tous à l'ouverture de
+   * l'écran : la cantine affiche les menus à venir, et charger les commentaires
+   * de chacun ferait autant de requêtes pour une information que personne ne
+   * demande. Un appui en déplie un, et une seule requête part.
+   *
+   * L'identifiant plutôt qu'un booléen par carte : l'état vit **une fois**, dans
+   * l'écran, et non dans chaque carte — une carte ne peut donc pas rester
+   * dépliée après que sa voisine l'a été.
+   */
+  const [filOuvert, setFilOuvert] = useState<string | null>(null);
+
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<CantineMenu>) => (
       <Card>
@@ -53,9 +79,19 @@ export function CantineScreen() {
             {item.notes}
           </AppText>
         )}
+
+        <Button
+          label={filOuvert === item.id ? 'Masquer les commentaires' : 'Commentaires'}
+          variant="ghost"
+          onPress={() => {
+            setFilOuvert(filOuvert === item.id ? null : item.id);
+          }}
+        />
+
+        {filOuvert === item.id ? <FilCommentaires cible={{ type: 'menu', id: item.id }} /> : null}
       </Card>
     ),
-    [],
+    [filOuvert],
   );
 
   return (

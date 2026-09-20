@@ -9,6 +9,14 @@ export {
 export { Badge, type BadgeProps } from '@/components/Badge';
 export { Button, type ButtonProps } from '@/components/Button';
 export { Card, type CardProps } from '@/components/Card';
+export {
+  CarteCommentaire,
+  FilCommentaires,
+  FormulaireCommentaire,
+  MAX_AUTEUR_NOM_LENGTH,
+  MAX_COMMENTAIRE_LENGTH,
+  type FormulaireCommentaireProps,
+} from '@/components/Commentaires';
 export { EmptyState, type EmptyStateProps } from '@/components/EmptyState';
 export { ErrorNotice, type ErrorNoticeProps } from '@/components/ErrorNotice';
 export { LoadingView, type LoadingViewProps } from '@/components/LoadingView';

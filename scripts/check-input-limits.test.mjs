@@ -218,21 +218,28 @@ const SAISIES = [
     ecran: 'src/screens/ContactScreen.tsx',
     constante: 'MAX_EMAIL_LENGTH',
   },
-  //  Les deux colonnes d'un commentaire, saisies sous une actualité. Elles sont
-  //  ouvertes **sans compte**, donc à des familles qui ne verront jamais un
-  //  message d'erreur technique : la borne du serveur doit être doublée côté
-  //  client, sinon le refus de `commentaires_auteur_nom_longueur` se lit « La
-  //  valeur envoyée n'est pas acceptée par le serveur ».
+  //  Les deux colonnes d'un commentaire, saisies sous une actualité, un sondage
+  //  ou un jour de cantine. Elles sont ouvertes **sans compte**, donc à des
+  //  familles qui ne verront jamais un message d'erreur technique : la borne du
+  //  serveur doit être doublée côté client, sinon le refus de
+  //  `commentaires_auteur_nom_longueur` se lit « La valeur envoyée n'est pas
+  //  acceptée par le serveur ».
+  //
+  //  Le formulaire vit dans `src/components/Commentaires.tsx` et non dans un
+  //  écran, et ce déplacement est un **correctif** : trois cibles de commentaire
+  //  auraient fini par avoir trois formulaires, donc trois jeux de bornes — et
+  //  ce banc n'aurait vu que celui qu'il attend ici. Un formulaire, un jeu de
+  //  bornes, un endroit à vérifier.
   {
     table: 'commentaires',
     colonne: 'auteur_nom',
-    ecran: 'src/screens/AnnonceDetailScreen.tsx',
+    ecran: 'src/components/Commentaires.tsx',
     constante: 'MAX_AUTEUR_NOM_LENGTH',
   },
   {
     table: 'commentaires',
     colonne: 'corps',
-    ecran: 'src/screens/AnnonceDetailScreen.tsx',
+    ecran: 'src/components/Commentaires.tsx',
     constante: 'MAX_COMMENTAIRE_LENGTH',
   },
 ];

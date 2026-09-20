@@ -1,6 +1,5 @@
-import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import {
   FlatList,
   Image,
@@ -15,23 +14,16 @@ import {
   AsyncErrorBanner,
   AsyncFallback,
   Badge,
-  Button,
   Card,
-  ErrorNotice,
-  LoadingView,
+  CarteCommentaire,
+  FormulaireCommentaire,
   Screen,
   SectionHeader,
-  TextField,
 } from '@/components';
-import { userMessage } from '@/errors';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import type { PlusStackParamList } from '@/navigation/types';
 import { fetchAnnonce } from '@/services/annonces';
-import {
-  fetchCommentaires,
-  publierCommentaire,
-  type CibleCommentaire,
-} from '@/services/commentaires';
+import { fetchCommentaires, type CibleCommentaire } from '@/services/commentaires';
 import { documentUrl } from '@/services/documents';
 import { colors, radius, spacing } from '@/theme';
 import { annonceCategoryStyle } from '@/theme/categories';
@@ -39,20 +31,6 @@ import { ANNONCE_CATEGORY_LABELS, type AnnonceWithAuthor, type Commentaire } fro
 import { formatRelativeDay } from '@/utils/date';
 
 const VIDE: readonly Commentaire[] = [];
-
-/**
- * Bornes de saisie, alignées sur les contraintes de la sixième migration.
- *
- * La borne basse — deux caractères — est tenue par la validation du formulaire.
- * La haute ne peut pas l'être autrement : un nom de 61 caractères est refusé par
- * `commentaires_auteur_nom_longueur`, et l'adhérent lirait « La valeur envoyée
- * n'est pas acceptée par le serveur », sans savoir quel champ ni quelle
- * longueur. Ces deux constantes sont vérifiées contre le SQL par
- * `scripts/check-input-limits.test.mjs` : les recopier ici ne suffit pas, il faut
- * qu'elles soient **posées sur les champs**.
- */
-const MAX_AUTEUR_NOM_LENGTH = 60;
-const MAX_COMMENTAIRE_LENGTH = 1000;
 
 /**
  * Ce que l'écran charge en un seul aller-retour.
@@ -167,72 +145,16 @@ export function AnnonceDetailScreen({
   const article = data;
   const commentaires = article?.commentaires ?? VIDE;
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [auteurNom, setAuteurNom] = useState('');
-  const [corps, setCorps] = useState('');
-  const [formError, setFormError] = useState<unknown>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [depose, setDepose] = useState(false);
-
-  const closeForm = useCallback(() => {
-    setFormOpen(false);
-    setFormError(null);
-    setAuteurNom('');
-    setCorps('');
-  }, []);
-
-  const handleSubmit = useCallback(() => {
-    if (auteurNom.trim().length < 2) {
-      // `userMessage` marque la phrase comme déjà rédigée pour l'adhérent :
-      // sans elle, `appErrorMessage` la prendrait pour un message technique non
-      // reconnu et afficherait « Une erreur inattendue est survenue » — en
-      // invitant à réessayer, ce qui ne peut pas marcher.
-      setFormError(userMessage('Indiquez votre nom, même un prénom.'));
-      return;
-    }
-    if (corps.trim().length < 2) {
-      setFormError(userMessage('Écrivez votre commentaire.'));
-      return;
-    }
-
-    setFormError(null);
-    setSubmitting(true);
-    setDepose(false);
-
-    void (async () => {
-      try {
-        await publierCommentaire({ cible, auteurNom, corps });
-        closeForm();
-        // Le commentaire part en validation : la relecture ne le fera donc pas
-        // apparaître, et c'est la confirmation ci-dessous qui répond à la
-        // question du parent. Sans elle, l'écran serait **identique** à
-        // l'avant-appui, et il conclurait que rien n'a été envoyé.
-        setDepose(true);
-        // `closeForm()` referme le formulaire : l'action ne peut pas être
-        // rejouée pendant la relecture, et `submitting` peut donc être relâché
-        // avant son arrivée. C'est la même exception que le formulaire de
-        // signalement, et elle tient à la même condition : le bouton disparaît.
-        reload();
-      } catch (caught) {
-        setFormError(caught);
-      } finally {
-        setSubmitting(false);
-      }
-    })();
-  }, [auteurNom, cible, closeForm, corps, reload]);
-
+  /**
+   * Le fil est rendu par les **mêmes composants** que la cantine et les sondages.
+   *
+   * C'est la raison pour laquelle le formulaire ne vit plus ici : un commentaire
+   * se dépose sous trois cibles, et trois copies du formulaire auraient été
+   * trois jeux de bornes de saisie — dont deux que `check-input-limits` ne
+   * regarde pas, puisqu'il lit une constante **là où il l'attend**.
+   */
   const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<Commentaire>) => (
-      <Card>
-        <View style={styles.commentaireTete}>
-          <AppText variant="caption" bold style={styles.commentaireAuteur}>
-            {item.auteur_nom}
-          </AppText>
-          <AppText variant="caption">{formatRelativeDay(item.created_at)}</AppText>
-        </View>
-        <AppText>{item.corps}</AppText>
-      </Card>
-    ),
+    ({ item }: ListRenderItemInfo<Commentaire>) => <CarteCommentaire commentaire={item} />,
     [],
   );
 
@@ -300,72 +222,7 @@ export function AnnonceDetailScreen({
 
                 <SectionHeader title="Commentaires" />
 
-                {depose ? (
-                  <Card muted>
-                    <View style={styles.confirmation}>
-                      <Ionicons name="time-outline" size={18} color={colors.success} />
-                      <AppText variant="caption" style={styles.confirmationTexte}>
-                        Merci ! Votre commentaire sera publié après validation par le bureau.
-                      </AppText>
-                    </View>
-                  </Card>
-                ) : null}
-
-                <Card muted>
-                  {formOpen ? (
-                    <>
-                      <AppText variant="heading">Écrire un commentaire</AppText>
-                      <AppText variant="caption">
-                        Votre nom apparaîtra sous votre commentaire. Il sera publié après validation
-                        par le bureau.
-                      </AppText>
-
-                      <TextField
-                        label="Votre nom"
-                        value={auteurNom}
-                        onChangeText={setAuteurNom}
-                        placeholder="Prénom, ou nom de famille"
-                        maxLength={MAX_AUTEUR_NOM_LENGTH}
-                        editable={!submitting}
-                      />
-                      <TextField
-                        label="Votre commentaire"
-                        value={corps}
-                        onChangeText={setCorps}
-                        placeholder="Partagez votre avis ou une information utile aux familles."
-                        multiline
-                        numberOfLines={5}
-                        maxLength={MAX_COMMENTAIRE_LENGTH}
-                        editable={!submitting}
-                        inputStyle={styles.multiline}
-                      />
-
-                      {formError === null ? null : <ErrorNotice error={formError} />}
-
-                      <Button label="Envoyer" onPress={handleSubmit} loading={submitting} />
-                      <Button
-                        label="Annuler"
-                        variant="ghost"
-                        onPress={closeForm}
-                        disabled={submitting}
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <AppText variant="caption">
-                        Une question, un avis, une précision ? Écrivez-le ici : le bureau le lira
-                        avant publication.
-                      </AppText>
-                      <Button
-                        label="Écrire un commentaire"
-                        onPress={() => {
-                          setDepose(false);
-                          setFormOpen(true);
-                        }}
-                      />
-                    </>
-                  )}
-                </Card>
+                <FormulaireCommentaire cible={cible} onDepose={reload} />
               </>
             )}
           </>
@@ -382,11 +239,6 @@ export function AnnonceDetailScreen({
               emptyIcon="megaphone-outline"
               loadingMessage="Chargement de l'actualité…"
             />
-          ) : submitting ? (
-            // Un envoi en cours n'est pas « aucun commentaire » : sans cette
-            // branche, l'écran inviterait à écrire le premier pendant tout
-            // l'aller-retour, y compris après que le serveur a accepté.
-            <LoadingView message="Envoi de votre commentaire…" />
           ) : (
             <AsyncFallback
               status={status}
@@ -426,26 +278,5 @@ const styles = StyleSheet.create({
     aspectRatio: 16 / 9,
     borderRadius: radius.md,
     backgroundColor: colors.surfaceMuted,
-  },
-  commentaireTete: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  commentaireAuteur: {
-    flexShrink: 1,
-  },
-  confirmation: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-  },
-  confirmationTexte: {
-    flexShrink: 1,
-  },
-  multiline: {
-    minHeight: 110,
-    textAlignVertical: 'top',
   },
 });
