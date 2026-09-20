@@ -39,7 +39,11 @@
 --  ----------------------
 --  Elle ne touche à aucune politique existante, à aucune table existante, et à
 --  aucune donnée existante. Elle ajoute une table, deux lignes, une fonction et
---  cinq politiques — et rien d'autre. Elle se rejoue sans dommage.
+--  quatre politiques — et rien d'autre. Elle se rejoue sans dommage.
+--
+--  Le décompte a été **mesuré**, pas compté de mémoire : il disait « cinq
+--  politiques », et le fichier en crée quatre. Une phrase en toutes lettres
+--  affirme une exhaustivité ; celle-ci était fausse, et rien ne le disait.
 --
 --  L'ORDRE
 --  -------
