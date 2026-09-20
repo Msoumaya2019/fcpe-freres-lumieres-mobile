@@ -163,7 +163,8 @@ supabase/migrations/20260921090000_administration.sql
 
 Même geste, même message attendu. Ce fichier ne crée **aucune table** : il ajoute
 une colonne à `annonces` et deux fonctions au bureau. Il n'est nécessaire que
-pour le **tableau de bord** (voir `ADMINISTRATION.md`) — l'application mobile
+pour le **tableau de bord** (dépôt `fcpe-freres-lumieres-admin`, fichier
+`ADMINISTRATION.md`). L'application mobile
 fonctionne sans lui, sauf que le bureau ne peut alors ni promouvoir un
 administrateur, ni clore une conversation depuis le tableau de bord. Il s'applique
 en dernier, et se recolle sans doublon. **Il n'est pas encore appliqué** — c'est

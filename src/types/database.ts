@@ -562,6 +562,29 @@ export type Database = {
         Args: { p_sondage_id: string };
         Returns: { choice_id: string; label: string; rang: number; voix: number }[];
       };
+      /**
+       * Les deux fonctions du tableau de bord, ajoutées par
+       * `20260921090000_administration.sql`.
+       *
+       * L'application mobile ne les appelle pas, et elles figurent pourtant ici :
+       * ce fichier décrit le **schéma**, pas l'usage qu'en fait l'application.
+       * C'est précisément ce qui le rend vérifiable — un miroir qui ne
+       * contiendrait que ce que le code emploie ne dirait plus rien de la base.
+       */
+      changer_role: {
+        Args: {
+          p_id: string;
+          p_role: Database['public']['Enums']['member_role'];
+        };
+        Returns: undefined;
+      };
+      marquer_conversation: {
+        Args: {
+          p_id: string;
+          p_statut: Database['public']['Enums']['conversation_status'];
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
       member_role: 'membre' | 'admin';
