@@ -1204,6 +1204,14 @@ n'existera pas, et aucune clef ne pourra rien y changer.
       tableau de bord sait fabriquer (il préfixe l'horodatage de l'instant),
       et cette image se relit sans aucun jeton : `200 image/png`,
       4 047 185 octets
+- [ ] **Recoller la première politique du compartiment** — celle des familles.
+      Elle porte désormais une branche de plus, sur le chemin `accueil/bandeau.jpg`
+      (le bloc de §1.4 l'écrit en clair), et c'est cette branche qui rend la
+      **photographie de l'école** visible **sans compte**. Le bloc commence par un
+      `drop policy if exists`, il se recolle donc tel quel, et le recoller ne
+      casse rien. Sans ce recollage, la photo déposée depuis le tableau de bord
+      ne s'afficherait que pour les adhérents **connectés** — et l'échec serait
+      discret : une politique absente rend une **liste vide**, pas un message
 - [x] `seed.sql` collé et exécuté → **mesuré** : `cantine_menus` a 10 lignes sur  
       **10 dates distinctes** (du 18 au 28 septembre, sans le 24) — **aucun  
       doublon**, relevé le 20 septembre 2026. `annonces` en compte quatre à cette  
