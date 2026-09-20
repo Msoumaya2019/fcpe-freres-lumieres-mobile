@@ -154,10 +154,10 @@ const STATUTS: Record<MemberStatus, { titre: string; explication: string }> = {
     titre: 'Demande en attente',
     explication:
       'Votre demande d’adhésion a bien été reçue. Le bureau de l’association la ' +
-      'valide, et votre statut changera sur cet écran. L’application n’envoie ' +
-      'aucune notification : revenez ici pour le consulter. En attendant, vous ' +
-      'pouvez lire les actualités, les menus, l’agenda et les documents destinés ' +
-      'aux familles.',
+      'valide, et votre statut changera sur cet écran. Activez les notifications ' +
+      'dans Réglages pour en être prévenu ; sans cela, revenez ici pour le ' +
+      'consulter. En attendant, vous pouvez lire les actualités, les menus, ' +
+      'l’agenda et les documents destinés aux familles.',
   },
   accepte: {
     titre: 'Adhérent',
