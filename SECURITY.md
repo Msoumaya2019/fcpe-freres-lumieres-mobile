@@ -234,28 +234,29 @@ Le relevé ci-dessous n'est pas la source : la source est
 qu'un appel apparaît ou disparaît sans être déclaré. Ce tableau le recopie, et
 c'est ce banc qu'il faut relire en cas de désaccord.
 
-| Requête                      | Table                  | Opération         | Politique                                                               |
-| ---------------------------- | ---------------------- | ----------------- | ----------------------------------------------------------------------- |
-| `fetchAgendaEvents`          | `agenda_events`        | select            | `agenda_events_select_public` · `…_select_authenticated`                |
-| `fetchAnnonces`              | `annonces`             | select            | `annonces_select_public` · `…_select_authenticated`                     |
-| `fetchAnnonce`               | `annonces`             | select            | `annonces_select_public` · `…_select_authenticated`                     |
-| `fetchUpcomingMenus`         | `cantine_menus`        | select            | `cantine_menus_select_public` · `…_select_authenticated`                |
-| `fetchCommentaires`          | `commentaires`         | select            | `commentaires_select_publies_anon` · `…_select_publies`                 |
-| `publierCommentaire`         | `commentaires`         | insert            | `commentaires_insert_public`                                            |
-| `fetchDiscussionMessages`    | `discussion_messages`  | select            | `discussion_messages_select_member`                                     |
-| `postDiscussionMessage`      | `discussion_messages`  | insert            | `discussion_messages_insert_member`                                     |
-| `fetchDocuments`             | `documents`            | select            | `documents_select_public` · `…_select_authenticated`                    |
-| `documentUrl`                | _(bucket `documents`)_ | `createSignedUrl` | `storage_documents_select_familles` · `storage_documents_select_bureau` |
-| `enregistrerAppareil` (pose) | `push_tokens`          | insert            | `push_tokens_insert_device`                                             |
-| `enregistrerAppareil` (date) | `push_tokens`          | update            | `push_tokens_update_device`                                             |
-| `fetchProfile`               | `profiles`             | select            | `profiles_select_authenticated`                                         |
-| `fetchAuthorNames`           | `profiles`             | select            | `profiles_select_authenticated`                                         |
-| `listerAdhesions`            | `profiles`             | select            | `profiles_select_authenticated`                                         |
-| `fetchMySignalements`        | `signalements`         | select            | `signalements_select_own_or_admin`                                      |
-| `createSignalement`          | `signalements`         | insert            | `signalements_insert_own`                                               |
-| `fetchSondages` (sondages)   | `sondages`             | select            | `sondages_select_public` · `…_select_authenticated`                     |
-| `fetchSondages` (choix)      | `sondage_choices`      | select            | `sondage_choices_select_public` · `…_select_authenticated`              |
-| `castVote`                   | `sondage_votes`        | insert            | `sondage_votes_insert_public` · `sondage_votes_insert_own`              |
+| Requête                      | Table                  | Opération          | Politique                                                               |
+| ---------------------------- | ---------------------- | ------------------ | ----------------------------------------------------------------------- |
+| `fetchAgendaEvents`          | `agenda_events`        | select             | `agenda_events_select_public` · `…_select_authenticated`                |
+| `fetchAnnonces`              | `annonces`             | select             | `annonces_select_public` · `…_select_authenticated`                     |
+| `fetchAnnonce`               | `annonces`             | select             | `annonces_select_public` · `…_select_authenticated`                     |
+| `fetchUpcomingMenus`         | `cantine_menus`        | select             | `cantine_menus_select_public` · `…_select_authenticated`                |
+| `fetchCommentaires`          | `commentaires`         | select             | `commentaires_select_publies_anon` · `…_select_publies`                 |
+| `publierCommentaire`         | `commentaires`         | insert             | `commentaires_insert_public`                                            |
+| `fetchDiscussionMessages`    | `discussion_messages`  | select             | `discussion_messages_select_member`                                     |
+| `postDiscussionMessage`      | `discussion_messages`  | insert             | `discussion_messages_insert_member`                                     |
+| `fetchDocuments`             | `documents`            | select             | `documents_select_public` · `…_select_authenticated`                    |
+| `documentUrl`                | _(bucket `documents`)_ | `createSignedUrl`  | `storage_documents_select_familles` · `storage_documents_select_bureau` |
+| `documentsUrls`              | _(bucket `documents`)_ | `createSignedUrls` | `storage_documents_select_familles` · `storage_documents_select_bureau` |
+| `enregistrerAppareil` (pose) | `push_tokens`          | insert             | `push_tokens_insert_device`                                             |
+| `enregistrerAppareil` (date) | `push_tokens`          | update             | `push_tokens_update_device`                                             |
+| `fetchProfile`               | `profiles`             | select             | `profiles_select_authenticated`                                         |
+| `fetchAuthorNames`           | `profiles`             | select             | `profiles_select_authenticated`                                         |
+| `listerAdhesions`            | `profiles`             | select             | `profiles_select_authenticated`                                         |
+| `fetchMySignalements`        | `signalements`         | select             | `signalements_select_own_or_admin`                                      |
+| `createSignalement`          | `signalements`         | insert             | `signalements_insert_own`                                               |
+| `fetchSondages` (sondages)   | `sondages`             | select             | `sondages_select_public` · `…_select_authenticated`                     |
+| `fetchSondages` (choix)      | `sondage_choices`      | select             | `sondage_choices_select_public` · `…_select_authenticated`              |
+| `castVote`                   | `sondage_votes`        | insert             | `sondage_votes_insert_public` · `sondage_votes_insert_own`              |
 
 Deux remarques que le tableau seul ne dirait pas. Les **sept** tables publiques
 portent **deux** politiques de lecture et non une : `*_select_public` pour le

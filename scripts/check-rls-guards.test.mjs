@@ -1282,6 +1282,16 @@ const STOCKAGE_DOCUMENTE = new Map([
       'ici, mais l’**instruction** qui le configure l’est — et le test qui suit ' +
       'compare le compartiment que le guide protège à celui que le code demande',
   ],
+  [
+    'documents.createSignedUrls',
+    'la **même** politique que ci-dessus, exercée par une autre forme du même ' +
+      'appel : la forme groupée, qui signe en une requête toutes les photos d’une ' +
+      'liste d’actualités au lieu d’une par photo. C’est `photosDesAnnonces` qui ' +
+      'la demande, pour les vignettes de l’accueil. Elle ne réclame aucun droit de ' +
+      'plus — le compartiment est celui que `MISE-EN-SERVICE.md` fait protéger —, ' +
+      'mais elle le nomme, et un appel de stockage non déclaré serait un appel dont ' +
+      'personne ne sait quelle politique l’autorise',
+  ],
 ]);
 
 test('tout appel à Storage est déclaré, avec sa raison', () => {

@@ -26,16 +26,34 @@ import {
 import { useAsyncData } from '@/hooks/useAsyncData';
 import { useNonLus } from '@/hooks/useNonLus';
 import type { MainTabParamList } from '@/navigation/types';
-import { fetchAnnonces } from '@/services/annonces';
+import { fetchAnnonces, photosDesAnnonces } from '@/services/annonces';
 import { fetchSondages, sondageOuvert } from '@/services/sondages';
 import { accents, colors, radius, spacing, type TintedAccent } from '@/theme';
 import type { AnnonceWithAuthor } from '@/types/models';
 
 const VIDE: readonly AnnonceWithAuthor[] = [];
 
+/**
+ * Aucune photo, et la même table pour tous les rendus.
+ *
+ * Une table vide écrite à chaque rendu (`new Map()`) changerait d'identité à
+ * chaque passage, ce qui suffirait à recréer le `renderItem` de la liste — donc
+ * à redemander le rendu de chaque carte — sans qu'aucune donnée n'ait bougé.
+ */
+const AUCUNE_PHOTO: ReadonlyMap<string, string> = new Map();
+
 /** Ce que l'accueil charge en une fois. */
 interface DonneesAccueil {
   readonly annonces: readonly AnnonceWithAuthor[];
+  /**
+   * Les photos, indexées par identifiant d'actualité.
+   *
+   * Elles sont chargées **avec** les annonces, et non par les cartes : le
+   * compartiment est privé, chaque photo demande une adresse signée, et c'est
+   * ici que la signature se fait — une fois pour toute la liste. Voir
+   * `photosDesAnnonces`.
+   */
+  readonly photos: ReadonlyMap<string, string>;
   readonly sondage: ReturnType<typeof sondageOuvert>;
 }
 
@@ -125,12 +143,21 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
     // les préférences locales plutôt que filtré par `auth.uid()`.
     const [annonces, sondages] = await Promise.all([fetchAnnonces(), fetchSondages()]);
 
-    return { annonces, sondage: sondageOuvert(sondages) };
+    //  Les photos se signent **après** la lecture des annonces, et non en
+    //  parallèle : il faut connaître les chemins pour les demander. C'est un
+    //  second aller-retour, mais un seul pour toute la liste — et il est nul
+    //  quand aucune actualité n'est illustrée, ce qui reste le cas courant.
+    return {
+      annonces,
+      photos: await photosDesAnnonces(annonces),
+      sondage: sondageOuvert(sondages),
+    };
   }, []);
 
   const { status, data, errorMessage, refreshing, refresh, reload } = useAsyncData(loader);
 
   const annonces = data?.annonces ?? VIDE;
+  const photos = data?.photos ?? AUCUNE_PHOTO;
   const sondage = data?.sondage ?? null;
   const prenom = profile?.display_name ?? '';
   const nonLus = useNonLus(userId);
@@ -154,14 +181,19 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
   //  suite » le dit. C'est le seul endroit de l'application où la carte est
   //  touchable : la rubrique « Actualités » montre déjà le texte entier, et y
   //  promettre une suite qui est sous les yeux serait un mensonge visible.
+  //
+  //  La photo est passée, jamais résolue : elle est déjà signée, une fois pour
+  //  la liste entière. Une actualité sans photo reçoit `null` et sa carte porte
+  //  alors l'illustration de sa catégorie.
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<AnnonceWithAuthor>) => (
       <AnnonceCard
         annonce={item}
+        photoUrl={photos.get(item.id) ?? null}
         onPress={() => navigation.navigate('Plus', { screen: 'Annonce', params: { id: item.id } })}
       />
     ),
-    [navigation],
+    [navigation, photos],
   );
 
   return (

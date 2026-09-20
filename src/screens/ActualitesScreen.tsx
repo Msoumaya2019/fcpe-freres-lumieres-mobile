@@ -3,11 +3,18 @@ import { FlatList, RefreshControl, StyleSheet, type ListRenderItemInfo } from 'r
 
 import { AnnonceCard, AsyncErrorBanner, AsyncFallback, Screen } from '@/components';
 import { useAsyncData } from '@/hooks/useAsyncData';
-import { fetchAnnonces } from '@/services/annonces';
+import { fetchAnnonces, photosDesAnnonces } from '@/services/annonces';
 import { colors, spacing } from '@/theme';
 import type { AnnonceWithAuthor } from '@/types/models';
 
 const VIDE: readonly AnnonceWithAuthor[] = [];
+const AUCUNE_PHOTO: ReadonlyMap<string, string> = new Map();
+
+/** Ce que la rubrique charge en une fois : les actualités, et leurs photos. */
+interface ListeActualites {
+  readonly annonces: readonly AnnonceWithAuthor[];
+  readonly photos: ReadonlyMap<string, string>;
+}
 
 /**
  * Toutes les actualités, texte entier.
@@ -22,19 +29,32 @@ const VIDE: readonly AnnonceWithAuthor[] = [];
  * C'est aussi ce qui remplace l'ancien onglet « Informations ». Les données, la
  * table et la politique sont les mêmes — seul l'écran change, et l'ancien a été
  * retiré plutôt que laissé en place sans être atteignable.
+ *
+ * LES PHOTOS SE SIGNENT ICI AUSSI, ET UNE SEULE FOIS
+ * --------------------------------------------------
+ * Même raison que sur l'accueil : le compartiment est privé, et signer depuis la
+ * carte ferait une requête par actualité. Le chargement reste **un** chargeur
+ * pour la page entière — c'est le contrat d'`useAsyncData` —, et non deux états
+ * de chargement qui se succéderaient à l'écran.
  */
 export function ActualitesScreen() {
-  const loader = useCallback(() => fetchAnnonces(), []);
+  const loader = useCallback(async (): Promise<ListeActualites> => {
+    const annonces = await fetchAnnonces();
+
+    return { annonces, photos: await photosDesAnnonces(annonces) };
+  }, []);
+
   const { status, data, errorMessage, refreshing, refresh, reload } = useAsyncData(loader);
 
-  const annonces = data ?? VIDE;
+  const annonces = data?.annonces ?? VIDE;
+  const photos = data?.photos ?? AUCUNE_PHOTO;
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<AnnonceWithAuthor>) => (
       // Le texte entier : on vient ici pour lire, pas pour parcourir.
-      <AnnonceCard annonce={item} lines={undefined} />
+      <AnnonceCard annonce={item} lines={undefined} photoUrl={photos.get(item.id) ?? null} />
     ),
-    [],
+    [photos],
   );
 
   return (

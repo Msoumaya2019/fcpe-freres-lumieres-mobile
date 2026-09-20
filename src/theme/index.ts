@@ -27,11 +27,33 @@ export const colors = {
   primarySoft: '#E6F0FD',
   primaryTint: '#C3DFF9',
 
-  background: '#F6F7FB',
+  /**
+   * Les trois jetons **neutres**, et leur température.
+   *
+   * POURQUOI ILS ONT CHANGÉ DEUX FOIS
+   * ---------------------------------
+   * Ils étaient froids — `#F6F7FB`, `#F0F2F8`, `#E2E5EE`, trois gris tirant sur
+   * le bleu —, ce qui donnait à l'application une allure d'écran d'administration
+   * alors que la maquette demande du pastel chaud. Le passage au chaud n'est pas
+   * un réglage d'ambiance : les trois vont **ensemble**, et en réchauffer un seul
+   * laisserait les deux autres se voir comme un bleu sale à côté de lui.
+   *
+   * Les valeurs ont été choisies **après mesure**, et pas à l'œil. Sur du texte
+   * sombre, un fond plus clair ne peut qu'améliorer le rapport : le corps passe
+   * de 16,20:1 à 16,59:1, la légende de 5,50:1 à 5,63:1, le libellé d'un bouton
+   * fantôme de 5,91:1 à 6,05:1. La carte muette suit le mouvement — corps
+   * 15,49:1 → 15,17:1, légende 5,26:1 → 5,15:1 —, très au-dessus des 4,5:1
+   * exigés dans les deux cas.
+   *
+   * La bordure, elle, garde **exactement** son écart avec le blanc : 1,26:1
+   * avant comme après. C'est ce qui la rend interchangeable sans que rien ne
+   * bouge dans la phrase ci-dessous, qui décrit un rôle et non une teinte.
+   */
+  background: '#FFF9F2',
   surface: '#FFFFFF',
-  surfaceMuted: '#F0F2F8',
+  surfaceMuted: '#F4EFE9',
   /** Décor : cartes, séparateurs, barre d'onglets. */
-  border: '#E2E5EE',
+  border: '#EDE4DB',
   /** Composant manipulable : bordure de champ. 3,74:1 sur `surface`. */
   borderInteractive: '#7C8499',
 
