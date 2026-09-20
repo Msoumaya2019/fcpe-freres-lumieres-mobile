@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "974280496235",
+    "project_id": "parentsfrereslumieres",
+    "storage_bucket": "parentsfrereslumieres.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:974280496235:android:04eb5510551e6678c4cd2e",
+        "android_client_info": {
+          "package_name": "fr.fcpe.frereslumieres"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC_PIHV0ORwSjxhjPXuG35lVT32FmGw-fk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

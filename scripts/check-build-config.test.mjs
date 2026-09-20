@@ -76,7 +76,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -732,5 +732,57 @@ test('l’extension annoncée par le guide est celle que le profil produit', () 
     'apk',
     'le profil `preview` ne produit plus un `apk`, alors que le guide annonce ' +
       '`fcpe-freres-lumieres-<version>-android.apk`',
+  );
+});
+
+/**
+ * Le fichier Firebase et sa déclaration vont **ensemble**.
+ *
+ * POURQUOI CE CONTRÔLE, ET POURQUOI IL VA DANS UN SEUL SENS
+ * ---------------------------------------------------------
+ * `google-services.json` est le seul fichier du dépôt qui soit **téléchargé
+ * depuis un service tiers** et **versionné quand même**. Ce n'est pas un oubli :
+ * EAS ne téléverse que ce que Git retient, donc l'ignorer priverait la
+ * compilation du fichier dont elle a besoin. Il est à la racine, et `app.json`
+ * doit le désigner — la propriété est lue par le greffon `GoogleServices` de
+ * `@expo/prebuild-config`, qui est dans la liste **par défaut**.
+ *
+ * Les deux désaccords ne coûtent pas la même chose, et c'est ce qui décide de la
+ * forme du contrôle :
+ *
+ * - **déclaré et absent** : `expo prebuild` s'arrête net — « Cannot copy
+ *   google-services.json from … to … ». Bruyant, et déjà porté par l'outil ;
+ * - **présent et non déclaré** : **rien** ne se plaint. Le fichier reste à la
+ *   racine, le greffon Google Services n'est jamais appliqué, et l'application
+ *   s'installe, s'ouvre, demande l'autorisation, l'obtient — et ne reçoit
+ *   **aucun jeton**. C'est la panne muette, et c'est la seule des deux qu'aucun
+ *   outil ne signale.
+ *
+ * Le contrôle est donc écrit « si le fichier est là, alors la déclaration doit
+ * l'être », et il **énonce** l'autre sens au lieu de le supposer : quand le
+ * fichier manque, la déclaration doit manquer aussi. Un `assert` inconditionnel
+ * sur la valeur aurait rendu le dépôt rouge avant l'étape 7, où l'absence du
+ * fichier est l'état normal.
+ */
+test('`google-services.json` présent est `google-services.json` déclaré', () => {
+  const chemin = fileURLToPath(new URL('../google-services.json', import.meta.url));
+  const declare = JSON.parse(lire('app.json')).expo.android?.googleServicesFile ?? null;
+
+  if (!existsSync(chemin)) {
+    assert.equal(
+      declare,
+      null,
+      '`app.json` déclare un `googleServicesFile` alors que le fichier est absent : ' +
+        '`expo prebuild` s’arrêterait sur « Cannot copy google-services.json from … to … »',
+    );
+    return;
+  }
+
+  assert.equal(
+    declare,
+    './google-services.json',
+    'le fichier est à la racine mais `app.json` ne le désigne pas : le greffon Google ' +
+      'Services ne serait pas appliqué, et l’application ne recevrait **aucun jeton** — ' +
+      'sans que rien ne le signale',
   );
 });

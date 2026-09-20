@@ -7,6 +7,12 @@ assets/
 supabase/
 *.png
 
+# Fichier **généré par la console Firebase**, téléchargé tel quel. Le reformater
+# ferait passer `format:check` — mais la prochaine version téléchargée depuis la
+# console le déferait, et le contrôle retomberait au premier changement de projet
+# Firebase. On ne tient pas la mise en forme d'un fichier qu'on ne rédige pas.
+google-services.json
+
 # Dossier géré par l'outil et ignoré par Git : hors du périmètre de formatage.
 # Prettier n'explore pas les dossiers cachés aujourd'hui, mais s'en remettre à ce
 # détail reviendrait à laisser une future version reformater des notes de travail.
