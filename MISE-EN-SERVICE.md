@@ -253,6 +253,13 @@ Le compartiment se crée donc à la main, une fois.
    l'identique, mais par des cases à cocher qu'on peut mal remplir. Les deux
    premières font **lire**, les trois suivantes font **déposer** :
 
+   > **À coller après `20260921150000_super_admin.sql`** — la sixième migration,
+   > qui est le **sixième collage** de §1.3. La première politique ci-dessous
+   > interroge `annonces.image_path`, une colonne que **seule cette migration
+   > crée**. Collée avant elle, la politique échoue sur
+   > `column a.image_path does not exist` — et l'échec serait discret : une
+   > politique manquante rend une **liste vide**, pas un message.
+
    ```sql
    --  Ce que les familles peuvent lire : les documents qui leur sont destinés,
    --  et les photos des actualités publiées.
