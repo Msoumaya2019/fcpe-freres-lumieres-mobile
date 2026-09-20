@@ -1135,3 +1135,48 @@ test('le chemin public des actualités ne lit que sa propre table', () => {
       'décider d’un autre choix',
   );
 });
+
+test('l’actualité épinglée est triée par le serveur, et non réordonnée dans l’écran', () => {
+  //  Deux moitiés, et aucune ne suffit seule : ici la **déclaration** du tri,
+  //  dans `check-migration-applicable` son **effet** sur un vrai PostgreSQL. Un
+  //  contrôle qui ne lirait que l’une des deux laisserait passer la faute de
+  //  l’autre — et celle-ci est muette : l’application afficherait simplement les
+  //  actualités dans l’ordre d’avant.
+  const chemin = join(RACINE, 'src', 'services', 'annonces.ts');
+  const source = sansCommentaires(lireFichier(chemin));
+
+  const ordres = [...source.matchAll(/\.order\(\s*'([a-z_]+)'\s*,\s*\{([^}]*)\}\s*\)/g)].map(
+    ([, colonne, options]) => ({ colonne, options }),
+  );
+
+  assert.ok(
+    ordres.length > 0,
+    'aucun `.order(…)` relevé dans `annonces.ts` : le motif est périmé, et ce test ne mesure rien',
+  );
+
+  assert.deepEqual(
+    ordres.map(({ colonne }) => colonne),
+    ['epinglee_at', 'published_at'],
+    'l’épinglage doit être le PREMIER critère de tri, et il doit être demandé au serveur. ' +
+      '`fetchAnnonces` ne lit que les trente actualités les plus récentes : une actualité ' +
+      'plus ancienne n’est pas dans cette page, et un tri fait ensuite dans l’application ' +
+      'ne pourrait pas l’y remettre. Le défaut serait silencieux, et il porterait sur le ' +
+      'seul cas où l’épinglage sert — remettre en tête une annonce que les familles ne ' +
+      'voient plus',
+  );
+
+  assert.match(
+    ordres[0].options,
+    /nullsFirst:\s*false/,
+    'sans `nullsFirst: false`, PostgreSQL range les valeurs nulles comme plus grandes que ' +
+      'tout : en tri décroissant elles passent EN TÊTE, et toutes les actualités non ' +
+      'épinglées passeraient devant celle qui l’est. La fonctionnalité serait inversée, ' +
+      'sans qu’aucune erreur ne soit levée',
+  );
+
+  assert.match(
+    ordres[1].options,
+    /ascending:\s*false/,
+    'les actualités non épinglées restent de la plus récente à la plus ancienne',
+  );
+});

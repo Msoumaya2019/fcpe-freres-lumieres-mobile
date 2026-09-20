@@ -59,6 +59,13 @@ export type Database = {
           published_at: string;
           is_draft: boolean;
           image_path: string | null;
+          //  Horodatage de l'épinglage, nulle quand l'actualité ne l'est pas.
+          //  C'est un horodatage et non un booléen parce que deux actualités
+          //  épinglées ont besoin d'un ordre entre elles, et parce que le tri
+          //  doit être fait par le serveur : une actualité ancienne n'est pas
+          //  dans la page lue, et un tri fait dans l'application ne l'y
+          //  remettrait pas.
+          epinglee_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -71,6 +78,7 @@ export type Database = {
           published_at?: string;
           is_draft?: boolean;
           image_path?: string | null;
+          epinglee_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -83,6 +91,7 @@ export type Database = {
           published_at?: string;
           is_draft?: boolean;
           image_path?: string | null;
+          epinglee_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };

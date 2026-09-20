@@ -643,27 +643,82 @@ test('les fonctions du super administrateur existent, dans le bon langage', asyn
   );
 });
 
-test('les trois colonnes ajoutées après coup sont bien là, avec leur défaut', async () => {
+test('les quatre colonnes ajoutées après coup sont bien là, avec leur défaut', async () => {
   // Un `alter table … add column if not exists` qui ne s'exécute pas ne lève
   // rien : il **fait** quelque chose, ou rien, et les deux se ressemblent. Le
   // seul juge est le catalogue — et le défaut compte autant que la colonne,
   // puisque c'est lui qui laisse les lignes existantes dans leur état.
+  //
+  // `epinglee_at` est la quatrième, et c'est celle dont le défaut est le plus
+  // important : elle doit être **nulle** pour toutes les actualités déjà
+  // publiées. Un défaut non nul les aurait toutes épinglées d'un coup.
   exigerLaSuite();
   const { rows } = await dbSuite.query(
     'select table_name as t, column_name as c, is_nullable as n, column_default as d ' +
       'from information_schema.columns ' +
       "where table_schema = 'public' " +
       "and ((table_name = 'profiles' and column_name = 'est_super_admin') " +
-      "or (table_name = 'annonces' and column_name in ('is_draft', 'image_path'))) " +
+      "or (table_name = 'annonces' and column_name in ('is_draft', 'image_path', 'epinglee_at'))) " +
       'order by table_name, column_name',
   );
   assert.deepEqual(
     rows.map(({ t, c, n, d }) => [t, c, n, d]),
     [
+      ['annonces', 'epinglee_at', 'YES', null],
       ['annonces', 'image_path', 'YES', null],
       ['annonces', 'is_draft', 'NO', 'false'],
       ['profiles', 'est_super_admin', 'NO', 'false'],
     ],
+  );
+});
+
+test('l’actualité épinglée passe devant, et les autres restent par date', async () => {
+  // L'**effet** de la déclaration lue par `check-async-wiring`, et non sa
+  // relecture : ce test exécute le tri que le service demande, sur un vrai
+  // PostgreSQL. Les deux moitiés se répondent — la déclaration seule ne dirait
+  // pas ce que PostgreSQL en fait, et le SQL seul ne dirait pas ce que le
+  // service demande.
+  //
+  // C'est `nulls last` qui est en jeu, et c'est là que la fonctionnalité
+  // basculerait en silence : PostgreSQL range les valeurs nulles comme plus
+  // grandes que tout, donc en tri décroissant elles passent **en tête**. Sans ce
+  // réglage, toutes les actualités non épinglées — c'est-à-dire presque
+  // toutes — passeraient devant celle qui l'est.
+  exigerLaSuite();
+
+  // Trois cas, et le troisième est celui qui compte : une annonce **ancienne et
+  // épinglée** doit passer devant une annonce récente qui ne l'est pas. C'est
+  // exactement le geste que le bureau demande.
+  await dbSuite.query(
+    'insert into public.annonces (id, title, body, published_at, epinglee_at) values ' +
+      "('11111111-1111-4111-8111-111111111111', 'recente', 'corps', '2026-09-01T00:00:00Z', null), " +
+      "('11111111-1111-4111-8111-111111111112', 'ancienne epinglee', 'corps', '2026-01-01T00:00:00Z', '2026-09-15T00:00:00Z'), " +
+      "('11111111-1111-4111-8111-111111111113', 'plus recente', 'corps', '2026-09-10T00:00:00Z', null) " +
+      'on conflict (id) do nothing',
+  );
+
+  const { rows } = await dbSuite.query(
+    'select title from public.annonces order by epinglee_at desc nulls last, published_at desc',
+  );
+
+  assert.deepEqual(
+    rows.map(({ title }) => title),
+    ['ancienne epinglee', 'plus recente', 'recente'],
+    'l’actualité épinglée doit passer en tête, quel que soit son âge, et les autres ' +
+      'doivent rester de la plus récente à la plus ancienne. `nulls last` est ce qui ' +
+      'l’obtient : sans lui, l’ordre est exactement inverse',
+  );
+
+  // Le témoin du tri : la même liste sans le second critère doit **changer**.
+  // Sans cela, un tri qui ne trierait rien passerait pour un tri juste.
+  const { rows: parDateSeule } = await dbSuite.query(
+    'select title from public.annonces order by published_at desc',
+  );
+
+  assert.deepEqual(
+    parDateSeule.map(({ title }) => title),
+    ['plus recente', 'recente', 'ancienne epinglee'],
+    'l’ordre par date seule doit être différent : sinon le premier tri ne mesurerait rien',
   );
 });
 

@@ -56,11 +56,37 @@ function avecAuteurs(rows: readonly Annonce[]): AnnonceWithAuthor[] {
   }));
 }
 
-/** Annonces les plus récentes d'abord. */
+/**
+ * Annonces les plus récentes d'abord, l'épinglée en tête.
+ *
+ * POURQUOI DEUX `order`, ET POURQUOI LE PREMIER N'EST PAS UN TRI DANS L'ÉCRAN
+ * -------------------------------------------------------------------------
+ * Le tri par épinglage est fait par le **serveur**, et ce n'est pas un détail
+ * de style : cette fonction ne lit que les `limit` actualités les plus récentes.
+ * Une actualité plus ancienne que la page n'est donc pas dans le résultat, et
+ * aucun réordonnancement fait ensuite dans l'application ne pourrait l'y
+ * remettre. L'épinglage d'une annonce que les familles ne voient plus — le cas
+ * où il sert vraiment — ne ferait **rien**, sans le dire.
+ *
+ * Les deux `order` ne s'additionnent pas : le premier trie, le second ne
+ * départage que les lignes que le premier laisse à égalité. Une actualité
+ * épinglée passe donc devant, et les autres restent du plus récent au plus
+ * ancien.
+ *
+ * `nullsFirst: false` EST LA LIGNE QUI DÉCIDE
+ * -------------------------------------------
+ * PostgreSQL range les valeurs nulles **comme plus grandes que tout le reste** :
+ * en tri décroissant, elles passent donc **en tête**. Sans ce réglage, toutes
+ * les actualités non épinglées — c'est-à-dire presque toutes — passeraient
+ * devant celle qui est épinglée, et la fonctionnalité serait inversée sans
+ * qu'aucune erreur ne soit levée. C'est `check-migration-applicable` qui le
+ * mesure, sur un vrai PostgreSQL, et non ce commentaire.
+ */
 export async function fetchAnnonces(limit: number = DEFAULT_LIMIT): Promise<AnnonceWithAuthor[]> {
   const { data, error } = await requireSupabase()
     .from('annonces')
     .select('*')
+    .order('epinglee_at', { ascending: false, nullsFirst: false })
     .order('published_at', { ascending: false })
     .limit(limit);
 

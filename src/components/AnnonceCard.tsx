@@ -131,6 +131,21 @@ export function AnnonceCard({ annonce, lines = 3, onPress, photoUrl = null }: An
           <AppText variant="heading">{annonce.title}</AppText>
 
           <View style={styles.repere}>
+            {/* L'épinglage se dit ici, dans la ligne des repères, et non par
+                une seconde pastille : la maquette demande des couleurs pastel
+                et sobres, et une pastille de plus sur chaque carte en
+                ajouterait une là où un mot suffit. Le repère explique aussi
+                pourquoi une actualité ancienne peut se trouver en tête — sans
+                lui, l'ordre aurait l'air d'un défaut. */}
+            {annonce.epinglee_at === null ? null : (
+              <>
+                <Ionicons name="pin" size={13} color={colors.primary} />
+                <AppText variant="caption" bold color={colors.primary}>
+                  Épinglée
+                </AppText>
+                <AppText variant="caption">·</AppText>
+              </>
+            )}
             <Ionicons name="time-outline" size={13} color={colors.textSecondary} />
             <AppText variant="caption">{formatRelativeDay(annonce.published_at)}</AppText>
             {annonce.authorName === null ? null : (

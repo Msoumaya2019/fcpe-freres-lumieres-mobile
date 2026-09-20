@@ -113,6 +113,7 @@ const MIGRATIONS_ATTENDUES = [
   '20260921150000_super_admin.sql',
   '20260921180000_commentaires_trois_cibles.sql',
   '20260921210000_reglages_et_moderation.sql',
+  '20260922090000_annonce_epinglee.sql',
 ];
 
 /**

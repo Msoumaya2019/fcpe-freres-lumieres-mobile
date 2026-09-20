@@ -230,9 +230,10 @@ distinguer, et « le jeudi, mon enfant est allergique » ne se dit pas d'une
 semaine entière. Une contrainte garantit qu'un commentaire a **exactement une**
 cible, et chacune des trois clés étrangères efface le fil avec sa cible.
 
-> **À coller après le sixième collage**, jamais avant. C'est le seul des huit qui
-> dépende du précédent par une **modification** de table, et non par une simple
-> lecture.
+> **À coller après le sixième collage**, jamais avant. C'est l'un des **deux** qui
+> dépendent d'un collage antérieur par une **modification** de table, et non par
+> une simple lecture — l'autre est le neuvième, qui ajoute une colonne à
+> `annonces` et dépend donc du premier.
 
 **Huitième collage** — le titre du bandeau d'accueil, et le retrait d'un message
 de conversation :
@@ -258,7 +259,35 @@ fichier pour qu'un seul collage suffise :
 > **À coller après le sixième collage**, pour la même raison que le septième : la
 > fonction s'appuie sur `is_super_admin()`, que le sixième crée.
 
-**Neuvième collage** — le jeu d'essai, et il est facultatif :
+**Neuvième collage** — l'actualité épinglée :
+
+```
+supabase/migrations/20260922090000_annonce_epinglee.sql
+```
+
+Même geste, même message attendu. C'est le fichier le plus court du dépôt : une
+**colonne**, et rien d'autre. Aucune table, aucune politique, aucun droit —
+`annonces_update_admin` autorise déjà le bureau à écrire cette table, et un
+`grant` de table couvre la colonne nouvelle.
+
+Ce qu'il apporte : `annonces.epinglee_at`. Le tableau de bord peut alors
+**épingler** une actualité, qui reste en tête de l'accueil **et** de la rubrique
+« Actualités », quel que soit son âge. Détacher l'actualité écrit `null` dans la
+même colonne : il n'y a pas de second chemin à tenir, donc pas de second chemin
+à oublier.
+
+Pourquoi une colonne, alors qu'une clef dans `reglages` aurait évité ce collage :
+parce que le tri doit être fait par le **serveur**. L'application ne lit que les
+trente actualités les plus récentes ; une actualité plus ancienne n'est pas dans
+cette page, et aucun réordonnancement fait ensuite dans l'application ne pourrait
+l'y remettre. L'épinglage d'une annonce que les familles ne voient plus — le cas
+où il sert vraiment — ne ferait **rien**, et le dirait d'autant moins.
+
+> **À coller après le premier collage** : il modifie la table `annonces`, que le
+> premier crée. Collé seul, il s'arrête sur
+> `relation "public.annonces" does not exist`.
+
+**Dixième collage** — le jeu d'essai, et il est facultatif :
 
 ```
 supabase/seed.sql
@@ -1236,6 +1265,16 @@ y changer.
       est repliée —, et c'est le tableau de bord qui le dit : la page
       « Accueil » refuse alors d'enregistrer, avec le message qui nomme la
       migration manquante)_
+- [ ] `20260922090000_annonce_epinglee.sql` collé et exécuté → une actualité
+      **épinglée** reste en tête de l'accueil **et** de la rubrique « Actualités »,
+      quel que soit son âge
+      _(à coller **après** le premier collage : il modifie la table `annonces`, que
+      le premier crée, donc collé seul il est refusé sur
+      `relation "public.annonces" does not exist`. **Mesurable depuis
+      l'extérieur** : la sonde « colonne annonces.epinglee_at » de
+      `scripts/sonder-base.mjs` répond `200` avec la seule clé publiable, là où
+      elle rend `42703` avant le collage. Sans ce collage, le tableau de bord
+      refuse d'épingler, avec le message qui nomme la colonne manquante)_
 - [x] Compartiment `documents` **privé** dans Storage — **mesuré** : l'adresse  
       publique du compartiment répond `Bucket not found`, et sa liste répond `200`  
       _(il existe donc, et n'est pas public)_
