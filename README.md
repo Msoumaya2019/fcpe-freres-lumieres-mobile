@@ -824,7 +824,7 @@ ce câblage laisserait l'adhérent sans recours : le bandeau d'erreur le renvoie
 geste qui ne ferait rien, et une erreur survenue alors que du contenu est affiché
 deviendrait définitive.
 
-Le fichier tient quatre promesses du même genre, et celle des écritures est la plus
+Le fichier tient **une promesse par propriété**, et celle des écritures est la plus
 utile : un écran qui écrit doit **relire sa liste**, sans quoi l'adhérent voit son
 action réussir et rien apparaître — il recommence, et crée un doublon. Les fonctions
 d'écriture n'y sont pas listées : elles sont **déduites des services**, en relevant
@@ -917,6 +917,26 @@ comparaison n'importe où dans le fichier, et le message affiché lui-même
 contrôle **vert**. Il lit donc l'**arbre** — une garde est une instruction `if` — et
 son motif **nomme** `session` sans exiger d'orthographe, pour ne pas tomber sur une
 remise en forme juste (`!session`). Éprouvé dans les deux sens.
+
+**Une colonne absente ne doit pas vider l'écran, et une colonne absente n'est pas
+une colonne nulle.** Le 20 septembre 2026, la base a répondu `42703` — « column
+annonces.epinglee_at does not exist » — à la requête qui triait les actualités sur
+la colonne de l'épinglage, une migration n'ayant pas encore été collée. PostgreSQL
+refuse une requête qui nomme une colonne absente, et il la refuse **en bloc** :
+l'accueil de toutes les familles serait tombé — photographie et bandeau compris —
+pour une fonctionnalité qu'elles n'avaient pas encore. `fetchAnnonces` reconnaît
+donc cette erreur-là, **et elle seule** — `42703` _et_ le nom de la colonne —, puis
+relit la liste dans l'ordre d'avant. Le banc tient les deux moitiés : la colonne
+gardée est celle qui est triée, et la seconde lecture est appelée **après** la
+reconnaissance, jamais avant ; un repli pris sur `error !== null` avalerait un refus
+de politique, et la liste aurait l'air normale.
+
+Le second piège vient du même endroit, et il est plus visible que le premier :
+`select('*')` rend les colonnes qui **existent**, donc `epinglee_at` est _absent_ de
+la ligne — `undefined` —, et la carte annonce l'épinglage sur `=== null`, qui est
+faux pour `undefined`. Sans la normalisation d'`avecAuteurs`, **toutes** les
+actualités auraient porté « Épinglée ». Le banc mesure cette forme, et son message
+dit quoi faire si c'est un jour la carte qui tolère l'absence.
 
 **`check-pending-action` prolonge la promesse précédente, et il est né d'une mesure.**
 « Un écran qui écrit relit sa liste » ne dit pas **combien de temps** l'indicateur

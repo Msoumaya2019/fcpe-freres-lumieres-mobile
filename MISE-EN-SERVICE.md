@@ -287,6 +287,17 @@ où il sert vraiment — ne ferait **rien**, et le dirait d'autant moins.
 > premier crée. Collé seul, il s'arrête sur
 > `relation "public.annonces" does not exist`.
 
+**Ce que l'application fait tant qu'il n'est pas collé** — et c'est la raison
+d'un repli qui a sa propre histoire : rien de cassé, et une fonctionnalité en
+moins. PostgreSQL refuse **en bloc** une requête qui nomme une colonne absente
+(`42703`) : un `order` sur `epinglee_at` ferait donc tomber l'accueil **entier**
+— photographie et bandeau compris — pour toutes les familles. `fetchAnnonces`
+reconnaît cette erreur-là, et **elle seule**, puis relit la liste comme avant,
+du plus récent au plus ancien. Une base en retard ne doit pas priver les familles
+de ce qu'elles lisaient la veille ; ce repli ne masque aucun autre refus, et
+`check-async-wiring` tient les deux moitiés — la colonne gardée, et l'ordre des
+deux lectures.
+
 **Dixième collage** — le jeu d'essai, et il est facultatif :
 
 ```
@@ -1274,7 +1285,9 @@ y changer.
       l'extérieur** : la sonde « colonne annonces.epinglee_at » de
       `scripts/sonder-base.mjs` répond `200` avec la seule clé publiable, là où
       elle rend `42703` avant le collage. Sans ce collage, le tableau de bord
-      refuse d'épingler, avec le message qui nomme la colonne manquante)_
+      refuse d'épingler, avec le message qui nomme la colonne manquante — et
+      l'accueil de l'application **reste lisible**, dans l'ordre d'avant : c'est
+      le repli de `fetchAnnonces`, tenu par `check-async-wiring`)_
 - [x] Compartiment `documents` **privé** dans Storage — **mesuré** : l'adresse  
       publique du compartiment répond `Bucket not found`, et sa liste répond `200`  
       _(il existe donc, et n'est pas public)_

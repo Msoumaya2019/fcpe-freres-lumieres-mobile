@@ -52,17 +52,23 @@ export const AUTEUR_COLLECTIF = 'Membre de parents d’élèves';
 function avecAuteurs(rows: readonly Annonce[]): AnnonceWithAuthor[] {
   return rows.map((row) => ({
     ...row,
+    //  `select('*')` rend les colonnes qui **existent**, pas celles qu'on attend :
+    //  sur une base qui n'a pas encore reçu la neuvième migration, `epinglee_at`
+    //  est **absent** de la ligne, et non nul. Sans cette normalisation, la carte
+    //  lirait `undefined`, son test `=== null` serait faux, et **toutes** les
+    //  actualités s'annonceraient « Épinglée » — un défaut bien plus visible que
+    //  celui qu'on cherche à éviter, et qui ne lèverait rien. Un repli ne sert à
+    //  rien si la donnée qu'il rend n'a pas la forme attendue.
+    epinglee_at: row.epinglee_at ?? null,
     authorName: row.author_id === null ? null : AUTEUR_COLLECTIF,
   }));
 }
 
 /**
- * Annonces les plus récentes d'abord, l'épinglée en tête.
+ * La lecture habituelle : l'épinglée d'abord, puis les dates.
  *
- * POURQUOI DEUX `order`, ET POURQUOI LE PREMIER N'EST PAS UN TRI DANS L'ÉCRAN
- * -------------------------------------------------------------------------
- * Le tri par épinglage est fait par le **serveur**, et ce n'est pas un détail
- * de style : cette fonction ne lit que les `limit` actualités les plus récentes.
+ * Le tri par épinglage est fait par le **serveur**, et ce n'est pas un détail de
+ * style : `fetchAnnonces` ne lit que les `limit` actualités les plus récentes.
  * Une actualité plus ancienne que la page n'est donc pas dans le résultat, et
  * aucun réordonnancement fait ensuite dans l'application ne pourrait l'y
  * remettre. L'épinglage d'une annonce que les familles ne voient plus — le cas
@@ -76,25 +82,109 @@ function avecAuteurs(rows: readonly Annonce[]): AnnonceWithAuthor[] {
  * `nullsFirst: false` EST LA LIGNE QUI DÉCIDE
  * -------------------------------------------
  * PostgreSQL range les valeurs nulles **comme plus grandes que tout le reste** :
- * en tri décroissant, elles passent donc **en tête**. Sans ce réglage, toutes
- * les actualités non épinglées — c'est-à-dire presque toutes — passeraient
- * devant celle qui est épinglée, et la fonctionnalité serait inversée sans
- * qu'aucune erreur ne soit levée. C'est `check-migration-applicable` qui le
- * mesure, sur un vrai PostgreSQL, et non ce commentaire.
+ * en tri décroissant, elles passent donc **en tête**. Sans ce réglage, toutes les
+ * actualités non épinglées — c'est-à-dire presque toutes — passeraient devant
+ * celle qui est épinglée, et la fonctionnalité serait inversée sans qu'aucune
+ * erreur ne soit levée. C'est `check-migration-applicable` qui le mesure, sur un
+ * vrai PostgreSQL, et non ce commentaire.
  */
-export async function fetchAnnonces(limit: number = DEFAULT_LIMIT): Promise<AnnonceWithAuthor[]> {
-  const { data, error } = await requireSupabase()
+async function lireAvecEpinglee(limit: number) {
+  return await requireSupabase()
     .from('annonces')
     .select('*')
     .order('epinglee_at', { ascending: false, nullsFirst: false })
     .order('published_at', { ascending: false })
     .limit(limit);
+}
 
-  if (error !== null) {
-    throw toAppError(error);
+/**
+ * La même liste, sans l'épinglage — pour une base qui n'a pas encore reçu la
+ * neuvième migration.
+ *
+ * POURQUOI CE REPLI EXISTE, ET CE QU'IL COÛTE SI ON LE RETIRE
+ * ----------------------------------------------------------
+ * C'est un défaut **mesuré**, le 20 septembre 2026, et il est du pire genre :
+ * PostgreSQL refuse une requête qui nomme une colonne absente, et il la refuse
+ * **en bloc** — `42703`, « column annonces.epinglee_at does not exist ». Le
+ * `order` d'une seule colonne fait donc tomber la lecture **entière**, et avec
+ * elle l'accueil de toutes les familles, photographie et bandeau compris.
+ *
+ * Une application ne peut pas exiger qu'une migration ait été collée pour
+ * continuer d'afficher ce qu'elle affichait la veille. Ici, la colonne manquante
+ * ne prive que d'une **nouveauté** : la liste reste exactement celle d'avant, du
+ * plus récent au plus ancien, et l'épinglage est simplement sans effet jusqu'au
+ * collage. C'est le seul arbitrage qui respecte « ne rien casser ».
+ *
+ * CE QUE CE REPLI NE DOIT PAS DEVENIR
+ * ----------------------------------
+ * Un repli qui avalerait n'importe quelle erreur cacherait un vrai refus — une
+ * politique RLS, un réseau coupé — derrière une liste qui a l'air normale. C'est
+ * pourquoi il n'est pris que sur la reconnaissance écrite dans
+ * `colonneEpingleeAbsente`, et pourquoi la seconde lecture lève à son tour si
+ * elle échoue. `check-async-wiring` tient les deux moitiés : la colonne gardée
+ * est **la même** que celle qui est triée, et le code gardé est celui d'une
+ * colonne absente.
+ */
+async function lireSansEpinglee(limit: number) {
+  return await requireSupabase()
+    .from('annonces')
+    .select('*')
+    .order('published_at', { ascending: false })
+    .limit(limit);
+}
+
+/**
+ * L'erreur dit-elle, et dit-elle **seulement**, que la colonne de l'épinglage
+ * manque ?
+ *
+ * La question est étroite à dessein : le code `42703` est celui d'une colonne
+ * inconnue, et le nom de la colonne est vérifié pour qu'un autre objet disparu
+ * ne se déguise pas en épinglage absent. La requête ne nomme qu'une colonne, donc
+ * les deux conditions ensemble ne peuvent désigner que ce cas.
+ *
+ * Le nom est écrit ici **et** dans `lireAvecEpinglee` : deux littéraux, une seule
+ * vérité. Un écart d'une lettre ferait un repli qui ne se déclencherait jamais —
+ * et `check-async-wiring` compare les deux, plutôt que de faire confiance à la
+ * relecture.
+ */
+function colonneEpingleeAbsente(erreur: { code?: string; message?: string } | null): boolean {
+  return erreur?.code === '42703' && (erreur.message ?? '').includes('epinglee_at');
+}
+
+/**
+ * Les annonces de l'accueil : l'épinglée en tête, les autres par date.
+ *
+ * ELLE N'ÉCRIT AUCUNE REQUÊTE, ET C'EST VOULU
+ * -------------------------------------------
+ * Les deux lectures qu'elle choisit — `lireAvecEpinglee`, `lireSansEpinglee` —
+ * portent chacune leur propre tri, et leurs commentaires disent pourquoi. Ce qui
+ * se décide **ici**, et seulement ici, c'est le passage de l'une à l'autre : le
+ * repli n'est pris que sur la reconnaissance d'une colonne absente, et toute
+ * autre erreur remonte telle quelle.
+ *
+ * La seconde lecture lève à son tour si elle échoue : un repli qui rendrait une
+ * liste vide sur un second refus ferait afficher « aucune actualité » à des
+ * familles qui en ont — le défaut que le tableau de bord interdit par un contrôle
+ * exprès, et qui fait douter du contenu plutôt que de l'outil.
+ */
+export async function fetchAnnonces(limit: number = DEFAULT_LIMIT): Promise<AnnonceWithAuthor[]> {
+  const premier = await lireAvecEpinglee(limit);
+
+  if (premier.error === null) {
+    return avecAuteurs(premier.data);
   }
 
-  return avecAuteurs(data);
+  if (!colonneEpingleeAbsente(premier.error)) {
+    throw toAppError(premier.error);
+  }
+
+  const repli = await lireSansEpinglee(limit);
+
+  if (repli.error !== null) {
+    throw toAppError(repli.error);
+  }
+
+  return avecAuteurs(repli.data);
 }
 
 /**

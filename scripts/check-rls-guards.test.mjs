@@ -1046,8 +1046,8 @@ test('SECURITY.md nomme exactement les tables que la cascade efface', () => {
 // écran d'erreur. Seulement un écran « aucune donnée », que personne ne
 // distinguera d'une table réellement vide.
 //
-// C'est le contrôle que `SECURITY.md` décrit en prose — « les dix-neuf appels de
-// `src/services/` ont été croisés un par un » — et une prose ne se relit pas
+// C'est le contrôle que `SECURITY.md` décrit en prose — « les vingt et un appels
+// de `src/services/` ont été croisés un par un » — et une prose ne se relit pas
 // toute seule. Ici, la phrase est vérifiée à chaque exécution.
 //
 // La quatrième question, elle, ne se lit nulle part : **une politique qui
@@ -1217,17 +1217,17 @@ const ALLOWANCES = new Map([
   ],
 ]);
 
-test('l’analyse des requêtes trouve les dix-neuf appels attendus', () => {
+test('l’analyse des requêtes trouve les vingt et un appels attendus', () => {
   // Contrôle, et invariant en même temps : le nombre est celui que SECURITY.md
   // annonce. Une expression régulière trop stricte qui ne trouverait rien ferait
   // passer les quatre tests suivants sur zéro cas.
   //
-  // Vingt **appels** pour dix-sept clés distinctes : trois appels s'ajoutent
-  // à une clé déjà comptée. Le décompte porte sur les appels parce que c'est ce
-  // que l'analyse parcourt ; la liste, elle, porte sur les clés, parce qu'une
-  // politique se réclame par couple et non par appel.
+  // Vingt et un **appels** pour dix-sept clés distinctes : quatre appels
+  // s'ajoutent à une clé déjà comptée. Le décompte porte sur les appels parce que
+  // c'est ce que l'analyse parcourt ; la liste, elle, porte sur les clés, parce
+  // qu'une politique se réclame par couple et non par appel.
   //
-  // Les trois appels excédentaires se répartissent en deux clés, et aucune
+  // Les quatre appels excédentaires se répartissent en deux clés, et aucun
   // n'ajoute de clé — donc aucune politique nouvelle n'est réclamée, c'est la
   // même politique qui sert chaque lecture :
   //
@@ -1238,8 +1238,12 @@ test('l’analyse des requêtes trouve les dix-neuf appels attendus', () => {
   //     atteint plus** : les noms des auteurs ne sont plus demandés pour une page
   //     d'actualités, et c'est cette demande-là qui refusait la lecture à un
   //     visiteur sans compte.
-  //   - `annonces.select`, écrit **deux** fois depuis l'écran qui ouvre une
-  //     actualité entière : la liste, puis l'article par son identifiant.
+  //   - `annonces.select`, écrit **trois** fois : la liste, sa **lecture de
+  //     repli** — celle qui ne trie pas sur la colonne de la neuvième migration,
+  //     pour qu'une base en retard ne fasse pas tomber l'accueil, voir
+  //     `src/services/annonces.ts` —, puis l'article par son identifiant. Le
+  //     repli ne réclame aucune politique nouvelle : c'est la même clé, et c'est
+  //     pourquoi il est compté ici plutôt que déclaré à part.
   //
   // Mesuré, et non déduit : une première rédaction de ce commentaire attribuait
   // le second doublon à `discussion_messages.select`, qui n'est écrit qu'une
@@ -1262,7 +1266,7 @@ test('l’analyse des requêtes trouve les dix-neuf appels attendus', () => {
   // Une clé entre avec les réglages : `reglages.select`, pour le titre et la
   // devise du bandeau. L'écriture, elle, n'est pas exercée ici — elle vit dans le
   // tableau de bord, et ses trois politiques sont nommées dans `NON_EXERCEES`.
-  assert.equal(REQUETES.length, 20);
+  assert.equal(REQUETES.length, 21);
   assert.deepEqual(CLES_REQUETES, [
     'agenda_events.select',
     'annonces.select',

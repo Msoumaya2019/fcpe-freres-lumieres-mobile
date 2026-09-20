@@ -223,11 +223,12 @@ même chose et dans le même ordre.
 
 ## Ce que la relecture des politiques a établi
 
-Les **vingt** appels de `src/services/` ont été croisés un par un avec les
-politiques des migrations. Dix-sept clés distinctes — trois appels s'ajoutent à
+Les **vingt et un** appels de `src/services/` ont été croisés un par un avec les
+politiques des migrations. Dix-sept clés distinctes — quatre appels s'ajoutent à
 une clé déjà comptée : `profiles.select` est écrit trois fois, `annonces.select`
-deux —, et **une seule écrit une ligne existante** : `push_tokens.update`, par
-laquelle un appareil déjà connu rafraîchit sa date.
+trois (la liste, sa lecture de repli, l'article par son identifiant) —, et **une
+seule écrit une ligne existante** : `push_tokens.update`, par laquelle un appareil
+déjà connu rafraîchit sa date.
 
 Le relevé ci-dessous n'est pas la source : la source est
 `scripts/check-rls-guards.test.mjs`, qui tient la liste **close** et tombe dès

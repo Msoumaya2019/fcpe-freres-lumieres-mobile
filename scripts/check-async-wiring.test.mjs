@@ -1136,6 +1136,38 @@ test('le chemin public des actualités ne lit que sa propre table', () => {
   );
 });
 
+/* -------------------------------------------------------------------------- *
+ *  Les fonctions d'une source, et les tris qu'elles demandent
+ *
+ *  Le découpage se fait sur les **déclarations de fonction**, et non sur le
+ *  fichier entier : la lecture habituelle et la lecture de repli portent le
+ *  même appel sur des colonnes différentes, et les confondre rendrait ce
+ *  contrôle incapable de dire laquelle des deux a perdu son critère.
+ *
+ *  Écrit comme une fonction pure — une source entre, une table sort — pour que
+ *  le témoin puisse l'exercer sur des sources écrites ici. Un découpage qui ne
+ *  séparerait plus rien rendrait les deux tests suivants verts en ne mesurant
+ *  rien, et c'est le pire des états.
+ * -------------------------------------------------------------------------- */
+
+function fonctionsDe(source) {
+  const morceaux = source.split(/(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/);
+  const fonctions = new Map();
+
+  for (let i = 1; i < morceaux.length; i += 2) {
+    const corps = morceaux[i + 1] ?? '';
+
+    fonctions.set(morceaux[i], {
+      corps,
+      tris: [...corps.matchAll(/\.order\(\s*'([a-z_]+)'\s*,\s*\{([^}]*)\}\s*\)/g)].map(
+        ([, colonne, options]) => ({ colonne, options }),
+      ),
+    });
+  }
+
+  return fonctions;
+}
+
 test('l’actualité épinglée est triée par le serveur, et non réordonnée dans l’écran', () => {
   //  Deux moitiés, et aucune ne suffit seule : ici la **déclaration** du tri,
   //  dans `check-migration-applicable` son **effet** sur un vrai PostgreSQL. Un
@@ -1143,19 +1175,19 @@ test('l’actualité épinglée est triée par le serveur, et non réordonnée d
   //  l’autre — et celle-ci est muette : l’application afficherait simplement les
   //  actualités dans l’ordre d’avant.
   const chemin = join(RACINE, 'src', 'services', 'annonces.ts');
-  const source = sansCommentaires(lireFichier(chemin));
+  const fonctions = fonctionsDe(sansCommentaires(lireFichier(chemin)));
 
-  const ordres = [...source.matchAll(/\.order\(\s*'([a-z_]+)'\s*,\s*\{([^}]*)\}\s*\)/g)].map(
-    ([, colonne, options]) => ({ colonne, options }),
-  );
+  const normal = fonctions.get('lireAvecEpinglee');
+  const repli = fonctions.get('lireSansEpinglee');
 
   assert.ok(
-    ordres.length > 0,
-    'aucun `.order(…)` relevé dans `annonces.ts` : le motif est périmé, et ce test ne mesure rien',
+    normal !== undefined && normal.tris.length > 0,
+    'aucun `.order(…)` relevé dans `lireAvecEpinglee` : le motif ou le nom de la fonction a ' +
+      'changé, et ce test ne mesure plus rien',
   );
 
   assert.deepEqual(
-    ordres.map(({ colonne }) => colonne),
+    normal.tris.map(({ colonne }) => colonne),
     ['epinglee_at', 'published_at'],
     'l’épinglage doit être le PREMIER critère de tri, et il doit être demandé au serveur. ' +
       '`fetchAnnonces` ne lit que les trente actualités les plus récentes : une actualité ' +
@@ -1166,7 +1198,7 @@ test('l’actualité épinglée est triée par le serveur, et non réordonnée d
   );
 
   assert.match(
-    ordres[0].options,
+    normal.tris[0].options,
     /nullsFirst:\s*false/,
     'sans `nullsFirst: false`, PostgreSQL range les valeurs nulles comme plus grandes que ' +
       'tout : en tri décroissant elles passent EN TÊTE, et toutes les actualités non ' +
@@ -1175,8 +1207,160 @@ test('l’actualité épinglée est triée par le serveur, et non réordonnée d
   );
 
   assert.match(
-    ordres[1].options,
+    normal.tris[1].options,
     /ascending:\s*false/,
     'les actualités non épinglées restent de la plus récente à la plus ancienne',
+  );
+
+  //  Le repli, et ce qu'il doit être : la liste d'avant, **sans** le critère
+  //  d'épinglage. S'il gardait `epinglee_at`, il échouerait exactement comme la
+  //  lecture qu'il remplace, et l'accueil tomberait quand même — un repli qui ne
+  //  replie rien.
+  assert.ok(
+    repli !== undefined,
+    'la lecture de repli a disparu. PostgreSQL refuse une requête qui nomme une colonne ' +
+      'absente, et il la refuse EN BLOC : sans ce repli, une base qui n’a pas reçu la ' +
+      'neuvième migration fait tomber l’accueil de toutes les familles — photographie et ' +
+      'bandeau compris. Mesuré le 20 septembre 2026 : `42703`, « column ' +
+      'annonces.epinglee_at does not exist »',
+  );
+
+  assert.deepEqual(
+    repli.tris.map(({ colonne }) => colonne),
+    ['published_at'],
+    'la lecture de repli doit demander exactement le tri d’avant, et rien d’autre',
+  );
+});
+
+test('le repli ne s’ouvre que sur une colonne absente, et il est réellement atteint', () => {
+  //  Un repli qui avalerait n'importe quelle erreur cacherait un vrai refus —
+  //  politique RLS, réseau coupé — derrière une liste qui a l'air normale. La
+  //  reconnaissance est donc étroite, et ce test tient ses deux moitiés.
+  const chemin = join(RACINE, 'src', 'services', 'annonces.ts');
+  const fonctions = fonctionsDe(sansCommentaires(lireFichier(chemin)));
+
+  const garde = fonctions.get('colonneEpingleeAbsente');
+
+  assert.ok(
+    garde !== undefined,
+    'la reconnaissance de l’erreur doit rester une fonction nommée : c’est elle qui empêche ' +
+      'le repli d’avaler un vrai refus',
+  );
+
+  assert.match(
+    garde.corps,
+    /'42703'/,
+    'le repli doit reconnaître le code d’une colonne inconnue — et un code plus large ' +
+      'ouvrirait le repli à des refus qui ne sont pas des colonnes absentes',
+  );
+
+  const colonneGardee = /includes\(\s*'([a-z_]+)'\s*\)/.exec(garde.corps)?.[1] ?? null;
+
+  assert.equal(
+    colonneGardee,
+    'epinglee_at',
+    'le nom gardé par la reconnaissance et celui qui est trié sont deux littéraux qui ' +
+      'portent la même vérité : un écart d’une lettre ferait un repli qui ne se ' +
+      'déclencherait jamais, et le défaut reviendrait sans un mot',
+  );
+
+  //  La relation, et non la présence : une fonction écrite et jamais appelée
+  //  passerait tout ce qui précède. C'est le défaut que ce fichier mesure partout
+  //  ailleurs, et il s'applique ici mot pour mot.
+  const principale = fonctions.get('fetchAnnonces');
+
+  assert.ok(principale !== undefined, '`fetchAnnonces` doit exister dans `annonces.ts`');
+
+  assert.match(
+    principale.corps,
+    /lireAvecEpinglee\(/,
+    'la lecture habituelle doit être appelée, sinon les deux tris ci-dessus ne servent à rien',
+  );
+
+  assert.match(
+    principale.corps,
+    /colonneEpingleeAbsente\([\s\S]*?lireSansEpinglee\(/,
+    'la lecture de repli doit être appelée APRÈS la reconnaissance de la colonne absente, ' +
+      'et non ailleurs : c’est l’ordre des deux qui fait qu’un vrai refus remonte',
+  );
+});
+
+test('une colonne absente de la base n’est pas rendue comme une colonne nulle', () => {
+  //  Le second piège du même défaut, et il est plus visible que le premier.
+  //  `select('*')` rend les colonnes qui **existent** : sur une base qui n'a pas
+  //  reçu la neuvième migration, `epinglee_at` est **absent** de la ligne, donc
+  //  `undefined`. La carte d'actualité, elle, annonce l'épinglage sur
+  //  `annonce.epinglee_at === null` — et `undefined === null` est **faux**. Sans
+  //  la normalisation ci-dessous, le repli rendrait une liste juste et **toutes**
+  //  les actualités porteraient la mention « Épinglée » : un défaut plus bruyant
+  //  que celui qu'on évite, et que rien d'autre ne signalerait.
+  //
+  //  C'est la forme du contrat qui est mesurée ici — « le service rend un
+  //  horodatage ou `null`, jamais rien » —, et non un appel : c'est elle que la
+  //  carte consomme. Si un jour la carte tolérait l'absence par elle-même
+  //  (`!== undefined`, ou une valeur fausse), cette normalisation deviendrait
+  //  inutile et ce test devrait être réécrit — le message de chute le dit.
+  const chemin = join(RACINE, 'src', 'services', 'annonces.ts');
+  const fonctions = fonctionsDe(sansCommentaires(lireFichier(chemin)));
+  const mapping = fonctions.get('avecAuteurs');
+
+  assert.ok(
+    mapping !== undefined,
+    '`avecAuteurs` doit exister : c’est le seul endroit où la forme rendue aux écrans est fixée',
+  );
+
+  assert.match(
+    mapping.corps,
+    /epinglee_at:\s*[\w.]+\s*\?\?\s*null/,
+    'le service doit rendre `epinglee_at` sous une seule forme d’absence — `null`. Une ' +
+      'étoile de `select` ne rend pas la colonne du tout sur une base qui n’a pas reçu la ' +
+      'neuvième migration : sans `?? null`, la carte lirait `undefined`, son test ' +
+      '`=== null` serait faux, et TOUTES les actualités s’annonceraient « Épinglée ». ' +
+      'Si c’est la carte qui tolère désormais l’absence, réécrivez ce test au lieu de ' +
+      'retirer la normalisation',
+  );
+});
+
+test('le témoin : les fonctions se découpent, et leurs tris ne se mélangent pas', () => {
+  const lues = fonctionsDe(
+    "export async function a() { .order('x', { ascending: false }).limit(1); }\n" +
+      'function b() { return 1; }\n' +
+      "async function c() { .order('y', { ascending: true }); }\n",
+  );
+
+  assert.deepEqual(
+    [...lues.keys()],
+    ['a', 'b', 'c'],
+    'chaque déclaration de fonction doit être vue, et nommée — y compris sans `export` ni ' +
+      '`async`',
+  );
+
+  assert.deepEqual(
+    lues.get('a').tris.map(({ colonne }) => colonne),
+    ['x'],
+    'le tri d’une fonction ne doit pas se mélanger à celui d’une autre',
+  );
+
+  assert.deepEqual(
+    lues.get('c').tris.map(({ colonne }) => colonne),
+    ['y'],
+    'le tri de la troisième fonction doit être lu aussi',
+  );
+
+  assert.deepEqual(
+    lues.get('b').tris,
+    [],
+    'une fonction sans tri ne doit rien relever — sinon un relevé vide ne dirait rien',
+  );
+
+  //  La normalisation se lit sur la **forme** : une ligne qui rend la colonne
+  //  telle quelle ne doit pas passer pour une normalisation.
+  const normalise = /epinglee_at:\s*[\w.]+\s*\?\?\s*null/;
+  assert.match('epinglee_at: row.epinglee_at ?? null,', normalise);
+  assert.doesNotMatch(
+    'epinglee_at: row.epinglee_at,',
+    normalise,
+    'rendre la colonne telle quelle n’est pas la normaliser : c’est exactement le défaut ' +
+      'que ce contrôle existe pour attraper',
   );
 });
