@@ -28,7 +28,7 @@ import { useNonLus } from '@/hooks/useNonLus';
 import type { MainTabParamList } from '@/navigation/types';
 import { fetchAnnonces } from '@/services/annonces';
 import { fetchSondages, sondageOuvert } from '@/services/sondages';
-import { accents, colors, radius, spacing } from '@/theme';
+import { accents, colors, radius, spacing, type TintedAccent } from '@/theme';
 import type { AnnonceWithAuthor } from '@/types/models';
 
 const VIDE: readonly AnnonceWithAuthor[] = [];
@@ -40,48 +40,69 @@ interface DonneesAccueil {
 }
 
 /**
- * Les raccourcis, dans l'ordre de la maquette.
+ * Les raccourcis, dans l'ordre et les teintes de la maquette.
  *
- * Déclarés comme données plutôt qu'écrits à la main dans le rendu : chaque
- * entrée porte à la fois son libellé, son sous-titre, son icône, son accent et
- * sa destination. Écrits en JSX, ces cinq éléments se retrouveraient dispersés
- * sur trente lignes, et l'oubli de l'un d'eux — un sous-titre, un accent — ne se
- * verrait qu'à l'écran.
+ * DÉCLARÉS PAR RANGÉES, ET NON EN UNE SEULE LISTE
+ * ----------------------------------------------
+ * La maquette montre **deux cartes par rangée**. Écrire une liste plate puis la
+ * découper au rendu obligerait à relire le rendu pour savoir ce que l'écran
+ * affiche ; écrite par rangées, la grille se lit dans la donnée. Les quatre
+ * entrées portent à la fois leur libellé, leur sous-titre, leur icône, leur
+ * accent et leur destination — dispersés en JSX, ces cinq éléments tiendraient
+ * sur trente lignes, et l'oubli de l'un d'eux ne se verrait qu'à l'écran.
+ *
+ * LES TEINTES SONT CELLES DE LA MAQUETTE
+ * --------------------------------------
+ * « Nous contacter » en bleu, « Sondages » en violet, « Cantine » en vert,
+ * « Agenda » en ambre. L'ambre a demandé un carré de plus dans la palette
+ * (`warningTint`), mesuré à 3,73:1 — voir `src/theme/index.ts`.
  */
-const RACCOURCIS = [
-  {
-    cle: 'cantine',
-    titre: 'Cantine',
-    // « Menus et réservations » jusqu'ici, et c'était devenu faux : l'écran de
-    // cantine ne réserve plus rien, et il le dit lui-même. Un sous-titre qui
-    // annonce une action que l'écran refuse est la pire des promesses — celle
-    // qui ne se voit que sur l'appareil, après avoir appuyé.
-    sousTitre: 'Menus publiés',
-    icone: 'restaurant-outline',
-    accent: 'vert',
-  },
-  {
-    cle: 'agenda',
-    titre: 'Agenda',
-    sousTitre: 'Tous les événements',
-    icone: 'calendar-outline',
-    accent: 'rose',
-  },
-  {
-    cle: 'contact',
-    titre: 'Nous contacter',
-    sousTitre: 'Une question ?',
-    icone: 'chatbubble-ellipses-outline',
-    accent: 'violet',
-  },
-  {
-    cle: 'sondages',
-    titre: 'Sondages',
-    sousTitre: 'Donnez votre avis',
-    icone: 'stats-chart-outline',
-    accent: 'bleu',
-  },
-] as const;
+interface Raccourci {
+  readonly cle: 'cantine' | 'agenda' | 'contact' | 'sondages';
+  readonly titre: string;
+  readonly sousTitre: string;
+  readonly icone: keyof typeof Ionicons.glyphMap;
+  readonly accent: TintedAccent;
+}
+
+const RACCOURCIS: readonly (readonly Raccourci[])[] = [
+  [
+    {
+      cle: 'contact',
+      titre: 'Nous contacter',
+      sousTitre: 'Une question ?',
+      icone: 'chatbubble-ellipses-outline',
+      accent: 'bleu',
+    },
+    {
+      cle: 'sondages',
+      titre: 'Sondages',
+      sousTitre: 'Donnez votre avis',
+      icone: 'stats-chart-outline',
+      accent: 'violet',
+    },
+  ],
+  [
+    {
+      cle: 'cantine',
+      titre: 'Cantine',
+      // « Menus et réservations » jusqu'ici, et c'était devenu faux : l'écran de
+      // cantine ne réserve plus rien, et il le dit lui-même. Un sous-titre qui
+      // annonce une action que l'écran refuse est la pire des promesses — celle
+      // qui ne se voit que sur l'appareil, après avoir appuyé.
+      sousTitre: 'Menus publiés',
+      icone: 'restaurant-outline',
+      accent: 'vert',
+    },
+    {
+      cle: 'agenda',
+      titre: 'Agenda',
+      sousTitre: 'Tous les événements',
+      icone: 'calendar-outline',
+      accent: 'ambre',
+    },
+  ],
+];
 
 export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamList, 'Accueil'>) {
   const { profile, session } = useAuth();
@@ -115,7 +136,7 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
   const nonLus = useNonLus(userId);
 
   const ouvrir = useCallback(
-    (cle: (typeof RACCOURCIS)[number]['cle']) => {
+    (cle: Raccourci['cle']) => {
       if (cle === 'cantine') {
         navigation.navigate('Cantine');
         return;
@@ -170,17 +191,21 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
             />
 
             <View style={styles.raccourcis}>
-              {RACCOURCIS.map((raccourci) => (
-                <ShortcutCard
-                  key={raccourci.cle}
-                  title={raccourci.titre}
-                  subtitle={raccourci.sousTitre}
-                  icon={raccourci.icone}
-                  accent={raccourci.accent}
-                  onPress={() => {
-                    ouvrir(raccourci.cle);
-                  }}
-                />
+              {RACCOURCIS.map((rangee, rang) => (
+                <View key={rang} style={styles.rangeeRaccourcis}>
+                  {rangee.map((raccourci) => (
+                    <ShortcutCard
+                      key={raccourci.cle}
+                      title={raccourci.titre}
+                      subtitle={raccourci.sousTitre}
+                      icon={raccourci.icone}
+                      accent={raccourci.accent}
+                      onPress={() => {
+                        ouvrir(raccourci.cle);
+                      }}
+                    />
+                  ))}
+                </View>
               ))}
             </View>
 
@@ -250,10 +275,23 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
  *
  * POURQUOI LE MESSAGE D'ACCUEIL EST ICI ET NON DANS UNE DONNÉE
  * -----------------------------------------------------------
- * « Bonjour » et la devise ne viennent pas de la base : ce sont des phrases de
- * l'application, pas des informations publiées par le bureau. Les faire
- * transiter par une table les rendrait modifiables par erreur, et obligerait à
- * une requête de plus pour afficher une phrase qui ne change pas.
+ * « Bonjour », la phrase de présentation et la ligne de rentrée ne viennent pas
+ * de la base : ce sont des phrases de l'application, pas des informations
+ * publiées par le bureau. Les faire transiter par une table les rendrait
+ * modifiables par erreur, et obligerait à une requête de plus pour afficher une
+ * phrase qui ne change pas.
+ *
+ * CE QUI A CHANGÉ, ET POURQUOI RIEN N'A ÉTÉ PERDU
+ * ----------------------------------------------
+ * L'ancienne carte portait la devise « Ensemble pour la réussite et le
+ * bien-être de nos enfants », suivie d'un cœur. La maquette met à cette place
+ * deux autres phrases, et elles **disent davantage** : la première explique ce
+ * que contient l'application, la seconde souhaite la rentrée. La devise, elle,
+ * n'est pas perdue — elle est la même intention que celle du panneau, qui
+ * affiche « Grandir · Apprendre · S'épanouir ensemble ». Écrire les deux
+ * revenait à dire deux fois la même chose à deux centimètres d'écart.
+ *
+ * Le cœur, enfin, n'a pas disparu non plus : le bandeau du bas le porte.
  */
 function Hero({
   prenom,
@@ -277,11 +315,30 @@ function Hero({
         <View style={styles.heroTexte}>
           <AppText variant="caption">Montmagny</AppText>
           <AppText variant="title">Bonjour{prenom === '' ? ' !' : ` ${prenom} !`}</AppText>
-          <View style={styles.devise}>
-            <AppText variant="caption" style={styles.deviseTexte}>
-              Ensemble pour la réussite et le bien-être de nos enfants
+
+          {/*
+            La phrase de la maquette, et elle dit quelque chose que rien d'autre
+            ne dit : ce que cette application contient. Le titre au-dessus
+            salue, la devise du panneau en dessous est une intention — aucune
+            des deux n'apprend à un parent qui ouvre l'application pour la
+            première fois ce qu'il va y trouver.
+          */}
+          <AppText variant="caption" style={styles.heroSousTitre}>
+            Les informations de l’école et de l’association de parents.
+          </AppText>
+
+          {/*
+            La ligne manuscrite de la maquette. Elle est écrite **en italique et
+            en bleu** plutôt que dans une police manuscrite : ajouter une police
+            à l'application pour une phrase serait une dépendance de plus, et
+            une police qui manque au chargement ne se voit qu'au premier
+            lancement, hors ligne.
+          */}
+          <View style={styles.tagline}>
+            <Ionicons name="sunny" size={15} color={accents.ambre.ink} />
+            <AppText variant="caption" color={accents.bleu.ink} style={styles.taglineTexte}>
+              Une belle année ensemble !
             </AppText>
-            <Ionicons name="heart" size={14} color={accents.rose.ink} />
           </View>
         </View>
 
@@ -427,13 +484,21 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.xs,
   },
-  devise: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.xs,
-  },
-  deviseTexte: {
+  heroSousTitre: {
+    // Deux lignes au plus avant que le panneau ne prenne toute la carte : la
+    // phrase est courte, et sur un écran étroit elle se replie d'elle-même.
     flexShrink: 1,
+  },
+  tagline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  taglineTexte: {
+    flexShrink: 1,
+    fontStyle: 'italic',
+    fontSize: 14,
   },
   panneau: {
     flexDirection: 'row',
@@ -452,10 +517,14 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   raccourcis: {
+    // Deux rangées de deux cartes, empilées. Une seule rangée de quatre
+    // obligeait chaque carte à tenir dans un quart de largeur, et le texte y
+    // descendait à dix points ; deux rangées lui rendent sa taille. La grille
+    // se lit ici, l'ordre des cartes dans la donnée.
+    gap: spacing.sm,
+  },
+  rangeeRaccourcis: {
     flexDirection: 'row',
-    // Les quatre cartes se partagent la largeur. Elles ne passent pas à la
-    // ligne : sur un petit écran elles se resserrent, et le sous-titre est coupé
-    // à deux lignes plutôt que de faire déborder la rangée.
     gap: spacing.sm,
   },
   carteSondage: {

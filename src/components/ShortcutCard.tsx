@@ -13,7 +13,20 @@ export interface ShortcutCardProps {
 }
 
 /**
- * Carte de raccourci de l'accueil — fond pastel, icône cerclée, sous-titre.
+ * Carte de raccourci de l'accueil — fond pastel, icône sur carré, chevron.
+ *
+ * LA CARTE EST HORIZONTALE, ET CE N'EST PAS QU'UNE QUESTION DE GOÛT
+ * -----------------------------------------------------------------
+ * La première version empilait l'icône, le titre puis le sous-titre, dans une
+ * carte étroite — quatre cartes sur une seule rangée. La maquette en montre
+ * deux par rangée, et chaque carte **allongée** : le carré d'icône passe à
+ * gauche, les deux textes s'alignent à sa droite, le chevron ferme la ligne.
+ *
+ * Le changement n'est pas cosmétique : empilés dans une carte de 80 points de
+ * large, « Nous contacter » se coupait, et le sous-titre descendait à 10 points
+ * sur deux lignes centrées. Allongée, la même carte écrit les deux textes
+ * complets à leur taille normale. Une disposition qui oblige à rapetisser le
+ * texte pour tenir n'est pas une disposition.
  *
  * LE RÔLE ACCESSIBLE EST « button », PAS « link »
  * -----------------------------------------------
@@ -46,17 +59,10 @@ export function ShortcutCard({ title, subtitle, icon, accent, onPress }: Shortcu
         <Ionicons name={icon} size={20} color={ink} />
       </View>
 
-      <AppText
-        variant="caption"
-        bold
-        numberOfLines={1}
-        maxFontSizeMultiplier={1.4}
-        style={styles.title}
-      >
-        {title}
-      </AppText>
-
-      <View style={styles.subtitleRow}>
+      <View style={styles.textes}>
+        <AppText variant="caption" bold numberOfLines={1} maxFontSizeMultiplier={1.4}>
+          {title}
+        </AppText>
         <AppText
           variant="caption"
           numberOfLines={2}
@@ -66,20 +72,24 @@ export function ShortcutCard({ title, subtitle, icon, accent, onPress }: Shortcu
         >
           {subtitle}
         </AppText>
-        <Ionicons name="chevron-forward" size={12} color={colors.textSecondary} />
       </View>
+
+      <Ionicons name="chevron-forward" size={14} color={colors.textSecondary} />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
+    // La carte prend la moitié de la rangée : c'est ce qui laisse au titre et au
+    // sous-titre la place de s'écrire en entier.
     flex: 1,
-    minHeight: 44,
+    minHeight: 56,
     borderRadius: radius.lg,
     padding: spacing.sm,
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   pressed: {
     opacity: 0.7,
@@ -92,25 +102,25 @@ const styles = StyleSheet.create({
    * ferait mesurer l'icône contre un fond qui n'est pas le sien.
    */
   iconSquare: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.lg,
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.xs,
   },
-  subtitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  title: {
-    textAlign: 'center',
+  /**
+   * Le bloc des deux textes.
+   *
+   * `flex: 1` et non une largeur : c'est ce qui laisse le titre se rétrécir
+   * plutôt que de pousser le chevron hors de la carte quand la taille de police
+   * du téléphone est augmentée.
+   */
+  textes: {
+    flex: 1,
+    gap: 1,
   },
   subtitle: {
-    flexShrink: 1,
-    fontSize: 10,
-    textAlign: 'center',
+    fontSize: 11,
+    lineHeight: 14,
   },
 });

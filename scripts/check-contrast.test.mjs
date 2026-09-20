@@ -194,7 +194,7 @@ const TEXTES = [
   ['badge « agenda » sur son fond pâle', 'pink', 'pinkSoft', TAILLES.caption, true],
   ['badge « sondage » sur son fond pâle', 'violet', 'violetSoft', TAILLES.caption, true],
   ['titre d’un raccourci, sur fond vert', 'textPrimary', 'successSoft', TAILLES.caption, true],
-  ['titre d’un raccourci, sur fond rose', 'textPrimary', 'pinkSoft', TAILLES.caption, true],
+  ['titre d’un raccourci, sur fond ambre', 'textPrimary', 'warningSoft', TAILLES.caption, true],
   ['titre d’un raccourci, sur fond violet', 'textPrimary', 'violetSoft', TAILLES.caption, true],
   ['titre d’un raccourci, sur fond bleu', 'textPrimary', 'primarySoft', TAILLES.caption, true],
   //  Le sous-titre d'un raccourci est gris, et il est posé sur le **même** pastel
@@ -208,7 +208,13 @@ const TEXTES = [
     TAILLES.caption,
     false,
   ],
-  ['sous-titre d’un raccourci, sur fond rose', 'textSecondary', 'pinkSoft', TAILLES.caption, false],
+  [
+    'sous-titre d’un raccourci, sur fond ambre',
+    'textSecondary',
+    'warningSoft',
+    TAILLES.caption,
+    false,
+  ],
   [
     'sous-titre d’un raccourci, sur fond violet',
     'textSecondary',
@@ -266,7 +272,7 @@ const NON_TEXTUELS = [
   //  couple `soft`/`tint` n'est donc pas un détail de dessin — c'est lui qui
   //  décide de quel fond on parle.
   ['icône d’un raccourci vert', 'success', 'successTint'],
-  ['icône d’un raccourci rose', 'pink', 'pinkTint'],
+  ['icône d’un raccourci ambre', 'warning', 'warningTint'],
   ['icône d’un raccourci violet', 'violet', 'violetTint'],
   ['icône d’un raccourci bleu', 'primary', 'primaryTint'],
   //  L'icône d'un badge, elle, est bien posée sur `soft`, le fond qui porte

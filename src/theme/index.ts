@@ -46,6 +46,15 @@ export const colors = {
   successTint: '#B0E7C5',
   warning: '#9D5D00',
   warningSoft: '#FDEEE5',
+  /**
+   * Le carré qui porte l'icône « agenda », sur la carte de raccourci.
+   *
+   * Relevé sur la maquette, puis **mesuré** : `warning` sur ce fond vaut
+   * 3,73:1, au-dessus des 3:1 qu'exige une icône seule — et dans la même
+   * famille que les trois autres carrés (3,80 / 4,59 / 5,84). Le ton est plus
+   * soutenu que `warningSoft`, comme `successTint` l'est de `successSoft`.
+   */
+  warningTint: '#F7D3B4',
 
   /**
    * Accents de catégorie, pris sur la maquette.
@@ -65,7 +74,6 @@ export const colors = {
    */
   pink: '#B0164A',
   pinkSoft: '#FDE8EF',
-  pinkTint: '#FACAD5',
   violet: '#5B34A8',
   violetSoft: '#F0EDFC',
   violetTint: '#DCD2F7',
@@ -155,18 +163,27 @@ export type AccentName = keyof typeof accents;
  * à peindre un badge sur `tint`, où son texte tomberait sous le seuil sans que
  * rien ne le signale.
  *
- * QUATRE ACCENTS, PAS SIX
- * -----------------------
- * Seuls les quatre raccourcis de l'accueil posent une icône sur un carré. Les
- * accents ambre et rouge n'en ont pas : leur ajouter un ton serait déclarer une
- * couleur que personne n'emploie, et le contrôle de contraste la refuserait à
- * juste titre. Le jour où l'agenda voudra un carré ambre, il ajoutera la ligne.
+ * QUATRE ACCENTS, ET LESQUELS
+ * ---------------------------
+ * Seuls les quatre raccourcis de l'accueil posent une icône sur un carré : bleu
+ * (« Nous contacter »), violet (« Sondages »), vert (« Cantine ») et ambre
+ * (« Agenda ») — les quatre teintes de la maquette, relevées puis mesurées.
+ *
+ * `pinkTint` a existé ici et **a été retiré** le jour où l'agenda est passé à
+ * l'ambre : plus personne ne le portait. Le contrôle de contraste refuse un
+ * jeton que personne n'emploie, et il a raison — une valeur que personne
+ * n'emploie est une valeur que personne n'a mesurée contre le fond où quelqu'un
+ * finira par la poser. `pink` et `pinkSoft` restent, eux : les cœurs de
+ * l'accueil les portent.
+ *
+ * `rouge` n'a pas de carré, et n'en aura pas tant qu'aucun raccourci ne le
+ * demande : lui en donner un serait déclarer une couleur sans emploi.
  */
 export const tints = {
   bleu: colors.primaryTint,
   vert: colors.successTint,
-  rose: colors.pinkTint,
   violet: colors.violetTint,
+  ambre: colors.warningTint,
 } as const;
 
 export type TintedAccent = keyof typeof tints;
