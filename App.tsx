@@ -1,11 +1,13 @@
 import { DefaultTheme, NavigationContainer, type Theme } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '@/auth/AuthProvider';
 import { isSupabaseConfigured } from '@/config/env';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { ConfigurationScreen } from '@/screens/ConfigurationScreen';
+import { preparerNotifications } from '@/services/push';
 import { colors } from '@/theme';
 
 /**
@@ -28,6 +30,29 @@ const navigationTheme: Theme = {
   },
 };
 
+/**
+ * L'enregistrement du téléphone auprès du bureau, monté sans rien rendre.
+ *
+ * POURQUOI CE N'EST PAS UN EFFET DANS `App`
+ * -----------------------------------------
+ * `App` rend aussi l'écran de configuration, affiché quand les clés d'API
+ * manquent. Un effet posé là s'exécuterait donc sur une application qui n'a
+ * aucune base à qui parler — et l'enregistrement, lui, écrit en base. Le
+ * composant est monté **à l'intérieur** d'`AuthProvider`, c'est-à-dire
+ * exactement là où la configuration est valide.
+ *
+ * Il ne pose aucune question : `preparerNotifications` se tait tant que
+ * l'autorisation n'a pas été accordée. La demande, elle, vit dans les Réglages,
+ * sur un geste de l'adhérent.
+ */
+function EnregistrementAppareil() {
+  useEffect(() => {
+    void preparerNotifications();
+  }, []);
+
+  return null;
+}
+
 export default function App() {
   return (
     <SafeAreaProvider>
@@ -41,6 +66,7 @@ export default function App() {
           `requireSupabase()` ne peut pas être appelé par erreur. */}
       {isSupabaseConfigured ? (
         <AuthProvider>
+          <EnregistrementAppareil />
           <NavigationContainer theme={navigationTheme}>
             <RootNavigator />
           </NavigationContainer>

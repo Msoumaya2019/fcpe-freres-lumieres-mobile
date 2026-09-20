@@ -1,13 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Constants from 'expo-constants';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/auth/AuthProvider';
 import { AppText, Button, Card, Screen } from '@/components';
 import { effacerMarquesDeLecture } from '@/config/preferences';
 import type { PlusStackParamList } from '@/navigation/types';
+import { demanderNotifications, etatPush, type EtatPush } from '@/services/push';
 import { accents, colors, spacing } from '@/theme';
 import { formatShortDate } from '@/utils/date';
 
@@ -41,14 +42,50 @@ import { formatShortDate } from '@/utils/date';
  * qui décrivait ce que le téléphone retient, était fausse pour la même raison —
  * elle nomme maintenant les quatre familles.
  *
- * CE QUE L'APPLICATION NE SAIT PAS FAIRE, ÉCRIT PLUTÔT QUE TU
- * ----------------------------------------------------------
- * Il n'y a **aucune notification push** : l'application ne prévient personne
- * d'une actualité ni d'un message. Le dire évite qu'un parent attende une alerte
- * qui n'arrivera pas, et se croie oublié. De même, l'application est en thème
- * clair uniquement — `app.json` fixe `userInterfaceStyle: "light"` —, et un
- * sélecteur d'apparence ne changerait rien.
+ * CE QUE L'APPLICATION PEUT FAIRE, ÉCRIT PLUTÔT QUE TU
+ * ---------------------------------------------------
+ * Les notifications existent désormais, et la carte ci-dessous est le **seul**
+ * endroit qui les demande. Le démarrage, lui, se tait : un appareil qui a déjà
+ * répondu oui rafraîchit son jeton, un appareil qui n'a jamais répondu reste en
+ * paix. Poser la question à l'ouverture ferait apparaître une boîte système
+ * avant que l'adhérent ait vu quoi que ce soit — et sur Android 13 et au-delà,
+ * un refus à ce moment-là est **définitif**.
+ *
+ * Ce que la carte refuse de promettre : « autorisé » et « enregistré » sont deux
+ * faits distincts, et ils sont dits séparément. Une autorisation accordée dont
+ * le jeton n'a pas pu être déposé n'enverrait rien, et l'écran le dit à ce
+ * moment-là plutôt que de laisser croire que tout va bien.
+ *
+ * L'application est en thème clair uniquement — `app.json` fixe
+ * `userInterfaceStyle: "light"` —, et un sélecteur d'apparence ne changerait
+ * rien. C'est pourquoi cette phrase est une carte, et non un interrupteur.
  */
+
+/**
+ * Ce que l'écran dit de l'état des notifications.
+ *
+ * Une phrase par état, et aucune ne dit « vous recevrez » : l'autorisation est
+ * un fait, la réception en est un autre. La seule qui nomme un chemin de
+ * réglages est celle du refus définitif, parce que c'est la seule qui en ait un
+ * — et un bouton qui n'agirait pas serait pire que pas de bouton.
+ */
+function phraseNotifications(etat: EtatPush): string {
+  switch (etat.autorisation) {
+    case 'accordees':
+      return 'Ce téléphone est autorisé à recevoir les notifications du bureau.';
+    case 'jamaisDemandees':
+      return "Ce téléphone n'est pas encore enregistré : le bureau ne peut rien lui envoyer.";
+    case 'refusees':
+      return etat.peutRedemander
+        ? 'Les notifications sont refusées. Le bouton ci-dessous repose la question.'
+        : 'Les notifications sont refusées, et Android ne repose plus la question. Pour les ' +
+            'réactiver : Réglages du téléphone, puis Applications, puis FCPE Frères Lumières, ' +
+            'puis Notifications.';
+    case 'indisponible':
+      return 'Cet appareil ne peut pas recevoir de notifications.';
+  }
+}
+
 export function ReglagesScreen({
   navigation,
 }: NativeStackScreenProps<PlusStackParamList, 'Reglages'>) {
@@ -58,7 +95,19 @@ export function ReglagesScreen({
   const [occupe, setOccupe] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  // `null` tant que le système n'a pas répondu : l'écran n'affiche alors ni
+  // état ni bouton, plutôt qu'un état supposé qu'il faudrait corriger après.
+  const [notifications, setNotifications] = useState<EtatPush | null>(null);
+  const [messageNotifications, setMessageNotifications] = useState<string | null>(null);
+
   const version = Constants.expoConfig?.version ?? '—';
+
+  useEffect(() => {
+    // Aucune demande ici : `etatPush` lit et rend la main, sans rien afficher.
+    // L'écriture d'état est dans la retombée, jamais dans le corps de l'effet —
+    // sinon React rendrait une seconde fois avant que le système ait répondu.
+    void etatPush().then(setNotifications);
+  }, []);
 
   const effacer = useCallback(async () => {
     setOccupe(true);
@@ -75,6 +124,43 @@ export function ReglagesScreen({
       setConfirmation(false);
     }
   }, []);
+
+  const demander = useCallback(async () => {
+    setOccupe(true);
+    setMessageNotifications(null);
+
+    try {
+      const { etat, enregistre } = await demanderNotifications();
+      setNotifications(etat);
+
+      // L'autorisation accordée et le jeton déposé sont deux faits. Quand le
+      // second manque, le taire ferait croire à un parent qu'il sera prévenu —
+      // alors que rien n'est enregistré, et qu'il ne recevra rien.
+      if (etat.autorisation === 'accordees' && !enregistre) {
+        setMessageNotifications(
+          "L'autorisation est accordée, mais ce téléphone n'a pas pu être enregistré. " +
+            'Réessayez dans un instant.',
+        );
+      }
+    } catch {
+      setMessageNotifications("La demande n'a pas abouti. Réessayez dans un instant.");
+    } finally {
+      setOccupe(false);
+    }
+  }, []);
+
+  /**
+   * Le bouton n'existe que là où il agit.
+   *
+   * Un refus définitif, un appareil sans notifications, une autorisation déjà
+   * accordée : dans les trois cas, appuyer ne changerait rien. L'afficher quand
+   * même serait le défaut que l'en-tête de cet écran nomme — un réglage qui
+   * n'agit sur rien.
+   */
+  const peutDemander =
+    notifications !== null &&
+    (notifications.autorisation === 'jamaisDemandees' ||
+      (notifications.autorisation === 'refusees' && notifications.peutRedemander));
 
   return (
     <Screen scrollable edges={[]}>
@@ -181,11 +267,48 @@ export function ReglagesScreen({
 
         <Card>
           <AppText variant="caption" bold>
-            Notifications et apparence
+            Notifications
           </AppText>
           <AppText variant="caption">
-            L’application n’envoie aucune notification : actualités et messages se lisent en ouvrant
-            les rubriques. L’affichage est en thème clair uniquement.
+            Autoriser ce téléphone à recevoir les notifications du bureau : les nouvelles
+            actualités, et les messages.
+          </AppText>
+
+          {notifications === null ? null : (
+            <AppText
+              variant="caption"
+              color={
+                notifications.autorisation === 'accordees' ? accents.vert.ink : colors.textSecondary
+              }
+            >
+              {phraseNotifications(notifications)}
+            </AppText>
+          )}
+
+          {messageNotifications === null ? null : (
+            <AppText variant="caption" color={accents.bleu.ink}>
+              {messageNotifications}
+            </AppText>
+          )}
+
+          {peutDemander ? (
+            <Button
+              label="Activer les notifications"
+              loading={occupe}
+              onPress={() => {
+                void demander();
+              }}
+            />
+          ) : null}
+        </Card>
+
+        <Card>
+          <AppText variant="caption" bold>
+            Apparence
+          </AppText>
+          <AppText variant="caption">
+            L’affichage est en thème clair uniquement. Un sélecteur d’apparence ne changerait rien :
+            c’est une propriété de la compilation, pas un réglage.
           </AppText>
         </Card>
 

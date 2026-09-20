@@ -42,7 +42,21 @@ supabase/.branches/
 
 # Jetons et identifiants d'outillage
 .npmrc.local
-google-services.json
+
+# La clef de compte de service Firebase, celle qui sert a FCM v1 : c'est un
+# SECRET, et elle ne doit jamais entrer dans le depot. Google la nomme
+# « <projet>-firebase-adminsdk-<hash>.json » ; ce motif est le seul qui la
+# reconnaisse, et il est ecrit pour ca.
+*firebase-adminsdk*.json
+
+# `google-services.json` n'est PAS ignore, et c'est deliberé : EAS ne televerse
+# que ce que Git ne retient pas, donc l'ignorer priverait la compilation du
+# fichier dont elle a besoin. Il ne porte que des identifiants publics —
+# identifiant de projet, numero de projet, identifiant d'application, et une
+# clef d'API restreinte au paquet et a l'empreinte de signature. La
+# documentation d'Expo l'etablit, ce n'est pas une supposition. La ligne
+# « google-services.json » figurait ici jusqu'au 20 septembre 2026 ; elle a ete
+# retiree le jour ou la compilation a eu besoin du fichier.
 GoogleService-Info.plist
 
 # Journaux

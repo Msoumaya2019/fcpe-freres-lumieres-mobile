@@ -42,6 +42,7 @@ service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 | 4   | Recopier les quatre identifiants SMTP                                                       | ~5 min  | ✅ les e-mails partent, jusqu'au clic sur le lien               |
 | 5   | Installer l'APK, ou signer l'IPA puis l'installer                                           | ~2 min  | les vérifications sur appareil réel                             |
 | 6   | Les quatre réglages du tableau de bord                                                      | ~5 min  | le contrôle des quatre valeurs                                  |
+| 7   | Une clef Firebase pour les notifications Android                                            | ~15 min | `google-services.json` placé, l'APK recompilé et redéposé       |
 
 **Où en est la mise en service : la « liste à cocher », plus bas, fait foi.** Les  
 étapes 2, 3 et 4 sont faites — les e-mails fonctionnent jusqu'au clic sur le lien  
@@ -987,6 +988,156 @@ lien utilisable. Les deux adresses sont recopiées du fichier
 
 ---
 
+## Étape 7 — Les notifications Android _(~15 min)_ — **en attente de votre geste**
+
+**Ce que cette étape change.** Jusqu'ici, l'application ne prévenait personne : une  
+actualité publiée, un message du bureau, et il fallait ouvrir l'application pour  
+l'apprendre. Le code des notifications est écrit, vérifié et compilé — il attend  
+**une seule chose** : une clef de compte de service Firebase, que seul un compte  
+Google peut créer.
+
+**Pourquoi ce n'est pas moi qui la crée.** Créer un projet Firebase demande d'ouvrir  
+la console avec votre compte Google, et déposer la clef chez EAS demande une session  
+Expo. Or `npx eas-cli whoami` répond **« Not logged in »** sur cette machine : la  
+connexion n'a jamais été faite ici, et je ne vous demanderai ni votre mot de passe  
+Google, ni votre mot de passe Expo. Les cinq gestes des §7.1 à §7.4 sont donc les  
+vôtres. Tout le reste est fait.
+
+**Ce qui est déjà fait, et mesuré :**
+
+- Le paquet `expo-notifications` est installé et épinglé à la version du SDK — il est  
+  **déjà dans l'APK** que vous avez installé. Il n'y a aucune dépendance à ajouter.
+- La demande d'autorisation vit dans `src/services/push.ts` ; le dépôt du jeton est  
+  resté dans `src/services/notifications.ts`, qui ne connaît **aucun** module natif.  
+  C'est cette séparation qui rend l'écriture vérifiable sans téléphone.
+- L'écran **Réglages** porte la carte « Notifications », et c'est **le seul endroit**  
+  qui pose la question. Au démarrage, l'application se tait : un appareil qui a déjà  
+  répondu oui rafraîchit son jeton, un appareil qui n'a jamais répondu reste en paix.
+- Le canal Android `default` est créé à l'exécution **et** annoncé au manifeste.  
+  Vérifié par une précompilation réelle, et non par lecture du code : le manifeste  
+  produit porte `com.google.firebase.messaging.default_notification_channel_id = "default"`.
+- Les politiques de `push_tokens` autorisent déjà l'insertion et la mise à jour par un  
+  appareil **anonyme** : **aucun fichier SQL n'est à coller** pour cette étape.
+- Un banc tient les quatre accords — la frontière entre les deux moitiés, l'unicité de  
+  l'import natif, le canal identique des deux côtés, et l'appel **réel** depuis le point  
+  d'entrée. Il a été éprouvé dans les deux sens : **quatre mutations, quatre chutes.**
+
+**Ce que vous avez à faire tient en cinq gestes**, tous dans un navigateur sauf le  
+quatrième, qui demande un terminal.
+
+### 7.1 Créer le projet Firebase _(~5 min)_
+
+1. Ouvrez <https://console.firebase.google.com> et connectez-vous avec votre compte  
+   Google.
+2. Cliquez sur **Create a project** — parfois écrit **Add project**.
+3. Nom du projet : `FCPE Freres Lumieres`. Google Analytics n'est pas nécessaire,  
+   vous pouvez le désactiver.
+4. Cliquez **Create project**, puis **Continue** quand la création est finie.
+
+### 7.2 Y ajouter l'application Android _(~3 min)_
+
+C'est cette étape qui fait apparaître le fichier `google-services.json` : sans elle,  
+Firebase n'a rien à vous proposer au téléchargement.
+
+1. Sur la page du projet, cliquez sur l'icône **Android** — c'est un des boutons  
+   « Add app ».
+2. **Android package name** : recopiez exactement `fr.fcpe.frereslumieres`.  
+   C'est l'identifiant déclaré dans `app.json` (`expo.android.package`) ; une faute de  
+   frappe ici donnerait un fichier qui ne s'applique pas à l'application.
+3. **App nickname** et **Debug signing certificate SHA-1** : laissez les deux vides.  
+   Le SHA-1 ne sert que si vous restreignez la clef d'API — voir §7.5.
+4. Cliquez **Register app**.
+5. Firebase affiche alors **Download google-services.json** : téléchargez-le. On s'en  
+   sert au §7.4.
+6. Cliquez **Next** jusqu'au bout, puis **Continue to console**.
+
+### 7.3 Générer la clef de compte de service _(~2 min)_
+
+C'est **le secret** de cette étape. Il ne doit jamais entrer dans le dépôt, et il ne  
+doit jamais passer par cette conversation.
+
+1. Dans la console Firebase, cliquez sur la roue dentée **⚙** puis **Project settings**.
+2. Ouvrez l'onglet **Service accounts**.
+3. Cliquez **Generate new private key**, puis confirmez avec **Generate key**.
+4. Un fichier `.json` se télécharge, sous un nom qui ressemble à  
+   `fcpe-freres-lumieres-firebase-adminsdk-xxxxx-xxxxxxxxxx.json`. **Ne le renommez  
+   pas et ne le déplacez pas dans le projet.** Le dépôt l'ignore déjà — la ligne  
+   `*firebase-adminsdk*.json` de `.gitignore` existe pour lui.
+
+### 7.4 Déposer la clef chez EAS _(~5 min)_
+
+Ouvrez un terminal **dans le dossier du projet**  
+(`C:\Users\mchik\WorkBuddy AI\2026-09-16-19-22-17`) et connectez-vous une fois :
+
+```
+npx eas-cli@latest login
+```
+
+Puis lancez la commande qui gère les identifiants :
+
+```
+npx eas-cli@latest credentials
+```
+
+Suivez les menus, dans cet ordre exact :
+
+1. **Android**
+2. **production**
+3. **Google Service Account**
+4. **Manage your Google Service Account Key for Push Notifications (FCM V1)**
+5. **Set up a Google Service Account Key for Push Notifications (FCM V1)**
+6. **Upload a new service account key**
+
+EAS détecte alors le fichier téléchargé au §7.3 et vous propose de le choisir :  
+répondez **Y**.
+
+### 7.5 Le piège de l'empreinte — à lire seulement si vous restreignez la clef
+
+Si vous laissez la clef d'API telle que Google l'a créée, cette section ne vous  
+concerne pas. Elle existe parce que la panne qu'elle décrit est **muette** :  
+l'application s'installe, s'ouvre, demande l'autorisation, l'obtient — et ne reçoit  
+jamais de jeton.
+
+Le fichier `google-services.json` contient une clef d'API (le champ  
+`client.api_key.current_key`). Si vous la restreignez, deux réglages doivent être  
+justes dans la console Google Cloud (<https://console.cloud.google.com/apis/credentials>) :
+
+- **API restrictions** : autorisez **FCM Registration API** et **Firebase  
+  Installations API**, ou laissez la clef sans restriction.
+- **Application restrictions** : l'empreinte à utiliser est celle du **certificat de  
+  signature** de l'application, pas celle d'une clef de dépôt. Une empreinte qui ne  
+  correspond pas fait répondre aux installations Firebase  
+  `403 PERMISSION_DENIED: Requests from this Android client application are blocked`,  
+  et l'application ne reçoit **aucun** jeton.
+
+Le remède le plus simple, et celui que je vous recommande pour la première mise en  
+service : **ne restreignez pas la clef.** Elle n'est lisible que dans un fichier qui  
+ne circule pas, et l'application n'est pas distribuée par le Google Play Store — les  
+deux raisons pour lesquelles la restriction existe ne s'appliquent pas ici.
+
+### 7.6 Ce que je fais dès réception, et ce qu'il me reste à recevoir
+
+Déposez **`google-services.json`** — le fichier du §7.2, pas celui du §7.3 — dans le  
+dossier du projet, et dites-le-moi. Il ne contient que des identifiants publics :  
+identifiant de projet, numéro de projet, identifiant d'application. La documentation  
+d'Expo autorise explicitement à le versionner, et c'est même nécessaire ici : EAS ne  
+téléverse que ce que Git ne retient pas, donc l'ignorer priverait la compilation du  
+fichier dont elle a besoin. La ligne qui l'ignorait a été retirée le 20 septembre 2026.
+
+Ensuite, **c'est mon travail, et il ne demande rien de vous** :
+
+- je place le fichier à la racine et je déclare `expo.android.googleServicesFile` dans  
+  `app.json` ;
+- je relance la chaîne complète — `npm run verify`, les 36 fichiers de test ;
+- je recompile l'APK et l'IPA, et je les redépose dans la page des versions.
+
+**Il faudra alors réinstaller l'APK.** L'APK que vous avez aujourd'hui a été compilé  
+**avant** ce travail : il contient le paquet natif, mais pas le code qui demande  
+l'autorisation. Sans réinstallation, la carte « Notifications » des Réglages  
+n'existera pas, et aucune clef ne pourra rien y changer.
+
+---
+
 ## La liste à cocher
 
 **Maintenant :**
@@ -1076,6 +1227,13 @@ pas.
       eux, l'application s'ouvre sur des listes vides, et rien ne distingue « le
       bureau n'a rien publié » de « l'application ne marche pas »
 - [ ] Les quatre réglages du tableau de bord
+- [ ] **Une clef Firebase**, pour que les notifications Android partent (§7) — cinq
+      gestes dans un navigateur, puis `npx eas-cli credentials` dans un terminal. Sans
+      elle, un téléphone peut **autoriser** les notifications et n'en recevoir aucune :
+      c'est exactement ce que la carte des Réglages distingue, en disant « autorisé »
+      et « enregistré » séparément
+- [ ] **Réinstaller l'APK** après la recompilation (§7.6) — celui d'aujourd'hui a été
+      compilé avant ce travail, donc il ne porte pas la carte « Notifications »
 - [x] Recopier les quatre valeurs SMTP dans Supabase — vérifié jusqu'au clic sur le lien
 - [ ] Le jeton Expo pour GitHub _(facultatif)_
 
@@ -1086,7 +1244,7 @@ pas.
 Pour que vous sachiez ce que vous n'avez pas à faire : les quatorze écrans et leur  
 navigation, l'authentification et la réinitialisation de mot de passe, les seize tables  
 et leurs politiques de sécurité, les contrôles de schéma et de politiques, la chaîne  
-de vérification complète (`npm run verify`, **35 fichiers de test**), les  
+de vérification complète (`npm run verify`, **36 fichiers de test**), les  
 trois flux GitHub Actions, le dépôt public sans aucun secret, les deux binaires  
 compilés — l'APK Android et l'IPA non signé —, les e-mails vérifiés jusqu'au clic  
 sur le lien reçu, et la documentation.

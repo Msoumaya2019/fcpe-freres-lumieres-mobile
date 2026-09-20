@@ -590,7 +590,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-parser-surface.test.mjs  les types de nœud que l'analyseur produit, et ce que les bancs en lisent
 │   ├── check-non-lus.test.mjs     un chiffre affiché trois fois, et sa seule source
 │   ├── check-safe-area.test.mjs   l'encoche, selon que l'écran a un en-tête ou non
-│   └── check-acces-public.test.mjs  la surface publiée, jouée sous le rôle anonyme
+│   ├── check-acces-public.test.mjs  la surface publiée, jouée sous le rôle anonyme
+│   └── check-notifications.test.mjs  les deux moitiés d'une notification, et le canal tenu des deux côtés
 └── .github/workflows/             CI, build EAS, IPA non signé
 ```
 
@@ -1988,7 +1989,7 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Trente-cinq fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Trente-six fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-effacement`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
@@ -1999,7 +2000,8 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   `check-migration-rejouable`, `check-migration-applicable`,
   `check-rls-comportement`, `check-sdk-pins`, `check-scripts-executables`,
   `check-markdown-listes`, `check-audit-scope`, `check-parser-surface`,
-  `check-non-lus`, `check-safe-area`, `check-commentaires` et `check-acces-public`
+  `check-non-lus`, `check-safe-area`, `check-commentaires`, `check-acces-public` et
+  `check-notifications`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui
@@ -2010,7 +2012,10 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   de compilation, l'accord des limites de saisie avec les contraintes de la base,
   l'accord du schéma SQL avec son miroir TypeScript, le câblage des issues de
   secours de chaque écran, garde de l'état vide comprise, la lisibilité de la
-  palette, la durée d'un indicateur d'action, la **portée** d'une borne de
+  palette, l'accord des deux moitiés d'une notification — qui demande
+  l'autorisation, qui dépose le jeton, et le canal Android que l'une crée quand
+  l'autre l'annonce au manifeste —, la durée d'un indicateur d'action, la
+  **portée** d'une borne de
   mot de passe, le **partage** d'un chiffre entre ses trois afficheurs — un compte
   calculé à un seul endroit, et publié quand il change, faute de quoi deux des trois
   annonçaient des messages déjà lus —, l'endroit où se place un bandeau et la forme
