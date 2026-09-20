@@ -1073,30 +1073,33 @@ doit jamais passer par cette conversation.
 
 ### 7.4 Déposer la clef chez EAS _(~5 min)_
 
-Ouvrez un terminal **dans le dossier du projet**  
-(`C:\Users\mchik\WorkBuddy AI\2026-09-16-19-22-17`) et connectez-vous une fois :
+**La voie sans terminal, et c'est celle-ci qu'il faut prendre ici.** EAS accepte
+le dépôt depuis son site, et la machine n'a **pas** de Node installé : `npx` y
+répond « Le terme «npx» n'est pas reconnu comme nom d'applet de commande » —
+mesuré le 20 septembre 2026.
 
-```
-npx eas-cli@latest login
-```
+1. Ouvrez <https://expo.dev> et connectez-vous.
+2. **Projects** → **fcpe-freres-lumieres** → **Project settings** → **Credentials**
+   (la page des identifiants est ce qui suit l'adresse du projet).
+3. Section **Android**, profil **production**.
+4. **Google Service Account** → **Manage your Google Service Account Key for Push
+   Notifications (FCM V1)** → **Set up a Google Service Account Key for Push
+   Notifications (FCM V1)** → **Upload a new service account key**.
+5. Choisissez le fichier téléchargé au §7.3, puis validez.
 
-Puis lancez la commande qui gère les identifiants :
+**L'autre voie, si Node est installé un jour.** Dans un terminal ouvert **dans le
+dossier du projet** (`C:\Users\mchik\WorkBuddy AI\2026-09-16-19-22-17`),
+connectez-vous une fois avec `npx eas-cli@latest login`, puis lancez
+`npx eas-cli@latest credentials` et suivez les **mêmes** six étapes de menu —
+**Android** → **production** → **Google Service Account** → **Manage … (FCM V1)**
+→ **Set up … (FCM V1)** → **Upload a new service account key**. EAS détecte alors
+le fichier téléchargé et vous propose de le choisir : répondez **Y**.
 
-```
-npx eas-cli@latest credentials
-```
-
-Suivez les menus, dans cet ordre exact :
-
-1. **Android**
-2. **production**
-3. **Google Service Account**
-4. **Manage your Google Service Account Key for Push Notifications (FCM V1)**
-5. **Set up a Google Service Account Key for Push Notifications (FCM V1)**
-6. **Upload a new service account key**
-
-EAS détecte alors le fichier téléchargé au §7.3 et vous propose de le choisir :  
-répondez **Y**.
+Le profil est **production** dans les deux voies, et c'est ce que dit la
+documentation d'Expo. Il ne décide pas de la compilation : la clef de compte de
+service sert au **service de notifications d'Expo** pour joindre FCM, pas à la
+fabrication de l'APK. Ce que l'APK lit, lui, c'est `google-services.json` — et
+cette partie-là est **faite**.
 
 ### 7.5 Le piège de l'empreinte — à lire seulement si vous restreignez la clef
 
@@ -1131,17 +1134,23 @@ d'Expo autorise explicitement à le versionner, et c'est même nécessaire ici :
 téléverse que ce que Git ne retient pas, donc l'ignorer priverait la compilation du  
 fichier dont elle a besoin. La ligne qui l'ignorait a été retirée le 20 septembre 2026.
 
-Ensuite, **c'est mon travail, et il ne demande rien de vous** :
+**C'est fait, le 20 septembre 2026.** Le fichier est à la racine, `app.json` le
+déclare par `expo.android.googleServicesFile`, et la chaîne complète est passée.
+La propriété est bien **lue** : `@expo/prebuild-config` place les trois greffons
+`GoogleServices` — la classe Gradle, `apply plugin` et la copie du fichier vers
+`android/app/google-services.json` — dans sa liste **par défaut**, donc la
+déclaration suffit. Le fichier est **versionné**, et c'est délibéré : EAS ne
+téléverse que ce que Git retient.
 
-- je place le fichier à la racine et je déclare `expo.android.googleServicesFile` dans  
-  `app.json` ;
-- je relance la chaîne complète — `npm run verify`, les 37 fichiers de test ;
-- je recompile l'APK et l'IPA, et je les redépose dans la page des versions.
+Un contrôle tient désormais l'accord entre les deux, dans le sens qui est
+**muet** : présent et non déclaré, le greffon n'est jamais appliqué et
+l'application obtient l'autorisation **sans jamais recevoir de jeton**. Le
+désaccord inverse — déclaré et absent — est bruyant, `expo prebuild` s'arrête
+sur « Cannot copy google-services.json ».
 
-**Il faudra alors réinstaller l'APK.** L'APK que vous avez aujourd'hui a été compilé  
-**avant** ce travail : il contient le paquet natif, mais pas le code qui demande  
-l'autorisation. Sans réinstallation, la carte « Notifications » des Réglages  
-n'existera pas, et aucune clef ne pourra rien y changer.
+**Il reste à réinstaller l'APK**, et il a été recompilé. Sans réinstallation, la
+carte « Notifications » des Réglages n'existera pas, et aucune clef ne pourra rien
+y changer.
 
 ---
 
@@ -1242,11 +1251,13 @@ pas.
       eux, l'application s'ouvre sur des listes vides, et rien ne distingue « le
       bureau n'a rien publié » de « l'application ne marche pas »
 - [ ] Les quatre réglages du tableau de bord
-- [ ] **Une clef Firebase**, pour que les notifications Android partent (§7) — cinq
-      gestes dans un navigateur, puis `npx eas-cli credentials` dans un terminal. Sans
-      elle, un téléphone peut **autoriser** les notifications et n'en recevoir aucune :
-      c'est exactement ce que la carte des Réglages distingue, en disant « autorisé »
-      et « enregistré » séparément
+- [ ] **Une clef Firebase**, pour que les notifications Android partent (§7) — et
+      **tout se fait dans un navigateur** : les gestes de la console Firebase, puis
+      le dépôt de la clef chez EAS (§7.4, voie sans terminal — la machine n'a pas
+      Node, donc `npx` n'y répond pas). `google-services.json`, lui, est **déjà
+      reçu et déclaré** (§7.6). Sans la clef, un téléphone peut **autoriser** les
+      notifications et n'en recevoir aucune : c'est exactement ce que la carte des
+      Réglages distingue, en disant « autorisé » et « enregistré » séparément
 - [ ] **Réinstaller l'APK** après la recompilation (§7.6) — celui d'aujourd'hui a été
       compilé avant ce travail, donc il ne porte pas la carte « Notifications »
 - [x] Recopier les quatre valeurs SMTP dans Supabase — vérifié jusqu'au clic sur le lien

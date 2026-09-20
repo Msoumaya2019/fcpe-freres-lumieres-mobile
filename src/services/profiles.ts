@@ -34,7 +34,9 @@ export async function fetchProfile(userId: string): Promise<Profile | null> {
  * un même membre écrivant souvent plusieurs messages.
  *
  * Un identifiant absent de la table `profiles` n'apparaît pas dans la table
- * retournée : c'est à l'appelant de choisir son libellé de repli.
+ * retournée : c'est à l'appelant de choisir son libellé de repli. **Et sans
+ * jeton, la table est vide** — le nom est un ornement, l'actualité est le
+ * contenu ; voir le commentaire de la fonction.
  *
  * Ce cas n'est **pas atteignable avec le schéma actuel**, et c'est délibéré.
  * `discussion_messages.author_id` est `not null` et suit son profil en cascade,
@@ -50,6 +52,35 @@ export async function fetchAuthorNames(
 ): Promise<ReadonlyMap<string, string>> {
   const uniqueIds = [...new Set(userIds)];
   if (uniqueIds.length === 0) {
+    return new Map();
+  }
+
+  //  SANS JETON, LA QUESTION N'A PAS DE DESTINATAIRE
+  //  ------------------------------------------------
+  //  `profiles` n'est lisible que par un **porteur de jeton** : le rôle anonyme
+  //  y est refusé (`42501 permission denied`, mesuré le 20 septembre 2026 avec
+  //  la seule clef publique). Or cette fonction est appelée par deux écrans
+  //  **publics** — les actualités et les commentaires de cantine —, que la
+  //  rubrique se lit sans compte.
+  //
+  //  Ce qui se produisait alors n'était pas une absence de nom, c'était **la
+  //  page entière qui tombait** : la requête refusée levait, l'erreur remontait
+  //  jusqu'au chargeur de l'écran, et un visiteur lisait « Vous n'avez pas les
+  //  droits nécessaires pour cette action » à la place des actualités. Le
+  //  défaut ne se voyait que sans compte — c'est-à-dire dans le seul mode que
+  //  l'équipe ne teste jamais en étant connectée.
+  //
+  //  La garde est **avant** la lecture, et non un `catch` autour d'elle : on ne
+  //  demande pas ce qu'on sait ne pas pouvoir lire, et un refus qui
+  //  surviendrait malgré un jeton reste une vraie panne — il doit remonter.
+  //
+  //  `RootNavigator` rend un écran de chargement tant que `status` vaut
+  //  `'loading'`, donc la session est **toujours** déjà lue quand un écran monte
+  //  sa liste : il n'y a pas de course où un adhérent connecté passerait ici
+  //  avant que sa session ne soit posée.
+  const { data: session } = await requireSupabase().auth.getSession();
+
+  if (session.session === null) {
     return new Map();
   }
 

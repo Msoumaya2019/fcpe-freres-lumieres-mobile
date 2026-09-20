@@ -923,3 +923,156 @@ test('un écran qui exige une session se garde, ou dit pourquoi il ne le fait pa
     '`SANS_GARDE_DE_SESSION` nomme un écran qui se garde : l’exception est périmée',
   );
 });
+
+/* -------------------------------------------------------------------------- *
+ *  Les tables qu'un visiteur ne peut pas lire
+ * -------------------------------------------------------------------------- */
+
+/**
+ * La seule table du porteur qu'une lecture d'**écran public** atteigne.
+ *
+ * MESURÉ, ET C'EST CE QUI DONNE SON SENS AU CONTRÔLE
+ * -------------------------------------------------
+ * Le 20 septembre 2026, avec la seule clef publique : les six rubriques
+ * publiques répondent `200` au rôle anonyme, et `profiles` répond **`401` /
+ * `42501 permission denied`**. La frontière est donc nette, et `profiles` est la
+ * seule table de l'autre côté qui soit lue par un écran que la rubrique ouvre
+ * sans compte — les actualités et les commentaires de cantine, qui tous deux
+ * résolvent des noms d'auteur.
+ *
+ * LE DÉFAUT QUE CE CONTRÔLE REND IMPOSSIBLE, ET IL A ÉTÉ VU SUR L'APPAREIL
+ * -----------------------------------------------------------------------
+ * Sans garde, la requête refusée **lève**, l'erreur remonte jusqu'au chargeur de
+ * l'écran, et un visiteur lit « Vous n'avez pas les droits nécessaires pour
+ * cette action » **à la place des actualités**. Le nom d'auteur est un ornement,
+ * l'article est le contenu — et c'est la page entière qui tombait, bandeau
+ * compris, pour l'ornement.
+ *
+ * La garde est exigée **avant** la lecture, et non quelque part dans le fichier :
+ * un `catch` posé autour laisserait partir la même requête inutile, alors qu'on
+ * ne demande pas ce qu'on sait ne pas pouvoir lire.
+ */
+const TABLES_DU_PORTEUR = ['profiles'];
+
+/**
+ * Les lectures qui n'ont pas besoin de la garde, et pourquoi.
+ *
+ * Leur appelant est **déjà** connecté par construction, et chaque raison est
+ * vérifiable à l'endroit qu'elle nomme — sans quoi elle serait une exception
+ * décorative.
+ */
+const SANS_GARDE_DE_LECTURE = new Map([
+  [
+    'fetchProfile',
+    'appelée par `AuthProvider` avec l’identifiant de la session, qui existe par définition',
+  ],
+  [
+    'listerAdhesions',
+    'appelée par `AdhesionsBureauScreen`, qui rend « Réservé au bureau » avant de charger',
+  ],
+]);
+
+/**
+ * Les fonctions d'un service qui lisent une table donnée.
+ *
+ * Le relevé est **par fonction**, et non par fichier : `profiles.ts` en porte
+ * trois, dont deux qui n'ont pas à se garder. Un contrôle de fichier aurait été
+ * satisfait par la garde de l'une et aurait laissé passer les autres — c'est la
+ * même erreur de granularité que `check-accent` a corrigée sur les blocs.
+ */
+function lecturesDeTable(chemin, table) {
+  const source = ts.createSourceFile(
+    chemin,
+    sansCommentaires(lireFichier(chemin)),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  const motif = new RegExp(`from\\(\\s*['"\`]${table}['"\`]\\s*\\)`);
+  const trouvees = [];
+
+  const visiter = (noeud) => {
+    const estFonction =
+      ts.isFunctionDeclaration(noeud) ||
+      ts.isFunctionExpression(noeud) ||
+      ts.isArrowFunction(noeud);
+
+    if (estFonction) {
+      const texte = noeud.getText(source);
+
+      if (motif.test(texte)) {
+        trouvees.push({
+          nom: noeud.name === undefined ? '' : noeud.name.getText(source),
+          texte,
+          lecture: texte.search(motif),
+        });
+      }
+
+      //  On ne descend pas : le texte d'une fonction contient déjà ses fonctions
+      //  imbriquées, et les compter deux fois ferait échouer le contrôle sur une
+      //  fonction juste.
+      return;
+    }
+
+    ts.forEachChild(noeud, visiter);
+  };
+
+  visiter(source);
+
+  return trouvees;
+}
+
+test('une lecture réservée au porteur d’un jeton se garde, ou dit pourquoi elle ne le fait pas', () => {
+  const lectures = SERVICES.flatMap((chemin) =>
+    TABLES_DU_PORTEUR.flatMap((table) =>
+      lecturesDeTable(chemin, table).map((trouvee) => ({
+        ...trouvee,
+        fichier: relative(RACINE, chemin).replace(/\\/g, '/'),
+      })),
+    ),
+  );
+
+  //  Sans ce garde-fou, un extracteur qui ne trouve plus rien — motif périmé,
+  //  table renommée — rendrait les contrôles suivants verts en ne mesurant rien.
+  assert.ok(
+    lectures.length >= 3,
+    `lectures de ${TABLES_DU_PORTEUR.join(', ')} relevées : ${lectures.length} — ` +
+      'l’extraction ne mesure plus rien',
+  );
+
+  const fautives = lectures
+    .filter(({ nom, texte, lecture }) => {
+      if (SANS_GARDE_DE_LECTURE.has(nom)) {
+        return false;
+      }
+
+      const garde = texte.search(GARDE_DE_SESSION);
+      return garde === -1 || garde > lecture;
+    })
+    .map(({ fichier, nom }) => `${fichier} : ${nom}`);
+
+  assert.deepEqual(
+    fautives,
+    [],
+    'ces fonctions lisent une table que le rôle anonyme ne peut pas lire sans ' +
+      'vérifier la session **avant** la lecture : sans jeton la requête est refusée, ' +
+      'elle lève, et c’est l’écran entier qui tombe. Les garder, ou les déclarer ' +
+      'dans `SANS_GARDE_DE_LECTURE` avec la raison qui rend le cas impossible',
+  );
+
+  //  Et une exception ne survit pas à sa cause : une fonction qui se garde
+  //  désormais est une justification périmée, qui masquerait un futur défaut.
+  const perimees = lectures
+    .filter(({ nom, texte, lecture }) => {
+      const garde = texte.search(GARDE_DE_SESSION);
+      return SANS_GARDE_DE_LECTURE.has(nom) && garde !== -1 && garde < lecture;
+    })
+    .map(({ nom }) => nom);
+
+  assert.deepEqual(
+    perimees,
+    [],
+    '`SANS_GARDE_DE_LECTURE` nomme une fonction qui se garde déjà : l’exception est périmée',
+  );
+});
