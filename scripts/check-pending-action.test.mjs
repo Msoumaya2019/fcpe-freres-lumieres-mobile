@@ -290,9 +290,28 @@ test('le seul écran qui relâche tôt empêche bien de rejouer son action', () 
   // « Envoyer » n'est rendu que dans la branche ouverte — contrairement au
   // compositeur de la discussion, qui reste à l'écran dans tous les cas, et qui
   // ne pouvait donc pas s'autoriser la même exception.
-  assert.match(
+  //
+  // L'ancre portait sur la **première instruction** de la fonction
+  // (`\{\s*setFormOpen\(false\)`), et c'était un défaut du banc : le jour où
+  // `closeForm` a reçu une instruction avant celle-là — `Keyboard.dismiss()`,
+  // qui rabat le clavier quand les champs sont démontés —, le contrôle est tombé
+  // sur du code juste. Ce qui compte n'est pas la **place** de la fermeture dans
+  // la fonction, c'est qu'elle y soit : le corps est donc délimité, puis lu.
+  const corpsCloseForm = /const closeForm = useCallback\(\(\) => \{([\s\S]*?)\}, \[\]\);/.exec(
     signalements,
-    /const closeForm = useCallback\(\(\) => \{\s*setFormOpen\(false\)/,
+  );
+
+  assert.ok(
+    corpsCloseForm !== null,
+    'le formulaire des signalements doit se refermer dans un `closeForm` délimité',
+  );
+  assert.ok(
+    corpsCloseForm[1].trim() !== '',
+    'le corps lu est vide : l’ancre a glissé, et ce contrôle ne mesurerait plus rien',
+  );
+  assert.match(
+    corpsCloseForm[1],
+    /setFormOpen\(false\)/,
     "le justificatif de l'exception repose sur cette fermeture",
   );
   assert.match(signalements, /formOpen \? \(/, 'le formulaire doit être rendu conditionnellement');

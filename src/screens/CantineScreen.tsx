@@ -115,6 +115,12 @@ export function CantineScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={[styles.list, menus.length === 0 && styles.listEmpty]}
+        // `keyboardShouldPersistTaps` vaut « never » par défaut : la liste
+        // consommerait le premier appui pour fermer le clavier, et « Envoyer »
+        // ne le recevrait jamais. Mesuré par scripts/check-clavier-liste.test.mjs.
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />
         }

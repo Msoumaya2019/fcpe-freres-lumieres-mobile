@@ -200,6 +200,12 @@ function VueConversation({ conversation, onRetour }: VueConversationProps) {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={[styles.liste, messages.length === 0 && styles.listeVide]}
+        // `keyboardShouldPersistTaps` vaut « never » par défaut : la liste
+        // consommerait le premier appui pour fermer le clavier, et « Envoyer »
+        // ne le recevrait jamais. Mesuré par scripts/check-clavier-liste.test.mjs.
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
         refreshControl={rafraichir(refreshing, refresh)}
         ListHeaderComponent={
           <>
@@ -319,6 +325,13 @@ function ListeConversations({ onOuvrir }: ListeConversationsProps) {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={[styles.liste, fils.length === 0 && styles.listeVide]}
+        // Même règle que la liste des messages : l'écran héberge un champ de
+        // réponse, et le premier appui sur « Envoyer » ne doit pas être consommé
+        // par la liste pour fermer le clavier. Mesuré par
+        // scripts/check-clavier-liste.test.mjs.
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
         refreshControl={rafraichir(refreshing, refresh)}
         ListHeaderComponent={
           <>

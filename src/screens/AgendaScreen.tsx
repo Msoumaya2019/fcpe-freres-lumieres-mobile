@@ -157,6 +157,16 @@ export function AgendaScreen({
             <CarteEvenement evenement={item} maintenant={maintenant} />
           )}
           contentContainerStyle={[styles.liste, evenements.length === 0 && styles.listeVide]}
+          // `keyboardShouldPersistTaps` vaut « never » par défaut : la liste
+          // consommerait le premier appui pour fermer le clavier, et « Envoyer »
+          // ne le recevrait jamais. La règle est portée par l'**écran**, pas par
+          // la seule liste qui se trouve héberger le formulaire : les deux
+          // onglets n'en sont qu'un, et déplacer le fil de commentaires de l'un
+          // à l'autre ne doit pas rouvrir le défaut. Mesuré par
+          // scripts/check-clavier-liste.test.mjs.
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -199,6 +209,12 @@ export function AgendaScreen({
             />
           )}
           contentContainerStyle={[styles.liste, sondages.length === 0 && styles.listeVide]}
+          // `keyboardShouldPersistTaps` vaut « never » par défaut : la liste
+          // consommerait le premier appui pour fermer le clavier, et « Envoyer »
+          // ne le recevrait jamais. Mesuré par scripts/check-clavier-liste.test.mjs.
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

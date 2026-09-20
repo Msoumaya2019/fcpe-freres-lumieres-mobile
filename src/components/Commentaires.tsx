@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Keyboard, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/AppText';
 import { AsyncFallback } from '@/components/AsyncFallback';
@@ -92,6 +92,11 @@ export function FormulaireCommentaire({ cible, onDepose }: FormulaireCommentaire
   const [depose, setDepose] = useState(false);
 
   const closeForm = useCallback(() => {
+    // Le formulaire quitte l'écran : le clavier doit partir avec lui. Les deux
+    // champs démontés le relâchent en principe, mais cette démission n'est
+    // écrite nulle part dans le contrat de React — et un clavier resté ouvert
+    // recouvrirait la confirmation, que le parent ne pourrait pas lire.
+    Keyboard.dismiss();
     setFormOpen(false);
     setFormError(null);
     setAuteurNom('');

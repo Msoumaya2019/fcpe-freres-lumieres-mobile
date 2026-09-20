@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import {
   FlatList,
+  Keyboard,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -104,6 +105,11 @@ export function MesSignalementsScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   const closeForm = useCallback(() => {
+    // Le formulaire quitte l'écran : le clavier doit partir avec lui. Les deux
+    // champs démontés le relâchent en principe, mais cette démission n'est
+    // écrite nulle part dans le contrat de React — et un clavier resté ouvert
+    // recouvrirait le signalement que le parent vient de déposer.
+    Keyboard.dismiss();
     setFormOpen(false);
     setFormError(null);
     setSubject('');
@@ -178,6 +184,12 @@ export function MesSignalementsScreen() {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={[styles.list, signalements.length === 0 && styles.listEmpty]}
+        // `keyboardShouldPersistTaps` vaut « never » par défaut : la liste
+        // consommerait le premier appui pour fermer le clavier, et « Envoyer »
+        // ne le recevrait jamais. Mesuré par scripts/check-clavier-liste.test.mjs.
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />
         }

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import {
   FlatList,
+  Keyboard,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -162,6 +163,11 @@ function ListeFils({ onOuvrir }: ListeFilsProps) {
   const [submitting, setSubmitting] = useState(false);
 
   const closeForm = useCallback(() => {
+    // Le formulaire quitte l'écran : le clavier doit partir avec lui. Les champs
+    // démontés le relâchent en principe, mais cette démission n'est écrite nulle
+    // part dans le contrat de React — et un clavier resté ouvert recouvrirait ce
+    // que le parent vient de lire.
+    Keyboard.dismiss();
     setFormOpen(false);
     setFormError(null);
     setSubject('');
@@ -194,6 +200,9 @@ function ListeFils({ onOuvrir }: ListeFilsProps) {
           body,
           replyTo: replyTo.trim() === '' ? null : replyTo,
         });
+        // L'écran change : sans cela, le clavier resterait ouvert par-dessus la
+        // conversation qui s'ouvre, et le parent ne verrait pas son message.
+        Keyboard.dismiss();
         // On ouvre la conversation qui vient de naître, au lieu de revenir à la
         // liste : le parent voit son message envoyé, et la réponse du bureau
         // arrivera exactement là.
@@ -240,6 +249,12 @@ function ListeFils({ onOuvrir }: ListeFilsProps) {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={[styles.list, fils.length === 0 && styles.listEmpty]}
+        // `keyboardShouldPersistTaps` vaut « never » par défaut : la liste
+        // consommerait le premier appui pour fermer le clavier, et « Envoyer »
+        // ne le recevrait jamais. Mesuré par scripts/check-clavier-liste.test.mjs.
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
         refreshControl={rafraichir(refreshing, refresh)}
         ListHeaderComponent={
           <>
@@ -435,6 +450,12 @@ function VueFil({ fil, onRetour }: VueFilProps) {
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
         contentContainerStyle={[styles.list, messages.length === 0 && styles.listEmpty]}
+        // `keyboardShouldPersistTaps` vaut « never » par défaut : la liste
+        // consommerait le premier appui pour fermer le clavier, et « Envoyer »
+        // ne le recevrait jamais. Mesuré par scripts/check-clavier-liste.test.mjs.
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
         refreshControl={rafraichir(refreshing, refresh)}
         ListHeaderComponent={
           <>
