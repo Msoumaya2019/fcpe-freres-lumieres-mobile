@@ -106,21 +106,21 @@ export const DOCUMENT_CATEGORY_LABELS: Readonly<Record<DocumentCategory, string>
   autre: 'Autre',
 };
 
-export const MESSAGE_CATEGORY_LABELS: Readonly<Record<MessageCategory, string>> = {
-  cantine: 'Cantine',
-  transport: 'Transport scolaire',
-  vie_scolaire: 'Vie scolaire',
-  activites: 'Activités',
-  autre: 'Autre',
-};
-
-export const MESSAGE_CATEGORIES: readonly MessageCategory[] = [
-  'cantine',
-  'transport',
-  'vie_scolaire',
-  'activites',
-  'autre',
-];
+/**
+ * Il n'y a plus de table de libellés pour `message_category`, et c'est une
+ * **absence décidée**.
+ *
+ * Le formulaire de contact demandait au parent de choisir un sujet, et le bureau
+ * a demandé qu'on le lui retire : l'application n'affiche donc plus de catégorie
+ * sous une conversation, et une table de libellés sans lecteur est une table qui
+ * pourrira — le premier à la relire croira qu'un écran s'en sert.
+ *
+ * Ce qui reste vérifié ne dépend pas d'elle : `check-schema-types` compare les
+ * valeurs de l'énumération à celles du SQL, et `MessageCategory` reste l'alias
+ * que `ConversationBureau` emploie. Une valeur ajoutée en base fait donc
+ * toujours tomber un banc — la seule chose perdue est le contrôle du compilateur
+ * sur les libellés, qui n'ont plus d'emploi.
+ */
 
 /**
  * Un sondage, ses réponses, et le vote **de cet appareil** s'il a voté.

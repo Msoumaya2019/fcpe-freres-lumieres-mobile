@@ -28,13 +28,8 @@ import {
   repondreConversation,
   type FilLocal,
 } from '@/services/conversations';
-import { colors, radius, spacing } from '@/theme';
-import {
-  MESSAGE_CATEGORIES,
-  MESSAGE_CATEGORY_LABELS,
-  type ConversationMessage,
-  type MessageCategory,
-} from '@/types/models';
+import { colors, spacing } from '@/theme';
+import { type ConversationMessage } from '@/types/models';
 import { formatDateTime } from '@/utils/date';
 
 /**
@@ -87,40 +82,6 @@ const MAX_SUBJECT_LENGTH = 120;
 const MAX_BODY_LENGTH = 4000;
 const MAX_EMAIL_LENGTH = 254;
 
-interface CategoryChipProps {
-  readonly category: MessageCategory;
-  readonly selected: boolean;
-  readonly disabled: boolean;
-  readonly onSelect: (category: MessageCategory) => void;
-}
-
-function CategoryChip({ category, selected, disabled, onSelect }: CategoryChipProps) {
-  return (
-    <Pressable
-      onPress={() => {
-        onSelect(category);
-      }}
-      disabled={disabled}
-      accessibilityRole="radio"
-      accessibilityState={{ selected, disabled }}
-      style={({ pressed }) => [
-        styles.chip,
-        selected && styles.chipSelected,
-        pressed && styles.chipPressed,
-        disabled && styles.chipDisabled,
-      ]}
-    >
-      <AppText
-        variant="caption"
-        bold={selected}
-        color={selected ? colors.textOnPrimary : colors.textPrimary}
-      >
-        {MESSAGE_CATEGORY_LABELS[category]}
-      </AppText>
-    </Pressable>
-  );
-}
-
 /** Le geste de rafraîchissement, écrit une fois et posé sur les deux listes. */
 function rafraichir(refreshing: boolean, refresh: () => void) {
   return <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.primary} />;
@@ -155,7 +116,6 @@ function ListeFils({ onOuvrir }: ListeFilsProps) {
   const fils = data ?? VIDE_FILS;
 
   const [formOpen, setFormOpen] = useState(false);
-  const [category, setCategory] = useState<MessageCategory>('vie_scolaire');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [replyTo, setReplyTo] = useState('');
@@ -173,7 +133,6 @@ function ListeFils({ onOuvrir }: ListeFilsProps) {
     setSubject('');
     setBody('');
     setReplyTo('');
-    setCategory('vie_scolaire');
   }, []);
 
   const handleSubmit = useCallback(() => {
@@ -196,7 +155,6 @@ function ListeFils({ onOuvrir }: ListeFilsProps) {
       try {
         const fil = await creerConversation({
           subject,
-          category,
           body,
           replyTo: replyTo.trim() === '' ? null : replyTo,
         });
@@ -213,7 +171,7 @@ function ListeFils({ onOuvrir }: ListeFilsProps) {
         setSubmitting(false);
       }
     })();
-  }, [body, category, onOuvrir, replyTo, subject]);
+  }, [body, onOuvrir, replyTo, subject]);
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<FilLocal>) => (
@@ -233,9 +191,7 @@ function ListeFils({ onOuvrir }: ListeFilsProps) {
               Ouvrir
             </AppText>
           </View>
-          <AppText variant="caption">
-            {MESSAGE_CATEGORY_LABELS[item.category]} · {formatDateTime(item.creeLe)}
-          </AppText>
+          <AppText variant="caption">{formatDateTime(item.creeLe)}</AppText>
         </Card>
       </Pressable>
     ),
@@ -268,21 +224,6 @@ function ListeFils({ onOuvrir }: ListeFilsProps) {
                 <>
                   <AppText variant="heading">Votre message au bureau</AppText>
                   <RappelDiscussion />
-
-                  <AppText variant="caption" bold>
-                    Sujet
-                  </AppText>
-                  <View style={styles.chipRow}>
-                    {MESSAGE_CATEGORIES.map((value) => (
-                      <CategoryChip
-                        key={value}
-                        category={value}
-                        selected={value === category}
-                        disabled={submitting}
-                        onSelect={setCategory}
-                      />
-                    ))}
-                  </View>
 
                   <TextField
                     label="Objet"
@@ -466,9 +407,7 @@ function VueFil({ fil, onRetour }: VueFilProps) {
             />
             <Card muted>
               <AppText variant="heading">{fil.subject}</AppText>
-              <AppText variant="caption">
-                {MESSAGE_CATEGORY_LABELS[fil.category]} · ouverte le {formatDateTime(fil.creeLe)}
-              </AppText>
+              <AppText variant="caption">Ouverte le {formatDateTime(fil.creeLe)}</AppText>
               <AppText variant="caption">
                 Cette conversation est gardée sur ce téléphone. Si vous réinstallez l’application ou
                 changez d’appareil, vous ne pourrez plus la rouvrir : notez l’objet et écrivez de
@@ -567,29 +506,6 @@ const styles = StyleSheet.create({
   },
   itemTitle: {
     flexShrink: 1,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  chip: {
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  chipPressed: {
-    opacity: 0.8,
-  },
-  chipDisabled: {
-    opacity: 0.5,
   },
   pressed: {
     opacity: 0.85,

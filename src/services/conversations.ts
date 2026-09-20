@@ -38,18 +38,48 @@ export interface FilLocal {
   readonly id: string;
   readonly secret: string;
   readonly subject: string;
-  readonly category: MessageCategory;
   readonly creeLe: string;
 }
 
-/** Ce qu'un parent écrit pour ouvrir un fil. */
+/**
+ * Ce qu'un parent écrit pour ouvrir un fil.
+ *
+ * POURQUOI IL N'Y A PLUS DE CATÉGORIE
+ * -----------------------------------
+ * Le formulaire demandait au parent de choisir un **sujet** — cantine,
+ * transport, vie scolaire… —, et le bureau a demandé qu'on le lui retire : trois
+ * champs suffisent, et un choix de plus est une question de plus. La décision est
+ * prise ici aussi, et pas seulement à l'écran : la catégorie n'est plus une
+ * donnée que le parent fournit, donc elle n'est plus un paramètre de ce type.
+ *
+ * Ce que la base reçoit à la place est dit par `CATEGORIE_NON_PRECISEE`.
+ */
 export interface NouvelleConversation {
   readonly subject: string;
-  readonly category: MessageCategory;
   readonly body: string;
   /** Facultatif : une adresse où le bureau peut répondre hors application. */
   readonly replyTo: string | null;
 }
+
+/**
+ * Ce que l'application envoie pour une conversation ouverte depuis le contact.
+ *
+ * POURQUOI `'autre'`, ET POURQUOI IL EST NOMMÉ
+ * -------------------------------------------
+ * `creer_conversation` **exige** une catégorie : PostgREST résout une fonction
+ * par ses arguments, donc l'omettre rendrait `PGRST202` — « aucune fonction de ce
+ * nom ». Mais ce que la fonction fait d'un `null` est écrit dans la première
+ * migration : `coalesce(p_category, 'autre')`. `'autre'` est donc la valeur que
+ * la base donne elle-même à « non précisé », et c'est celle-ci que l'application
+ * envoie — nommée, commentée, et vérifiée par le compilateur plutôt qu'écrite au
+ * fond d'un appel.
+ *
+ * Ce que le retrait change pour la lecture : plus aucun écran n'affiche de
+ * catégorie sous une conversation. Le libellé qui restait dans les listes aurait
+ * dit « Autre » sous chaque message — une catégorie que personne n'a choisie,
+ * affichée comme si quelqu'un l'avait fait.
+ */
+const CATEGORIE_NON_PRECISEE: MessageCategory = 'autre';
 
 /** Ce que le bureau voit d'un fil, dans sa liste. */
 export interface ConversationBureau {
@@ -83,7 +113,6 @@ function estFilLocal(valeur: unknown): valeur is FilLocal {
     typeof fil.id === 'string' &&
     typeof fil.secret === 'string' &&
     typeof fil.subject === 'string' &&
-    typeof fil.category === 'string' &&
     typeof fil.creeLe === 'string'
   );
 }
@@ -132,7 +161,7 @@ async function retenirFil(fil: FilLocal): Promise<void> {
 export async function creerConversation(input: NouvelleConversation): Promise<FilLocal> {
   const { data, error } = await requireSupabase().rpc('creer_conversation', {
     p_subject: input.subject.trim(),
-    p_category: input.category,
+    p_category: CATEGORIE_NON_PRECISEE,
     p_body: input.body.trim(),
     p_reply_to: input.replyTo === null ? '' : input.replyTo.trim(),
   });
@@ -151,7 +180,6 @@ export async function creerConversation(input: NouvelleConversation): Promise<Fi
     id: ligne.conversation_id,
     secret: ligne.conversation_secret,
     subject: input.subject.trim(),
-    category: input.category,
     creeLe: new Date().toISOString(),
   };
 

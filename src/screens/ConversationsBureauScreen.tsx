@@ -28,11 +28,7 @@ import {
   type ConversationBureau,
 } from '@/services/conversations';
 import { colors, spacing } from '@/theme';
-import {
-  MESSAGE_CATEGORY_LABELS,
-  type ConversationMessage,
-  type ConversationStatus,
-} from '@/types/models';
+import { type ConversationMessage, type ConversationStatus } from '@/types/models';
 import { formatDateTime } from '@/utils/date';
 import { pendingTarget, type PendingAction } from '@/utils/pendingAction';
 
@@ -217,8 +213,8 @@ function VueConversation({ conversation, onRetour }: VueConversationProps) {
             <Card muted>
               <AppText variant="heading">{conversation.subject}</AppText>
               <AppText variant="caption">
-                {MESSAGE_CATEGORY_LABELS[conversation.category]} · {STATUTS[conversation.status]} ·
-                ouverte le {formatDateTime(conversation.created_at)}
+                {STATUTS[conversation.status]} · ouverte le{' '}
+                {formatDateTime(conversation.created_at)}
               </AppText>
               {/* L'adresse n'est montrée que lorsqu'elle existe : un champ vide
                   affiché en clair ferait croire à un oubli du parent. */}
@@ -286,7 +282,7 @@ function ListeConversations({ onOuvrir }: ListeConversationsProps) {
           onOuvrir(item);
         }}
         accessibilityRole="button"
-        accessibilityLabel={`${item.subject}. ${MESSAGE_CATEGORY_LABELS[item.category]}. ${STATUTS[item.status]}.`}
+        accessibilityLabel={`${item.subject}. ${STATUTS[item.status]}.`}
         style={({ pressed }) => (pressed ? styles.appuye : undefined)}
       >
         <Card elevated>
@@ -299,8 +295,8 @@ function ListeConversations({ onOuvrir }: ListeConversationsProps) {
             </AppText>
           </View>
           <AppText variant="caption">
-            {MESSAGE_CATEGORY_LABELS[item.category]} · {formatDateTime(item.updated_at)} ·{' '}
-            {item.message_count} message{item.message_count > 1 ? 's' : ''}
+            {formatDateTime(item.updated_at)} · {item.message_count} message
+            {item.message_count > 1 ? 's' : ''}
           </AppText>
           {item.last_body === null ? null : (
             <AppText variant="caption" numberOfLines={2}>
