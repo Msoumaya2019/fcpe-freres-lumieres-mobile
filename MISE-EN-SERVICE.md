@@ -3,8 +3,9 @@
 > **En résumé.** Les étapes 1 à 4 sont faites : Supabase répond, le projet Expo est
 > créé, le jeton est posé, et **les e-mails partent** — vérifié jusqu'au clic sur le
 > lien reçu. **Les deux binaires se recompilent** — l'APK Android et l'IPA non signé.
-> Ce qui reste tient en deux gestes : les quatre réglages du tableau de bord, et
-> installer l'application sur un téléphone.
+> Ce qui reste tient en trois gestes : **le compartiment des documents et ses cinq
+> politiques** (§1.4), les quatre réglages du tableau de bord (§6), et installer
+> l'application sur un téléphone.
 >
 > **Un binaire ne vaut que pour le commit dont il est né.** Ceux que je vous avais
 > envoyés dataient d'**avant la refonte visuelle** : 58 fichiers et 7 851 lignes les
@@ -32,22 +33,21 @@ service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 
 ## Ce que vous faites, et ce que je fais ensuite
 
-| #   | Vous                                                                                         | Durée   | Moi, dès réception                                              |
-| --- | -------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------- |
-| 1   | Un projet Supabase, les **trois** fichiers SQL collés, le compartiment créé, l'URL et la clé | ~15 min | `.env.local`, variables EAS                                     |
-| 2   | Un compte Expo, et la connexion faite une fois                                               | ~5 min  | `eas init`, variables EAS, compilation de l'APK                 |
-| 3   | Un jeton Expo pour GitHub _(facultatif)_                                                     | ~2 min  | le secret `EXPO_TOKEN`, qui réveille la compilation automatique |
-| 4   | Recopier les quatre identifiants SMTP                                                        | ~5 min  | ✅ les e-mails partent, jusqu'au clic sur le lien               |
-| 5   | Installer l'APK, ou signer l'IPA puis l'installer                                            | ~2 min  | les vérifications sur appareil réel                             |
-| 6   | Les quatre réglages du tableau de bord                                                       | ~5 min  | le contrôle des quatre valeurs                                  |
+| #   | Vous                                                                                          | Durée   | Moi, dès réception                                              |
+| --- | --------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------- |
+| 1   | Un projet Supabase, les **quatre** fichiers SQL collés, le compartiment créé, l'URL et la clé | ~15 min | `.env.local`, variables EAS                                     |
+| 2   | Un compte Expo, et la connexion faite une fois                                                | ~5 min  | `eas init`, variables EAS, compilation de l'APK                 |
+| 3   | Un jeton Expo pour GitHub _(facultatif)_                                                      | ~2 min  | le secret `EXPO_TOKEN`, qui réveille la compilation automatique |
+| 4   | Recopier les quatre identifiants SMTP                                                         | ~5 min  | ✅ les e-mails partent, jusqu'au clic sur le lien               |
+| 5   | Installer l'APK, ou signer l'IPA puis l'installer                                             | ~2 min  | les vérifications sur appareil réel                             |
+| 6   | Les quatre réglages du tableau de bord                                                        | ~5 min  | le contrôle des quatre valeurs                                  |
 
 **Où en est la mise en service : la « liste à cocher », plus bas, fait foi.** Les  
 étapes 2, 3 et 4 sont faites — les e-mails fonctionnent jusqu'au clic sur le lien  
-reçu. De l'**étape 1**, il reste **deux gestes** : le quatrième fichier SQL (§1.3,  
-celui de l'administration — le tableau de bord seul en dépend) et le compartiment  
-des documents avec ses **cinq** politiques (§1.4). Les trois premiers fichiers, eux,  
-sont appliqués : **mesuré depuis l'extérieur**, les six tables publiques répondent à  
-la clé publique et refusent la lecture de tout le reste. Viennent ensuite, dans cet  
+reçu. De l'**étape 1**, il reste **un geste** : le compartiment des documents avec  
+ses **cinq** politiques (§1.4). Les quatre fichiers SQL, eux, sont appliqués :  
+**mesuré depuis l'extérieur** le 20 septembre 2026, les six tables publiques  
+répondent à la clé publique, et tout le reste la refuse. Viennent ensuite, dans cet  
 ordre : installer l'application (§5), créer votre compte, **vous promouvoir  
 administrateur** (§1.8 — une commande à coller, qui ne peut pas être la mienne),  
 **accepter votre propre adhésion** (§1.9 — sans elle, la discussion vous répond une  
@@ -59,15 +59,16 @@ l'ancienne application — c'est pourquoi cette page porte cette ligne.
 
 ---
 
-## Étape 1 — Supabase _(~15 min)_ — **presque faite : trois gestes restent** (§1.3, §1.4)
+## Étape 1 — Supabase _(~15 min)_ — **presque faite : un geste reste** (§1.4)
 
 > **Faite, et vérifiée de l'extérieur le 18 septembre 2026** — pour les six tables de  
 > la première migration. Le projet que vous avez créé répond, et ces six tables  
 > **existent et refusent la clé publique** (`permission denied`). C'est exactement ce  
 > que la migration doit produire : une table qui existe et qui est fermée.
 >
-> **Restent à faire depuis ce guide : le quatrième fichier SQL (§1.3) et le  
-> compartiment des documents avec ses cinq politiques (§1.4).** Les étapes  
+> **Reste à faire depuis ce guide : le compartiment des documents avec ses cinq  
+> politiques (§1.4).** Le quatrième fichier SQL est appliqué — mesuré le  
+> 20 septembre 2026. Les étapes  
 > 2 et suivantes n'en dépendent pas : vous pouvez continuer sans attendre.
 
 Supabase, c'est la base de données et le service d'authentification. Le forfait  
@@ -167,8 +168,9 @@ pour le **tableau de bord** (dépôt `fcpe-freres-lumieres-admin`, fichier
 `ADMINISTRATION.md`). L'application mobile
 fonctionne sans lui, sauf que le bureau ne peut alors ni promouvoir un
 administrateur, ni clore une conversation depuis le tableau de bord. Il s'applique
-en dernier, et se recolle sans doublon. **Il n'est pas encore appliqué** — c'est
-mesuré, et la mesure est dans la liste à cocher.
+en dernier, et se recolle sans doublon. **Il est appliqué** — mesuré depuis
+l'extérieur le 20 septembre 2026 : la colonne `is_draft` existe, et les deux
+fonctions répondent.
 
 **Cinquième collage** — même chose avec :
 
@@ -339,8 +341,9 @@ Elle ne dit pas la même chose de toutes, et c'est ce qui la rend utile :
   `signalements`, `discussion_messages`, `messages`, `conversations`,
   `conversation_messages`, `cantine_reservations`, `sondage_votes`. Un `401`
   prouve l'existence **et** la fermeture — c'est le meilleur des deux signes.
-- **Deux répondent avec des lignes** : `annonces` (2) et `cantine_menus` (10).
-  C'est le jeu d'essai, et il est bien passé.
+- **Deux répondent avec des lignes** : `annonces` et `cantine_menus` (10). Le
+  jeu d'essai pose **deux** annonces ; le compte a grandi depuis, parce que le
+  bureau en a publié — c'est le signe que la chaîne complète fonctionne.
 - **Quatre répondent avec zéro ligne** : `agenda_events`, `documents`,
   `sondages`, `sondage_choices`. Elles sont **vides**, pas fermées — l'écran qui
   les lit affichera « aucune donnée », ce qui est le comportement attendu avant
@@ -349,12 +352,12 @@ Elle ne dit pas la même chose de toutes, et c'est ce qui la rend utile :
   accepte l'écriture d'un appareil sans compte, mais sa lecture est réservée au
   bureau. Le rôle anonyme n'y voit rien, exactement comme la politique le décrit.
 
-**Seule la quatrième migration manque**, et c'est mesuré aussi : la colonne
-`is_draft` répond `400` (elle n'existe pas), et les fonctions `changer_role` et
-`marquer_conversation` répondent `404` (elles n'existent pas). Les trois autres
-sont donc appliquées, et leurs fonctions répondent — `lister_conversations` et
-`decider_adhesion` refusent la clé publique (`401`), `lire_conversation` et
-`resultats_sondage` l'acceptent (`200`), ce qui est le partage voulu.
+**Les quatre migrations sont appliquées**, et c'est mesuré aussi — le
+20 septembre 2026, depuis l'extérieur : la colonne `is_draft` répond `200`, et les
+sept fonctions qu'appelle le tableau de bord existent. Chacune refuse la clé
+publiable (`401`, `permission denied`), sauf `resultats_sondage`, qui l'accepte
+(`200`) — ouverte à `anon` par décision écrite, parce qu'elle rend des compteurs
+par réponse et jamais une ligne de votant.
 
 1. Dans le menu de gauche, cliquez **Table Editor**.
 2. Vous devez voir les quinze tables : `agenda_events`, `annonces`,
@@ -364,8 +367,9 @@ sont donc appliquées, et leurs fonctions répondent — `lister_conversations` 
    Les trois dernières arrivées — `conversations`, `conversation_messages`,
    `push_tokens` — sont celles du **troisième** fichier : si vous ne les voyez
    pas, c'est qu'il n'a pas été collé.
-3. Cliquez sur **annonces** : vous devez voir **2 lignes**. Ce nombre ne bouge
-   plus, même si vous relancez `seed.sql`.
+3. Cliquez sur **annonces** : le jeu d'essai en pose **2 lignes**, et ce nombre ne
+   bouge plus si vous relancez `seed.sql`. Il **grandit** en revanche à chaque
+   actualité que vous publiez : c'est normal, et c'est même souhaitable.
 4. Cliquez sur **cantine_menus** : vous devez voir **8 lignes** la première fois.
    Les menus sont datés à partir du jour où vous appliquez le fichier : si vous
    le relancez un autre jour, huit menus **de plus** s'ajoutent pour les jours
@@ -851,9 +855,11 @@ lien utilisable. Les deux adresses sont recopiées du fichier
 - [x] `20260920120000_acces_public.sql` collé et exécuté → **mesuré** : les six  
       tables publiques répondent à la clé publique, et les fonctions du bureau  
       (`lister_conversations`, `decider_adhesion`) la refusent
-- [ ] `20260921090000_administration.sql` collé et exécuté → le tableau de bord  
+- [x] `20260921090000_administration.sql` collé et exécuté → le tableau de bord  
       peut enregistrer un brouillon, changer un rôle et clore une conversation  
-      _(**mesuré absent** : `is_draft` répond `400`, `changer_role` répond `404`)_
+      _(**mesuré présent le 20 septembre 2026** : `is_draft` répond `200`, et les  
+      sept fonctions appelées par le tableau de bord existent, refusant toutes la  
+      clé publiable sauf `resultats_sondage`)_
 - [x] Compartiment `documents` **privé** dans Storage — **mesuré** : l'adresse  
       publique du compartiment répond `Bucket not found`, et sa liste répond `200`  
       _(il existe donc, et n'est pas public)_
@@ -863,7 +869,8 @@ lien utilisable. Les deux adresses sont recopiées du fichier
 - [x] `seed.sql` collé et exécuté → **mesuré** : `annonces` a 2 lignes lues par la  
       clé publique, et `cantine_menus` en a 10 — huit, plus deux d'une seconde  
       exécution un autre jour, ce qui est le comportement décrit en §1.5
-- [x] Table Editor : `annonces` a 2 lignes
+- [x] Table Editor : `annonces` a les 2 lignes du jeu d'essai — plus, depuis, celles
+      que le bureau a publiées
 - [x] Table Editor : les quinze tables sont là — **mesuré depuis l'extérieur**, les  
       quinze répondent : huit refusent la clé publique, sept l'acceptent
 - [x] Project URL et publishable key envoyées dans la conversation
