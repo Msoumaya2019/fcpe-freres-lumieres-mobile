@@ -114,11 +114,12 @@ const MIGRATIONS_ATTENDUES = [
   '20260921180000_commentaires_trois_cibles.sql',
   '20260921210000_reglages_et_moderation.sql',
   '20260922090000_annonce_epinglee.sql',
+  '20260923090000_publication_par_les_membres.sql',
 ];
 
 /**
- * Les politiques que la troisième migration **retire**, et qui n'ont donc pas
- * de `create policy` en face.
+ * Les politiques que des migrations **retirent**, et qui n'ont donc pas de
+ * `create policy` en face.
  *
  * Une garde sans instruction est le plus souvent une politique supprimée dont la
  * garde est restée — c'est ce que le test du surnombre surveille. Ici, les
@@ -141,19 +142,30 @@ const MIGRATIONS_ATTENDUES = [
  *     sous une condition qui interroge `is_super_admin()` est un mensonge que le
  *     prochain lecteur croira. L'ancien nom est donc retiré, et le nouveau
  *     créé — deux retraits, et ils sont ici pour cette raison.
+ *   - les **cinq** politiques d'insertion de la dixième migration changent de
+ *     nom pour la même raison, en sens inverse : elles s'appelaient
+ *     `…_insert_admin` et n'autorisent plus les seuls administrateurs, mais
+ *     `peut_publier()` — un membre dont l'adhésion est acceptée y a droit. Le
+ *     nom disait encore « admin », et c'est le genre de mensonge qui ne se
+ *     corrige jamais tout seul.
  *
  * Les nommer vaut mieux que de tolérer des gardes en surnombre : la liste dit
  * lesquelles, et le test vérifie que chacune est bien retirée et bien absente
  * des créations.
  */
 const RETRAITS = [
+  'agenda_events_insert_admin',
+  'annonces_insert_admin',
+  'cantine_menus_insert_admin',
   'discussion_messages_insert_own',
   'discussion_messages_select_authenticated',
   'messages_insert_own',
   'messages_select_own_or_admin',
   'signalements_select_own_or_admin',
   'signalements_update_own_or_admin',
+  'sondage_choices_insert_admin',
   'sondage_votes_select_own_or_admin',
+  'sondages_insert_admin',
 ];
 
 /** Les noms des fichiers de migration, dans un ordre stable. */
