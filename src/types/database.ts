@@ -476,7 +476,21 @@ export type Database = {
         Relationships: [];
       };
       /**
-       * Les commentaires déposés sous une actualité, publiés après validation.
+       * Les commentaires déposés sous une actualité, un sondage ou un jour de
+       * cantine, publiés après validation.
+       *
+       * LES TROIS CIBLES SONT FACULTATIVES, ET UNE SEULE EST POSÉE
+       * ----------------------------------------------------------
+       * `annonce_id`, `sondage_id` et `menu_id` sont toutes les trois
+       * nullables, et la contrainte `commentaires_une_seule_cible` impose
+       * `num_nonnulls(…) = 1`. Le type ne peut pas exprimer cette exclusivité —
+       * TypeScript n'a pas d'union « exactement un des trois » —, donc c'est le
+       * **service** qui la porte, par un type discriminé, et la base qui la
+       * garantit.
+       *
+       * Trois colonnes plutôt qu'un couple `(cible, cible_id)` : une colonne
+       * polymorphe ne peut pas porter de clé étrangère, et la cascade est le
+       * mécanisme d'effacement du projet. Supprimer un sondage efface son fil.
        *
        * `statut` est **obligatoire à l'insertion** côté SQL — la colonne porte un
        * défaut, donc `Insert` la marque facultative, mais la politique
@@ -490,7 +504,7 @@ export type Database = {
       commentaires: {
         Row: {
           id: string;
-          annonce_id: string;
+          annonce_id: string | null;
           auteur_nom: string;
           corps: string;
           statut: Database['public']['Enums']['commentaire_statut'];
@@ -498,10 +512,12 @@ export type Database = {
           moderated_at: string | null;
           moderated_by: string | null;
           created_at: string;
+          menu_id: string | null;
+          sondage_id: string | null;
         };
         Insert: {
           id?: string;
-          annonce_id: string;
+          annonce_id?: string | null;
           auteur_nom: string;
           corps: string;
           statut?: Database['public']['Enums']['commentaire_statut'];
@@ -509,10 +525,12 @@ export type Database = {
           moderated_at?: string | null;
           moderated_by?: string | null;
           created_at?: string;
+          menu_id?: string | null;
+          sondage_id?: string | null;
         };
         Update: {
           id?: string;
-          annonce_id?: string;
+          annonce_id?: string | null;
           auteur_nom?: string;
           corps?: string;
           statut?: Database['public']['Enums']['commentaire_statut'];
@@ -520,6 +538,8 @@ export type Database = {
           moderated_at?: string | null;
           moderated_by?: string | null;
           created_at?: string;
+          menu_id?: string | null;
+          sondage_id?: string | null;
         };
         Relationships: [];
       };

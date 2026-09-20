@@ -583,6 +583,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-migration-rejouable.test.mjs  la migration, rejouable sans historique
 │   ├── check-migration-applicable.test.mjs  la migration, exécutée contre un vrai PostgreSQL
 │   ├── check-rls-comportement.test.mjs  les politiques RLS, jouées sous chaque rôle
+│   ├── check-commentaires.test.mjs  les trois cibles d'un commentaire, et ce qu'un client ne peut pas écrire
 │   ├── check-sdk-pins.test.mjs    les paquets installés, contre les épinglages du SDK
 │   ├── check-scripts-executables.test.mjs  les commandes que `package.json` lance, et leur existence
 │   ├── check-audit-scope.test.mjs  ce qui est livré, et ce qui est seulement construit
@@ -1987,7 +1988,7 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Trente-quatre fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Trente-cinq fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-effacement`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
@@ -1998,7 +1999,7 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   `check-migration-rejouable`, `check-migration-applicable`,
   `check-rls-comportement`, `check-sdk-pins`, `check-scripts-executables`,
   `check-markdown-listes`, `check-audit-scope`, `check-parser-surface`,
-  `check-non-lus`, `check-safe-area` et `check-acces-public`
+  `check-non-lus`, `check-safe-area`, `check-commentaires` et `check-acces-public`
   couvrent les
   gardes, les
   traductions, le formatage des dates, la couverture des verrous de colonne, ce qui

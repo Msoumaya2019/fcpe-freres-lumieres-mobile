@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   Image,
@@ -27,7 +27,11 @@ import { userMessage } from '@/errors';
 import { useAsyncData } from '@/hooks/useAsyncData';
 import type { PlusStackParamList } from '@/navigation/types';
 import { fetchAnnonce } from '@/services/annonces';
-import { fetchCommentaires, publierCommentaire } from '@/services/commentaires';
+import {
+  fetchCommentaires,
+  publierCommentaire,
+  type CibleCommentaire,
+} from '@/services/commentaires';
 import { documentUrl } from '@/services/documents';
 import { colors, radius, spacing } from '@/theme';
 import { annonceCategoryStyle } from '@/theme/categories';
@@ -133,6 +137,11 @@ export function AnnonceDetailScreen({
 }: NativeStackScreenProps<PlusStackParamList, 'Annonce'>) {
   const { id } = route.params;
 
+  //  La cible est construite **une fois**, et typée : c'est le seul endroit de
+  //  l'écran qui sache que ce fil commente une actualité. Le service ne connaît
+  //  que trois types de cible, et refuse un appel qui n'en désignerait aucune.
+  const cible = useMemo<CibleCommentaire>(() => ({ type: 'annonce', id }), [id]);
+
   const loader = useCallback(async (): Promise<Article | null> => {
     const annonce = await fetchAnnonce(id);
 
@@ -141,7 +150,7 @@ export function AnnonceDetailScreen({
     }
 
     const [commentaires, photoUrl] = await Promise.all([
-      fetchCommentaires(id),
+      fetchCommentaires(cible),
       adresseDeLaPhoto(annonce.image_path),
     ]);
 
@@ -151,7 +160,7 @@ export function AnnonceDetailScreen({
       photoIndisponible: annonce.image_path !== null && photoUrl === null,
       commentaires,
     };
-  }, [id]);
+  }, [cible, id]);
 
   const { status, data, errorMessage, refreshing, refresh, reload } = useAsyncData(loader);
 
@@ -192,7 +201,7 @@ export function AnnonceDetailScreen({
 
     void (async () => {
       try {
-        await publierCommentaire({ annonceId: id, auteurNom, corps });
+        await publierCommentaire({ cible, auteurNom, corps });
         closeForm();
         // Le commentaire part en validation : la relecture ne le fera donc pas
         // apparaître, et c'est la confirmation ci-dessous qui répond à la
@@ -210,7 +219,7 @@ export function AnnonceDetailScreen({
         setSubmitting(false);
       }
     })();
-  }, [auteurNom, closeForm, corps, id, reload]);
+  }, [auteurNom, cible, closeForm, corps, reload]);
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<Commentaire>) => (

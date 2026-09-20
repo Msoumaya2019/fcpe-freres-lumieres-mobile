@@ -287,8 +287,15 @@ test('aucune politique d’insertion n’est perdue à la lecture', () => {
  * La troisième est arrivée avec les commentaires : un parent **sans compte**
  * dépose un commentaire sous une actualité, exactement comme il vote sans
  * compte. Elle est donc ici, et son comportement est mesuré par
- * `check-acces-public` — dépôt accepté, statut imposé, relecture muette avant
- * validation.
+ * `check-commentaires` — dépôt accepté sous les trois cibles, statut imposé,
+ * brouillon refusé, relecture muette avant validation.
+ *
+ * La référence a longtemps nommé `check-acces-public`, et c'était **faux** :
+ * ce banc-là monte la base après la troisième migration, et `commentaires` naît
+ * dans la sixième. La politique la plus ouverte du schéma — elle accepte le rôle
+ * `anon` — n'était donc exercée par rien, et la phrase qui prétendait le
+ * contraire était verte. Une affirmation sur ce que mesure un banc se vérifie
+ * comme les autres ; celle-ci a été mesurée, et corrigée en ajoutant le banc.
  */
 const INSERTIONS_HORS_MOTIF = [
   'commentaires_insert_public',
@@ -488,10 +495,10 @@ const SURFACE_PUBLIQUE = new Map([
   ],
   [
     'commentaires',
-    'un parent **sans compte** dépose un commentaire sous une actualité, comme il ' +
-      'vote : `commentaires_insert_public` l’accepte, et `commentaires_select_publies_anon` ' +
-      'ne lui rend que les commentaires **publiés** — un commentaire en attente de ' +
-      'validation est muet, y compris pour son auteur',
+    'un parent **sans compte** dépose un commentaire sous une actualité, un sondage ' +
+      'ou un jour de cantine, comme il vote : `commentaires_insert_public` l’accepte, et ' +
+      '`commentaires_select_publies_anon` ne lui rend que les commentaires **publiés** — un ' +
+      'commentaire en attente de validation est muet, y compris pour son auteur',
   ],
 ]);
 
@@ -717,6 +724,58 @@ function blocsDeTable(sql) {
 }
 
 /**
+ * Les clés étrangères **ajoutées après coup**, par `alter table … add column`.
+ *
+ * POURQUOI CE SECOND RELEVÉ
+ * -------------------------
+ * Le relevé principal ne lit que les corps de `create table`. Une colonne
+ * ajoutée par `alter table` — ce qui est la **seule** façon correcte de faire
+ * évoluer une table déjà déployée, les six premières migrations étant déjà
+ * appliquées sur la base — lui était donc invisible.
+ *
+ * Conséquence mesurée, et c'est exactement le piège que ce fichier surveille
+ * ailleurs : la septième migration ajoute `commentaires.sondage_id` et
+ * `commentaires.menu_id`, toutes deux `on delete cascade`, et le relevé n'en
+ * voyait **aucune**. La liste close des clés serait restée à dix-sept, verte, et
+ * fausse — et une arête perdue rétrécit la liste des tables effacées, donc les
+ * contrôles suivants se seraient accordés sur une liste incomplète.
+ *
+ * C'est la même correction que celle apportée à `check-schema-types` pour la
+ * même raison : un relevé qui ne lit que les déclarations initiales devient
+ * faux le jour où le schéma évolue, et il ne le dit pas.
+ *
+ * La cible garde son schéma, comme dans le relevé principal : `auth.users` et
+ * un hypothétique `public.users` ne sont pas la même table.
+ */
+function clesEtrangeresAjoutees(sql) {
+  const ajout =
+    /alter table (?:only )?public\.(\w+)\s+add column (?:if not exists )?(\w+)\s+([^;]*);/g;
+  const cle =
+    /((?:not null\s+|primary key\s+)*)references\s+(?:(public|auth)\.)?(\w+)\s*\(\w+\)\s+on delete (cascade|set null|restrict|no action)/;
+  const cles = [];
+
+  for (const [, table, colonne, definition] of sql.matchAll(ajout)) {
+    const trouve = cle.exec(definition);
+
+    if (trouve === null) {
+      continue;
+    }
+
+    const [, qualificatifs, schema, nom, regle] = trouve;
+
+    cles.push({
+      table,
+      colonne,
+      cible: schema === 'auth' ? `auth.${nom}` : nom,
+      obligatoire: qualificatifs.includes('not null') || qualificatifs.includes('primary key'),
+      regle,
+    });
+  }
+
+  return cles;
+}
+
+/**
  * Toutes les clés étrangères du schéma : qui, sur quelle colonne, vers quelle
  * table, avec quelle obligation et quelle règle d'effacement.
  *
@@ -727,6 +786,12 @@ function blocsDeTable(sql) {
  * admis, sans quoi `id uuid primary key references …` — la clé de `profiles` —
  * échappait aussi. La cible garde son schéma : `auth.users` et un hypothétique
  * `public.users` ne sont pas la même table.
+ *
+ * Le relevé réunit **les deux formes** : les clés écrites dans un corps de
+ * `create table`, et celles ajoutées après coup par `alter table`. La seconde
+ * forme était ignorée jusqu'à la septième migration, et l'ignorer ne faisait
+ * tomber aucun test — la liste close des clés serait simplement devenue fausse,
+ * en silence. Voir `clesEtrangeresAjoutees` pour la mesure.
  */
 function clesEtrangeres(sql) {
   const cle =
@@ -745,7 +810,7 @@ function clesEtrangeres(sql) {
     }
   }
 
-  return cles;
+  return [...cles, ...clesEtrangeresAjoutees(sql)];
 }
 
 /**
@@ -799,7 +864,7 @@ const EFFACEMENT_DOCUMENTE = new Map([
   ['sondage_votes', 'les votes'],
 ]);
 
-test('le découpage par blocs voit les quinze tables déclarées', () => {
+test('le découpage par blocs voit les seize tables déclarées', () => {
   // Contrôle du contrôle, et non redondance : `tablesDeclarees` lit les en-têtes,
   // ce découpage lit les corps. S'ils divergent, l'analyse des clés étrangères
   // porterait sur un schéma partiel sans que rien ne le dise.
@@ -809,7 +874,7 @@ test('le découpage par blocs voit les quinze tables déclarées', () => {
   );
 });
 
-test('l’analyse voit les dix-sept clés étrangères du schéma', () => {
+test('l’analyse voit les dix-neuf clés étrangères du schéma', () => {
   // Contrôle du contrôle, et il porte tout le reste de la famille : la fermeture
   // transitive ne vaut que par les arêtes qu'on lui donne. Une arête perdue
   // rétrécit la liste des tables effacées, et les tests suivants s'accorderaient
@@ -817,6 +882,11 @@ test('l’analyse voit les dix-sept clés étrangères du schéma', () => {
   //
   // La liste est écrite en toutes lettres plutôt que comptée : un décompte
   // laisserait passer une arête perdue compensée par une arête inventée.
+  //
+  // Les deux dernières sont arrivées avec la septième migration, et par la forme
+  // qui échappait au relevé : `alter table … add column … references …`. Les
+  // voir ici est le seul signe que le relevé les lit — sans quoi la liste serait
+  // restée à dix-sept, et rien n'aurait dit qu'il manquait deux arêtes.
   assert.deepEqual(
     CLES.map(
       ({ table, colonne, cible, regle }) => `${table}.${colonne} → ${cible} ${regle}`,
@@ -827,7 +897,9 @@ test('l’analyse voit les dix-sept clés étrangères du schéma', () => {
       'cantine_reservations.menu_id → cantine_menus cascade',
       'cantine_reservations.user_id → profiles cascade',
       'commentaires.annonce_id → annonces cascade',
+      'commentaires.menu_id → cantine_menus cascade',
       'commentaires.moderated_by → auth.users set null',
+      'commentaires.sondage_id → sondages cascade',
       'conversation_messages.conversation_id → conversations cascade',
       'discussion_messages.author_id → profiles cascade',
       'documents.author_id → auth.users set null',

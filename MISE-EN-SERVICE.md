@@ -3,10 +3,10 @@
 > **En résumé.** Les étapes 1 à 4 sont faites : Supabase répond, le projet Expo est
 > créé, le jeton est posé, et **les e-mails partent** — vérifié jusqu'au clic sur le
 > lien reçu. **Les deux binaires se recompilent** — l'APK Android et l'IPA non signé.
-> Ce qui reste tient en quatre gestes : **le cinquième fichier SQL** (§1.3, celui du
-> vote des membres connectés), **le compartiment des documents et ses cinq
-> politiques** (§1.4), les quatre réglages du tableau de bord (§6), et installer
-> l'application sur un téléphone.
+> Ce qui reste tient en quatre gestes : **deux fichiers SQL** (§1.3 — le vote des
+> membres connectés, puis les trois cibles d'un commentaire), **le compartiment des
+> documents et ses cinq politiques** (§1.4), les quatre réglages du tableau de
+> bord (§6), et installer l'application sur un téléphone.
 >
 > **Un binaire ne vaut que pour le commit dont il est né.** Ceux que je vous avais
 > envoyés dataient d'**avant la refonte visuelle** : 58 fichiers et 7 851 lignes les
@@ -34,25 +34,27 @@ service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 
 ## Ce que vous faites, et ce que je fais ensuite
 
-| #   | Vous                                                                                          | Durée   | Moi, dès réception                                              |
-| --- | --------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------- |
-| 1   | Un projet Supabase, les **quatre** fichiers SQL collés, le compartiment créé, l'URL et la clé | ~15 min | `.env.local`, variables EAS                                     |
-| 2   | Un compte Expo, et la connexion faite une fois                                                | ~5 min  | `eas init`, variables EAS, compilation de l'APK                 |
-| 3   | Un jeton Expo pour GitHub _(facultatif)_                                                      | ~2 min  | le secret `EXPO_TOKEN`, qui réveille la compilation automatique |
-| 4   | Recopier les quatre identifiants SMTP                                                         | ~5 min  | ✅ les e-mails partent, jusqu'au clic sur le lien               |
-| 5   | Installer l'APK, ou signer l'IPA puis l'installer                                             | ~2 min  | les vérifications sur appareil réel                             |
-| 6   | Les quatre réglages du tableau de bord                                                        | ~5 min  | le contrôle des quatre valeurs                                  |
+| #   | Vous                                                                                        | Durée   | Moi, dès réception                                              |
+| --- | ------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------- |
+| 1   | Un projet Supabase, les **sept** fichiers SQL collés, le compartiment créé, l'URL et la clé | ~15 min | `.env.local`, variables EAS                                     |
+| 2   | Un compte Expo, et la connexion faite une fois                                              | ~5 min  | `eas init`, variables EAS, compilation de l'APK                 |
+| 3   | Un jeton Expo pour GitHub _(facultatif)_                                                    | ~2 min  | le secret `EXPO_TOKEN`, qui réveille la compilation automatique |
+| 4   | Recopier les quatre identifiants SMTP                                                       | ~5 min  | ✅ les e-mails partent, jusqu'au clic sur le lien               |
+| 5   | Installer l'APK, ou signer l'IPA puis l'installer                                           | ~2 min  | les vérifications sur appareil réel                             |
+| 6   | Les quatre réglages du tableau de bord                                                      | ~5 min  | le contrôle des quatre valeurs                                  |
 
 **Où en est la mise en service : la « liste à cocher », plus bas, fait foi.** Les  
 étapes 2, 3 et 4 sont faites — les e-mails fonctionnent jusqu'au clic sur le lien  
-reçu. De l'**étape 1**, il reste **un geste** : le compartiment des documents avec  
-ses **cinq** politiques (§1.4). Les quatre fichiers SQL, eux, sont appliqués :  
-**mesuré depuis l'extérieur** le 20 septembre 2026, les six tables publiques  
-répondent à la clé publique, et tout le reste la refuse. Viennent ensuite, dans cet  
-ordre : installer l'application (§5), créer votre compte, **vous promouvoir  
-administrateur** (§1.8 — une commande à coller, qui ne peut pas être la mienne),  
-**accepter votre propre adhésion** (§1.9 — sans elle, la discussion vous répond une  
-liste vide), puis les quatre réglages du tableau de bord (§6).
+reçu. De l'**étape 1**, il reste **trois gestes** : le cinquième fichier SQL (§1.3,  
+celui du vote des membres connectés), le septième (§1.3, celui des trois cibles d'un  
+commentaire), et le compartiment des documents avec ses **cinq** politiques (§1.4).  
+Les six premiers fichiers SQL, eux, sont appliqués : **mesuré depuis l'extérieur**  
+le 20 septembre 2026, les six tables publiques répondent à la clé publique, et tout  
+le reste la refuse. Viennent ensuite, dans cet ordre : installer l'application  
+(§5), créer votre compte, **vous promouvoir administrateur** (§1.8 — une commande  
+à coller, qui ne peut pas être la mienne), **accepter votre propre adhésion** (§1.9 —  
+sans elle, la discussion vous répond une liste vide), puis les quatre réglages du  
+tableau de bord (§6).
 
 Les deux binaires, eux, sont à jour du code actuel : la page des versions nomme, pour  
 chacun, le commit dont il est né. Un binaire antérieur à la refonte vous montrerait  
@@ -210,7 +212,28 @@ Il s'applique après les cinq autres, et se recolle sans doublon. **Il est
 nécessaire pour les deux dépôts** : l'application mobile affiche les
 commentaires, et le tableau de bord les valide.
 
-**Septième collage** — le jeu d'essai, et il est facultatif :
+**Septième collage** — les trois cibles d'un commentaire :
+
+```
+supabase/migrations/20260921180000_commentaires_trois_cibles.sql
+```
+
+Même geste, même message attendu. Il **complète** le sixième : il modifie la
+table `commentaires`, que le sixième crée. Collé seul, il est refusé sur
+`relation "public.commentaires" does not exist`.
+
+Ce qu'il apporte : un commentaire ne se dépose plus seulement sous une
+**actualité**, mais aussi sous un **sondage** et sous un **jour de cantine**.
+Une ligne de `cantine_menus` est un jour — c'est ce qu'un parent veut
+distinguer, et « le jeudi, mon enfant est allergique » ne se dit pas d'une
+semaine entière. Une contrainte garantit qu'un commentaire a **exactement une**
+cible, et chacune des trois clés étrangères efface le fil avec sa cible.
+
+> **À coller après le sixième collage**, jamais avant. C'est le seul des sept qui
+> dépende du précédent par une **modification** de table, et non par une simple
+> lecture.
+
+**Huitième collage** — le jeu d'essai, et il est facultatif :
 
 ```
 supabase/seed.sql
@@ -219,7 +242,7 @@ supabase/seed.sql
 **Attendu : `Success. No rows returned`** — un `insert` ne renvoie pas de lignes,  
 donc le message est le même. C'est normal.
 
-> **Les sept fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
+> **Les huit fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
 > ce qu'il signale et relancez **le même fichier** : il ne créera pas de doublon, et  
 > il n'y a pas besoin de repartir de zéro.
 
@@ -984,6 +1007,15 @@ lien utilisable. Les deux adresses sont recopiées du fichier
       `est_super_admin` refuse la clé publiable (`42501`), ce qui **prouve
       qu'elle est là** — PostgreSQL détecte une colonne inconnue avant de
       vérifier les privilèges
+- [ ] `20260921180000_commentaires_trois_cibles.sql` collé et exécuté → un
+      commentaire peut porter sur une actualité, un **sondage** ou un **jour de
+      cantine** _(à coller **après** le précédent, et jamais seul : il modifie la
+      table `commentaires`, donc collé seul il est refusé sur `relation
+"public.commentaires" does not exist`. **Non mesurable** depuis
+      l'extérieur, comme le cinquième : la clé publiable ne lit que les
+      commentaires **publiés**, et il n'y en a aucun avant votre première
+      validation. Le recoller est sans risque — les deux colonnes sont posées en
+      `if not exists` et la contrainte est retirée puis reposée)_
 - [x] Compartiment `documents` **privé** dans Storage — **mesuré** : l'adresse  
       publique du compartiment répond `Bucket not found`, et sa liste répond `200`  
       _(il existe donc, et n'est pas public)_
@@ -1029,9 +1061,9 @@ pas.
 ## Ce qui est déjà fait
 
 Pour que vous sachiez ce que vous n'avez pas à faire : les quatorze écrans et leur  
-navigation, l'authentification et la réinitialisation de mot de passe, les quinze tables  
+navigation, l'authentification et la réinitialisation de mot de passe, les seize tables  
 et leurs politiques de sécurité, les contrôles de schéma et de politiques, la chaîne  
-de vérification complète (`npm run verify`, **34 fichiers de test**), les  
+de vérification complète (`npm run verify`, **35 fichiers de test**), les  
 trois flux GitHub Actions, le dépôt public sans aucun secret, les deux binaires  
 compilés — l'APK Android et l'IPA non signé —, les e-mails vérifiés jusqu'au clic  
 sur le lien reçu, et la documentation.
