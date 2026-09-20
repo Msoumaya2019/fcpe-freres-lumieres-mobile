@@ -25,6 +25,7 @@ export type Database = {
           display_name: string;
           role: Database['public']['Enums']['member_role'];
           status: Database['public']['Enums']['member_status'];
+          est_super_admin: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -33,6 +34,7 @@ export type Database = {
           display_name?: string;
           role?: Database['public']['Enums']['member_role'];
           status?: Database['public']['Enums']['member_status'];
+          est_super_admin?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -41,6 +43,7 @@ export type Database = {
           display_name?: string;
           role?: Database['public']['Enums']['member_role'];
           status?: Database['public']['Enums']['member_status'];
+          est_super_admin?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -55,6 +58,7 @@ export type Database = {
           author_id: string | null;
           published_at: string;
           is_draft: boolean;
+          image_path: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -66,6 +70,7 @@ export type Database = {
           author_id?: string | null;
           published_at?: string;
           is_draft?: boolean;
+          image_path?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -77,6 +82,7 @@ export type Database = {
           author_id?: string | null;
           published_at?: string;
           is_draft?: boolean;
+          image_path?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -469,6 +475,54 @@ export type Database = {
         };
         Relationships: [];
       };
+      /**
+       * Les commentaires déposés sous une actualité, publiés après validation.
+       *
+       * `statut` est **obligatoire à l'insertion** côté SQL — la colonne porte un
+       * défaut, donc `Insert` la marque facultative, mais la politique
+       * `commentaires_insert_public` impose `'en_attente'`. Le type ne peut pas
+       * l'exprimer : c'est le service qui pose la valeur, et le banc de
+       * comportement qui vérifie qu'un client modifié ne peut pas publier.
+       *
+       * `moderated_by` désigne le **modérateur**, jamais l'auteur — celui-ci
+       * n'est qu'une clé d'appareil, dans `voter_key`, sans clé étrangère.
+       */
+      commentaires: {
+        Row: {
+          id: string;
+          annonce_id: string;
+          auteur_nom: string;
+          corps: string;
+          statut: Database['public']['Enums']['commentaire_statut'];
+          voter_key: string;
+          moderated_at: string | null;
+          moderated_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          annonce_id: string;
+          auteur_nom: string;
+          corps: string;
+          statut?: Database['public']['Enums']['commentaire_statut'];
+          voter_key: string;
+          moderated_at?: string | null;
+          moderated_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          annonce_id?: string;
+          auteur_nom?: string;
+          corps?: string;
+          statut?: Database['public']['Enums']['commentaire_statut'];
+          voter_key?: string;
+          moderated_at?: string | null;
+          moderated_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -596,6 +650,7 @@ export type Database = {
       document_visibility: 'familles' | 'bureau';
       message_category: 'cantine' | 'transport' | 'vie_scolaire' | 'activites' | 'autre';
       conversation_status: 'nouveau' | 'en_cours' | 'clos';
+      commentaire_statut: 'en_attente' | 'publie' | 'refuse';
     };
     CompositeTypes: {
       [_ in never]: never;

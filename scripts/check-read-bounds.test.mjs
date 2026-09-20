@@ -161,10 +161,18 @@ test('l’extraction lit bien les services, et rien d’autre', () => {
   // `sondage_votes` enfin, qui reste **écrit** sans être lu : un vote d'appareil
   // n'a plus d'auteur à qui le relire (`voter_id` est nul), le choix est gardé
   // par le téléphone et le décompte vient de `resultats_sondage()`.
+  //
+  // `commentaires` est **entrée** dans la liste avec la sixième migration, et sa
+  // lecture porte bien sa borne : les commentaires publiés d'une actualité, les
+  // cinquante plus récents. C'est le genre de lecture dont l'absence de borne ne
+  // se verrait qu'au bout de plusieurs années — un article très commenté
+  // finirait par être tronqué par un plafond du serveur, et la page afficherait
+  // silencieusement une conversation incomplète.
   assert.deepEqual(tablesLues(), [
     'agenda_events',
     'annonces',
     'cantine_menus',
+    'commentaires',
     'discussion_messages',
     'documents',
     'profiles',

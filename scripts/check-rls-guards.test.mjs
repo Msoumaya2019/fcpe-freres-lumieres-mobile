@@ -283,8 +283,18 @@ test('aucune politique d’insertion n’est perdue à la lecture', () => {
  *
  * Les nommer est ce qui empêche la liste close de mentir le jour où une
  * troisième politique de cette forme apparaîtrait sans être éprouvée.
+ *
+ * La troisième est arrivée avec les commentaires : un parent **sans compte**
+ * dépose un commentaire sous une actualité, exactement comme il vote sans
+ * compte. Elle est donc ici, et son comportement est mesuré par
+ * `check-acces-public` — dépôt accepté, statut imposé, relecture muette avant
+ * validation.
  */
-const INSERTIONS_HORS_MOTIF = ['push_tokens_insert_device', 'sondage_votes_insert_public'];
+const INSERTIONS_HORS_MOTIF = [
+  'commentaires_insert_public',
+  'push_tokens_insert_device',
+  'sondage_votes_insert_public',
+];
 
 /** Toute politique d'insertion du schéma, avec le rôle qu'elle vise. */
 function politiquesDInsertion(sql) {
@@ -476,6 +486,13 @@ const SURFACE_PUBLIQUE = new Map([
     'un appareil sans compte enregistre son jeton ; la lecture, elle, est réservée ' +
       'au bureau par `push_tokens_select_admin`',
   ],
+  [
+    'commentaires',
+    'un parent **sans compte** dépose un commentaire sous une actualité, comme il ' +
+      'vote : `commentaires_insert_public` l’accepte, et `commentaires_select_publies_anon` ' +
+      'ne lui rend que les commentaires **publiés** — un commentaire en attente de ' +
+      'validation est muet, y compris pour son auteur',
+  ],
 ]);
 
 /**
@@ -515,7 +532,7 @@ const PROMOTION = [
   'README.md',
 ];
 
-test('les migrations déclarent les quinze tables attendues', () => {
+test('les migrations déclarent les seize tables attendues', () => {
   // Contrôle : sans lui, une analyse qui ne lirait rien ferait passer les trois
   // invariants suivants sur zéro table. La liste est **close** : une table
   // ajoutée sans être déclarée ici fait tomber le test, et l'ajouter est une
@@ -537,6 +554,7 @@ test('les migrations déclarent les quinze tables attendues', () => {
     'conversations',
     'conversation_messages',
     'push_tokens',
+    'commentaires',
   ]);
 });
 
@@ -681,6 +699,10 @@ test('la promotion est documentée partout où elle est écrite', () => {
 // adressé à tout le monde survit à son auteur ; ce qui est adressé par une
 // personne, ou privé, est effacé.**
 //
+// `commentaires.moderated_by` suit `set null` sans être une cinquième table de
+// contenu collectif, et la nuance est écrite là où elle est jugée — dans le test
+// des survivantes, plus bas. La règle des quatre tables, elle, ne bouge pas.
+//
 // Le piège que ce croisement surveille est asymétrique, et c'est pour cela qu'il
 // faut le nommer : `src/services/discussion.ts` porte un libellé de repli pour un
 // message « sans auteur ». Ce cas n'existe pas — mais il existerait si quelqu'un
@@ -787,7 +809,7 @@ test('le découpage par blocs voit les quinze tables déclarées', () => {
   );
 });
 
-test('l’analyse voit les quinze clés étrangères du schéma', () => {
+test('l’analyse voit les dix-sept clés étrangères du schéma', () => {
   // Contrôle du contrôle, et il porte tout le reste de la famille : la fermeture
   // transitive ne vaut que par les arêtes qu'on lui donne. Une arête perdue
   // rétrécit la liste des tables effacées, et les tests suivants s'accorderaient
@@ -804,6 +826,8 @@ test('l’analyse voit les quinze clés étrangères du schéma', () => {
       'annonces.author_id → profiles set null',
       'cantine_reservations.menu_id → cantine_menus cascade',
       'cantine_reservations.user_id → profiles cascade',
+      'commentaires.annonce_id → annonces cascade',
+      'commentaires.moderated_by → auth.users set null',
       'conversation_messages.conversation_id → conversations cascade',
       'discussion_messages.author_id → profiles cascade',
       'documents.author_id → auth.users set null',
@@ -819,13 +843,14 @@ test('l’analyse voit les quinze clés étrangères du schéma', () => {
   );
 });
 
-test('les dix colonnes rattachées au compte sont reconnues', () => {
+test('les onze colonnes rattachées au compte sont reconnues', () => {
   // La fermeture part de `auth.users`, mais la moitié des colonnes y arrivent
   // par `profiles`. Les deux chemins sont donc réunis ici, et nommés.
   assert.deepEqual(VERS_LE_COMPTE.map(({ table, colonne }) => `${table}.${colonne}`).sort(), [
     'agenda_events.author_id',
     'annonces.author_id',
     'cantine_reservations.user_id',
+    'commentaires.moderated_by',
     'discussion_messages.author_id',
     'documents.author_id',
     'messages.author_id',
@@ -860,6 +885,22 @@ test('seul le contenu collectif survit à son auteur', () => {
   // annonce, une date du calendrier, un document partagé, une question posée à
   // tous. Elles restent utiles après le départ de leur auteur, et les effacer
   // retirerait de l'information collective au motif qu'un compte a été fermé.
+  //
+  // LA CINQUIÈME EST D'UNE AUTRE NATURE, ET ELLE EST DÉCIDÉE ICI
+  // -----------------------------------------------------------
+  // `commentaires.moderated_by` ne désigne pas l'auteur de la ligne : c'est le
+  // **modérateur**, celui qui a validé ou refusé le commentaire d'un parent. La
+  // règle ci-dessus ne le décrit donc pas — mais la conséquence, elle, se
+  // mesure : le commentaire survit à la fermeture du compte de celui qui l'a
+  // validé.
+  //
+  // C'est voulu, et les deux autres règles d'effacement sont pires. `cascade`
+  // effacerait le commentaire d'un parent au motif qu'un membre du bureau s'en
+  // va — une perte de contenu qui n'appartient pas à celui qui part. Retirer la
+  // clé étrangère laisserait un identifiant pointant vers un compte effacé, ce
+  // que le RGPD demande précisément de retirer. Il reste `set null` : la trace
+  // de la **date** de validation subsiste — `commentaires_decision_complete`
+  // l'impose —, et le nom de qui a validé s'efface avec son compte.
   const survivantes = VERS_LE_COMPTE.filter(({ regle }) => regle === 'set null');
 
   assert.deepEqual(
@@ -867,6 +908,7 @@ test('seul le contenu collectif survit à son auteur', () => {
     [
       'agenda_events.author_id → set null',
       'annonces.author_id → set null',
+      'commentaires.moderated_by → set null',
       'documents.author_id → set null',
       'sondages.author_id → set null',
     ],
@@ -1093,12 +1135,12 @@ const ALLOWANCES = new Map([
   ],
 ]);
 
-test('l’analyse des requêtes trouve les dix-sept appels attendus', () => {
+test('l’analyse des requêtes trouve les dix-neuf appels attendus', () => {
   // Contrôle, et invariant en même temps : le nombre est celui que SECURITY.md
   // annonce. Une expression régulière trop stricte qui ne trouverait rien ferait
   // passer les quatre tests suivants sur zéro cas.
   //
-  // Dix-sept **appels** pour quatorze clés distinctes : trois appels s'ajoutent
+  // Dix-neuf **appels** pour seize clés distinctes : trois appels s'ajoutent
   // à une clé déjà comptée. Le décompte porte sur les appels parce que c'est ce
   // que l'analyse parcourt ; la liste, elle, porte sur les clés, parce qu'une
   // politique se réclame par couple et non par appel.
@@ -1123,11 +1165,20 @@ test('l’analyse des requêtes trouve les dix-sept appels attendus', () => {
   // `messages.select` et `messages.insert` venaient de l'ancien contact, qui
   // exigeait un compte ; `sondage_votes.select` relisait le vote par son auteur,
   // or un vote d'appareil n'en a plus.
-  assert.equal(REQUETES.length, 17);
+  //
+  // Deux clés sont **entrées** avec les commentaires, et elles arrivent par deux
+  // appels : `commentaires.select` pour la liste publiée sous un article, et
+  // `commentaires.insert` pour le dépôt d'un parent. Ce sont les deux seules
+  // que l'application exerce sur cette table — la décision de modération et le
+  // retrait vivent dans le tableau de bord, et figurent donc, nommés, dans
+  // `NON_EXERCEES`.
+  assert.equal(REQUETES.length, 19);
   assert.deepEqual(CLES_REQUETES, [
     'agenda_events.select',
     'annonces.select',
     'cantine_menus.select',
+    'commentaires.insert',
+    'commentaires.select',
     'discussion_messages.insert',
     'discussion_messages.select',
     'documents.select',
@@ -1275,19 +1326,36 @@ test('le compartiment que le guide protège est celui que le code demande', () =
   }
 
   //  Le rôle anonyme n'obtient **pas** le compartiment : sa politique doit être
-  //  bornée par la table `documents`, comme l'est la politique de lecture de
-  //  cette table. Une politique `to anon using (bucket_id = 'documents')` — la
-  //  forme la plus simple à écrire, et la plus tentante — ouvrirait tous les
-  //  fichiers à quiconque détient la clé publique, extraite d'un APK.
+  //  bornée par les **tables** qui décident de ce qui est public, comme le sont
+  //  les politiques de lecture de ces tables. Une politique `to anon using
+  //  (bucket_id = 'documents')` — la forme la plus simple à écrire, et la plus
+  //  tentante — ouvrirait tous les fichiers à quiconque détient la clé publique,
+  //  extraite d'un APK.
+  //
+  //  DEUX TABLES, ET NON UNE
+  //  -----------------------
+  //  Le compartiment sert à deux choses : les documents, bornés par
+  //  `documents.visibility`, et les photos d'actualité, bornées par
+  //  `annonces.is_draft`. Une photo n'a **aucune** ligne dans `documents` :
+  //  exiger `public.documents` seul refuserait les photos aux familles sans
+  //  compte — un défaut qui ne se voit que sur un téléphone, et seulement sur
+  //  les articles illustrés.
+  //
+  //  La liste est **close**, et dans les deux sens : une table citée par la
+  //  politique sans être déclarée ici fait tomber le contrôle, et une table
+  //  déclarée ici que la politique ne nomme plus aussi. C'est ce qui empêche la
+  //  seconde branche de devenir un passe-droit ajouté sans être relu.
+  const TABLES_PUBLIQUES_DU_COMPARTIMENT = ['public.annonces', 'public.documents'];
+
   for (const { nom, operation, corps } of politiques.filter(({ role }) => role === 'anon')) {
     assert.equal(operation, 'select', `la politique « ${nom} » ouvre une écriture au rôle anonyme`);
 
-    assert.match(
-      corps,
-      /public\.documents/,
+    assert.deepEqual(
+      TABLES_PUBLIQUES_DU_COMPARTIMENT.filter((table) => corps.includes(table)),
+      TABLES_PUBLIQUES_DU_COMPARTIMENT,
       `la politique « ${nom} » ouvre le compartiment au rôle anonyme sans le borner ` +
-        'par la table `documents` : les documents du bureau seraient lisibles avec ' +
-        'la seule clé publique',
+        'par les tables qui décident de ce qui est public : les documents du bureau, ' +
+        'et les brouillons d’actualité, seraient lisibles avec la seule clé publique',
     );
   }
 });
@@ -1408,6 +1476,8 @@ test('toute politique non exercée par l’application est nommée', () => {
       'cantine_reservations.delete',
       'cantine_reservations.insert',
       'cantine_reservations.select',
+      'commentaires.delete',
+      'commentaires.update',
       'discussion_messages.delete',
       'documents.delete',
       'documents.insert',
@@ -1434,8 +1504,21 @@ test('les politiques non exercées sont des chemins d’administration, ou des e
   // menus, pose le statut d'un signalement, retire un message. `profiles.insert`
   // n'est pas de celles-là — c'est le filet de sécurité de `handle_new_user`, et
   // il doit sa présence à une raison, pas à une ressemblance.
+  //
+  // DEUX FORMES D'ADMINISTRATION, ET NON UNE
+  // ----------------------------------------
+  // Le motif n'acceptait que `public.is_admin()`. Depuis le super administrateur,
+  // une politique réservée à lui seul s'écrit `public.is_super_admin()` — et la
+  // chaîne `public.is_admin()` **n'est pas** contenue dans `public.is_super_admin()`,
+  // si bien que la politique la plus restrictive du schéma aurait été comptée
+  // comme « ouverte à tout membre ». C'est le contraire qui est vrai, et le
+  // laisser passer aurait obligé à inscrire dans `ALLOWANCES` — c'est-à-dire à
+  // justifier — les deux politiques les plus fermées du projet.
+  const administration = (corps) =>
+    corps.includes('public.is_admin()') || corps.includes('public.is_super_admin()');
+
   const inattendues = NON_EXERCEES.filter(
-    (cle) => !POLITIQUES.get(cle).corps.includes('public.is_admin()') && !ALLOWANCES.has(cle),
+    (cle) => !administration(POLITIQUES.get(cle).corps) && !ALLOWANCES.has(cle),
   );
 
   assert.deepEqual(

@@ -39,7 +39,7 @@ de bord Supabase, **dans l'ordre des noms**, puis exécuter. Une seule fois chac
 ## Après l'installation
 
 Créez votre compte depuis l'application (onglet « Créer un compte »), puis
-promouvez-le administrateur :
+promouvez-le administrateur **et super administrateur** :
 
 ```sql
 begin;
@@ -51,7 +51,8 @@ begin;
 alter table public.profiles disable trigger profiles_prevent_role_change;
 
 update public.profiles
-   set role = 'admin'
+   set role = 'admin',
+       est_super_admin = true
   from auth.users
  where auth.users.id = public.profiles.id
    and auth.users.email = 'votre.adresse@exemple.fr';
@@ -61,6 +62,17 @@ alter table public.profiles enable trigger profiles_prevent_role_change;
 
 commit;
 ```
+
+Les deux colonnes vont ensemble, et **la seconde n'est pas un ornement** : depuis
+le sixième fichier de `migrations/`, valider une adhésion, lire les messages des
+familles, traiter un signalement et publier un commentaire sont réservés au super
+administrateur. Un administrateur sans `est_super_admin` voit les écrans du
+bureau, et chacune de ces actions lui est refusée.
+
+`est_super_admin` appartient au **sixième** fichier (`20260921150000_super_admin.sql`).
+Si vous ne l'avez pas encore collé, la commande échoue sur « column
+est_super_admin does not exist » : collez d'abord ce fichier, ou retirez la
+ligne — la promotion administrateur suffit alors, et vous la referrez après.
 
 L'adresse est lue dans `auth.users`, qui en est la seule source : `profiles` ne
 la stocke pas, pour ne pas exposer l'ensemble des adresses des adhérents à tous

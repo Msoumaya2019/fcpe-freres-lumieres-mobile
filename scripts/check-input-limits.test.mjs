@@ -218,6 +218,23 @@ const SAISIES = [
     ecran: 'src/screens/ContactScreen.tsx',
     constante: 'MAX_EMAIL_LENGTH',
   },
+  //  Les deux colonnes d'un commentaire, saisies sous une actualité. Elles sont
+  //  ouvertes **sans compte**, donc à des familles qui ne verront jamais un
+  //  message d'erreur technique : la borne du serveur doit être doublée côté
+  //  client, sinon le refus de `commentaires_auteur_nom_longueur` se lit « La
+  //  valeur envoyée n'est pas acceptée par le serveur ».
+  {
+    table: 'commentaires',
+    colonne: 'auteur_nom',
+    ecran: 'src/screens/AnnonceDetailScreen.tsx',
+    constante: 'MAX_AUTEUR_NOM_LENGTH',
+  },
+  {
+    table: 'commentaires',
+    colonne: 'corps',
+    ecran: 'src/screens/AnnonceDetailScreen.tsx',
+    constante: 'MAX_COMMENTAIRE_LENGTH',
+  },
 ];
 
 /**
@@ -350,6 +367,8 @@ test('l’extraction lit bien la migration et les écrans', () => {
     [
       'agenda_events_title_length',
       'annonces_title_not_blank',
+      'commentaires_auteur_nom_longueur',
+      'commentaires_corps_longueur',
       'conversation_messages_body_length',
       'conversations_reply_to_length',
       'conversations_subject_length',

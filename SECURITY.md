@@ -179,10 +179,52 @@ que `check-acces-public` mesure : un compte en attente reçoit une liste **vide*
 pas une erreur. Ce qui reste ouvert à tout porteur d'un jeton est la liste des
 noms affichés et des rôles, jamais les adresses e-mail.
 
+## Le super administrateur, et les deux portes qu'il a fallu fermer
+
+Le bureau a demandé une marche au-dessus de l'administrateur : **seul** un super
+administrateur valide les adhésions, lit les messages des familles, traite un
+signalement, publie un commentaire, et modère la discussion. La sixième migration
+l'ajoute, et la partie qui compte n'est pas la colonne — c'est ce qui l'entoure.
+
+**Première porte : la modification.** `profiles` n'a **aucune** politique de
+modification, et c'est ce qui protège `role` depuis le premier jour. Le
+déclencheur `prevent_role_change` a été étendu : une colonne dont on ne peut pas
+écrire n'a pas besoin de politique, mais elle a besoin que le déclencheur la
+nomme, sinon le seul chemin d'écriture restant — l'éditeur SQL — serait aussi le
+seul à la connaître.
+
+**Seconde porte : l'insertion, et c'est celle qu'on oublie.** Un verrou
+`before update` **ne couvre pas l'insertion** : il ne voit pas les lignes qui
+naissent avec la valeur interdite. Or `profiles` a une politique d'insertion —
+`profiles_insert_own`, le filet de sécurité si `handle_new_user` n'a pas pu
+s'exécuter — qui autorisait un porteur de jeton à insérer **sa propre** ligne.
+Sans la condition `and not est_super_admin`, n'importe quel compte aurait pu
+s'insérer super administrateur, et la hiérarchie entière tombait par la porte
+d'entrée, sans qu'aucun écran ne montre rien.
+
+**Et un garde-fou de dernier recours** : le déclencheur refuse de retirer
+`est_super_admin` au **dernier** super administrateur. Sans lui, un appui
+malheureux sur un écran laisserait l'association sans personne capable de valider
+une adhésion — un état dont on ne sort que par l'éditeur SQL, c'est-à-dire par
+vous, et sans que rien ne l'ait annoncé.
+
+**Ce qui reste ouvert à tout porteur d'un jeton, et c'est délibéré** : savoir
+**qui** est super administrateur. La colonne est lue par la politique de lecture
+de `profiles`, qui est `using (true)` — comme `role`. Un nom et un rôle ne sont
+pas des secrets ; une adresse e-mail en serait un, et c'est pourquoi elle n'est
+pas recopiée dans `profiles`.
+
+**Ce que ce rôle coûte, et qui doit être dit** : si aucun compte ne porte
+`est_super_admin`, plus personne ne peut valider une adhésion. La promotion est
+donc écrite à **trois** endroits — `supabase/migrations/20260916120000_init.sql`,
+`supabase/README.md` et `README.md` — et elle pose les **deux** colonnes
+ensemble. `scripts/check-rls-guards.test.mjs` vérifie que les trois disent la
+même chose et dans le même ordre.
+
 ## Ce que la relecture des politiques a établi
 
-Les **dix-sept** appels de `src/services/` ont été croisés un par un avec les
-politiques des migrations. Quatorze clés distinctes — trois appels s'ajoutent à
+Les **dix-neuf** appels de `src/services/` ont été croisés un par un avec les
+politiques des migrations. Seize clés distinctes — trois appels s'ajoutent à
 une clé déjà comptée : `profiles.select` est écrit trois fois, `annonces.select`
 deux —, et **une seule écrit une ligne existante** : `push_tokens.update`, par
 laquelle un appareil déjà connu rafraîchit sa date.
@@ -198,6 +240,8 @@ c'est ce banc qu'il faut relire en cas de désaccord.
 | `fetchAnnonces`              | `annonces`             | select            | `annonces_select_public` · `…_select_authenticated`                     |
 | `fetchAnnonce`               | `annonces`             | select            | `annonces_select_public` · `…_select_authenticated`                     |
 | `fetchUpcomingMenus`         | `cantine_menus`        | select            | `cantine_menus_select_public` · `…_select_authenticated`                |
+| `fetchCommentaires`          | `commentaires`         | select            | `commentaires_select_publies_anon` · `…_select_publies`                 |
+| `publierCommentaire`         | `commentaires`         | insert            | `commentaires_insert_public`                                            |
 | `fetchDiscussionMessages`    | `discussion_messages`  | select            | `discussion_messages_select_member`                                     |
 | `postDiscussionMessage`      | `discussion_messages`  | insert            | `discussion_messages_insert_member`                                     |
 | `fetchDocuments`             | `documents`            | select            | `documents_select_public` · `…_select_authenticated`                    |
@@ -213,7 +257,7 @@ c'est ce banc qu'il faut relire en cas de désaccord.
 | `fetchSondages` (choix)      | `sondage_choices`      | select            | `sondage_choices_select_public` · `…_select_authenticated`              |
 | `castVote`                   | `sondage_votes`        | insert            | `sondage_votes_insert_public` · `sondage_votes_insert_own`              |
 
-Deux remarques que le tableau seul ne dirait pas. Les six tables publiques
+Deux remarques que le tableau seul ne dirait pas. Les **sept** tables publiques
 portent **deux** politiques de lecture et non une : `*_select_public` pour le
 rôle `anon`, `*_select_authenticated` pour un porteur de jeton. Un parent sans
 compte et un adhérent lisent les mêmes lignes par deux chemins distincts, et
@@ -221,6 +265,18 @@ retirer l'une des deux ne se verrait pas à l'écriture — d'où les deux noms.
 `profiles.select` est écrit **trois fois** (le profil de l'appelant, les noms des
 auteurs d'une page, la file des adhésions du bureau) et ne réclame qu'une
 politique : c'est le même couple table/opération.
+
+`commentaires` est la septième, et sa politique de lecture anonyme porte un nom
+qui dit ce qu'elle fait : `commentaires_select_publies_anon` filtre sur
+`statut = 'publie'`. Un commentaire en attente de validation est donc **muet**
+pour tout le monde, y compris pour son auteur — celui-ci n'est qu'une clé
+d'appareil, qui ne peut pas être comparée à `auth.uid()`. L'écran le dit au
+parent au moment du dépôt, plutôt que de lui promettre une relecture qui
+n'existe pas. Le dépôt, lui, est ouvert sans compte par
+`commentaires_insert_public`, qui impose **en base** trois choses qu'un client
+modifié ne peut pas contourner : le commentaire naît `en_attente`, sa décision de
+modération est nulle, et l'actualité commentée existe **et n'est pas un
+brouillon**.
 
 Les deux lignes de `push_tokens` sont les seules du tableau qu'**aucun écran
 n'appelle** : `enregistrerAppareil` est écrit, éprouvé, et branché sur rien — voir
@@ -234,9 +290,18 @@ Les deux politiques de compartiment, elles, vivent **hors du dépôt** — le sc
 l'**instruction** qui les crée : `MISE-EN-SERVICE.md` §1.4, que
 `scripts/check-rls-guards.test.mjs` lit pour vérifier que le compartiment protégé
 est celui que le code interroge, que rien n'y autorise l'écriture, et que la
-politique ouverte au rôle anonyme est **bornée** par la table `documents` — sans
-quoi la seule clé publique, extraite d'un APK, ouvrirait aussi les documents du
-bureau.
+politique ouverte au rôle anonyme est **bornée** par les tables qui décident de
+ce qui est public — sans quoi la seule clé publique, extraite d'un APK, ouvrirait
+aussi les documents du bureau.
+
+**Deux tables, et non une**, depuis que les actualités portent une photo. Le
+même compartiment sert aux documents, bornés par `documents.visibility`, et aux
+photos d'actualité, bornées par `annonces.is_draft`. Une photo n'a **aucune**
+ligne dans `documents` : exiger la seule table `documents` aurait refusé les
+photos aux familles sans compte — un défaut qui ne se voit que sur un téléphone,
+et seulement sur les articles illustrés. La liste des tables citées par cette
+politique est donc **close dans les deux sens** dans le banc : en nommer une
+quatrième sans la déclarer fait tomber le contrôle.
 
 Une écriture de statut n'apparaît pas dans ce tableau, et c'est normal : elle ne
 passe par aucune requête de `src/services/`. Le bureau décide d'une adhésion par

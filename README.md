@@ -232,14 +232,16 @@ table `documents`. C'est la même distinction que pour la longueur minimale du m
 de passe : ce qui se règle dans le tableau de bord échappe au test, ce qui
 s'installe par une instruction n'y échappe pas.
 
-Après la première inscription, promouvez votre compte :
+Après la première inscription, promouvez votre compte — administrateur **et**
+super administrateur :
 
 ```sql
 begin;
 alter table public.profiles disable trigger profiles_prevent_role_change;
 
 update public.profiles
-   set role = 'admin'
+   set role = 'admin',
+       est_super_admin = true
   from auth.users
  where auth.users.id = public.profiles.id
    and auth.users.email = 'votre.adresse@exemple.fr';
@@ -254,6 +256,13 @@ administrateur, et `is_admin()` lit `auth.uid()`, qui vaut `NULL` hors d'une
 requête authentifiée : sans eux, la commande échoue dans l'éditeur SQL sur
 « Seul un administrateur peut modifier le rôle d'un membre ». La transaction
 garantit qu'un échec de la mise à jour ne laisse pas le verrou désactivé.
+
+Les deux colonnes vont ensemble, et la seconde n'est pas un ornement : depuis la
+sixième migration, valider une adhésion, lire les messages des familles, traiter
+un signalement et publier un commentaire sont réservés au super administrateur.
+`est_super_admin` appartient à `20260921150000_super_admin.sql` — si ce fichier
+n'est pas encore collé, la commande échoue sur « column est_super_admin does not
+exist ».
 
 L'adresse est lue dans `auth.users`, seule source de vérité : `profiles` ne la
 stocke pas. Sa politique de lecture est ouverte à tout porteur d'un jeton — y

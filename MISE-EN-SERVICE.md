@@ -111,11 +111,11 @@ gratuit suffit.
 > il est **irrécupérable**, et c'est le seul moyen de secours si un jour il faut  
 > accéder à la base directement.
 
-### 1.3 Créer les quinze tables
+### 1.3 Créer les seize tables
 
 Dans le menu de gauche, cliquez **SQL Editor**, puis **New query**.
 
-Vous allez coller **six fichiers**, l'un après l'autre, dans cet ordre.
+Vous allez coller **sept fichiers**, l'un après l'autre, dans cet ordre.
 
 **Premier collage** — ouvrez ce fichier du projet et copiez tout son contenu :
 
@@ -187,7 +187,30 @@ pas les droits nécessaires », et il ne vient ni du sondage ni de la réponse
 choisie. Il s'applique après le troisième fichier, qui déclare cette
 politique, et se recolle sans doublon.
 
-**Sixième collage** — le jeu d'essai, et il est facultatif :
+**Sixième collage** — le super administrateur, les commentaires validés et les
+photos d'actualité :
+
+```
+supabase/migrations/20260921150000_super_admin.sql
+```
+
+Même geste, même message attendu. C'est le fichier le plus long des trois
+derniers, et il porte quatre choses d'un coup :
+
+- une colonne `est_super_admin` sur `profiles`, et les **deux verrous** qui vont
+  avec — sans quoi n'importe quel compte créé aurait pu s'insérer lui-même super
+  administrateur, et la hiérarchie tombait par la porte d'entrée ;
+- la table `commentaires` — la **seizième** —, où les familles déposent un
+  commentaire sous une actualité, publié seulement après votre validation ;
+- la lecture des signalements et des messages des familles, désormais réservée
+  au super administrateur ;
+- une colonne `image_path` sur `annonces`, pour la photo d'un article.
+
+Il s'applique après les cinq autres, et se recolle sans doublon. **Il est
+nécessaire pour les deux dépôts** : l'application mobile affiche les
+commentaires, et le tableau de bord les valide.
+
+**Septième collage** — le jeu d'essai, et il est facultatif :
 
 ```
 supabase/seed.sql
@@ -196,7 +219,7 @@ supabase/seed.sql
 **Attendu : `Success. No rows returned`** — un `insert` ne renvoie pas de lignes,  
 donc le message est le même. C'est normal.
 
-> **Les six fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
+> **Les sept fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
 > ce qu'il signale et relancez **le même fichier** : il ne créera pas de doublon, et  
 > il n'y a pas besoin de repartir de zéro.
 
@@ -231,16 +254,24 @@ Le compartiment se crée donc à la main, une fois.
    premières font **lire**, les trois suivantes font **déposer** :
 
    ```sql
-   --  Les documents destinés aux familles : lisibles par un parent sans compte.
+   --  Ce que les familles peuvent lire : les documents qui leur sont destinés,
+   --  et les photos des actualités publiées.
    drop policy if exists storage_documents_select_familles on storage.objects;
    create policy storage_documents_select_familles
    on storage.objects for select to anon
    using (
      bucket_id = 'documents'
-     and exists (
-       select 1 from public.documents d
-       where d.storage_path = storage.objects.name
-         and d.visibility = 'familles'
+     and (
+       exists (
+         select 1 from public.documents d
+         where d.storage_path = storage.objects.name
+           and d.visibility = 'familles'
+       )
+       or exists (
+         select 1 from public.annonces a
+         where a.image_path = storage.objects.name
+           and not a.is_draft
+       )
      )
    );
 
@@ -320,14 +351,28 @@ Le compartiment se crée donc à la main, une fois.
    déplacer un fichier hors du compartiment.
 
    Et la première **n'ouvre pas le compartiment** : elle exige que le fichier
-   demandé ait, dans la table `documents`, une ligne marquée `familles`. Un
-   document du bureau, ou un fichier déposé sans ligne correspondante, reste
-   refusé. C'est le même critère que celui de la table : `visibility`, une seule
-   fois écrit, lu aux deux endroits.
+   demandé ait, dans la table `documents`, une ligne marquée `familles` — **ou**
+   qu'il soit la photo d'une actualité publiée. Un document du bureau, ou un
+   fichier déposé sans ligne correspondante, reste refusé. C'est le même critère
+   que celui de la table : `visibility`, une seule fois écrit, lu aux deux
+   endroits.
+
+   **Les deux `exists` sont nécessaires, et la seconde branche n'est pas un
+   confort.** Le même compartiment sert aux documents et aux photos d'actualité,
+   et une photo n'a **aucune** ligne dans `documents` : sans la seconde branche,
+   elle serait refusée à un parent sans compte, et l'illustration d'une annonce
+   ne s'afficherait que pour les adhérents connectés — un défaut qui ne se voit
+   que sur un téléphone, et seulement sur les articles qui ont une photo.
+
+   Les photos sont déposées sous le préfixe `annonces/`, les documents sous
+   n'importe quel autre chemin. Ce préfixe n'est **pas** ce qui borne la lecture
+   — la borne est la seconde sous-requête —, il range le compartiment : sans lui,
+   un document et une photo se retrouveraient mêlés dans la même liste.
 
    Un mot sur `storage.objects.name` : c'est le chemin du fichier **dans** le
-   compartiment, et c'est exactement ce que porte la colonne `storage_path`. C'est
-   cette égalité qui fait le lien entre le fichier et sa fiche.
+   compartiment, et c'est exactement ce que porte la colonne `storage_path` — et
+   ce que porte `annonces.image_path` pour une photo. C'est cette égalité qui fait
+   le lien entre le fichier et sa fiche.
 
    Ces politiques ne figurent pas dans nos migrations : le schéma `storage`
    n'existe pas dans la doublure des tests, et une instruction le concernant
@@ -340,15 +385,19 @@ Le compartiment se crée donc à la main, une fois.
 Tant que le compartiment n'existe pas, l'écran Documents affiche une erreur de
 chargement — les autres écrans ne sont pas affectés.
 
-### 1.5 Vérifier que les quinze tables sont là
+### 1.5 Vérifier que les seize tables sont là
 
 C'est la vraie vérification : le message `Success` ne dit pas que les tables  
 existent, il dit que le SQL n'a pas échoué.
 
-**Les quinze ont été vérifiées pour vous**, depuis l'extérieur, avec la clé que
-vous m'avez envoyée : les quinze **existent**. C'est la vraie vérification, et
-elle est faite. Les deux moitiés comptent — une table absente répondrait `404`,
-une table ouverte aurait laissé passer la lecture.
+**Les quinze premières ont été vérifiées pour vous**, depuis l'extérieur, avec la
+clé que vous m'avez envoyée : les quinze **existent**. C'est la vraie
+vérification, et elle est faite. Les deux moitiés comptent — une table absente
+répondrait `404`, une table ouverte aurait laissé passer la lecture.
+
+**La seizième, `commentaires`, arrive avec le sixième fichier** — celui du super
+administrateur —, qui n'est pas encore appliqué. Tant qu'il ne l'est pas, elle
+n'existe pas : c'est normal, et c'est la seule des seize dans ce cas.
 
 Elle ne dit pas la même chose de toutes, et c'est ce qui la rend utile :
 
@@ -367,7 +416,7 @@ Elle ne dit pas la même chose de toutes, et c'est ce qui la rend utile :
   accepte l'écriture d'un appareil sans compte, mais sa lecture est réservée au
   bureau. Le rôle anonyme n'y voit rien, exactement comme la politique le décrit.
 
-**Les quatre premières migrations sont appliquées**, et c'est mesuré aussi — le
+**Les quatre premières migrations sont appliquées**, et c'est mesuré — le
 20 septembre 2026, depuis l'extérieur : la colonne `is_draft` répond `200`, et les
 sept fonctions qu'appelle le tableau de bord existent. Chacune refuse la clé
 publiable (`401`, `permission denied`), sauf `resultats_sondage`, qui l'accepte
@@ -381,14 +430,23 @@ fait pas partie de ce sondage »). Le chemin anonyme fonctionne donc, et c'est l
 rôle `authenticated` qui n'avait aucune politique d'insertion : le seul compte
 existant — celui du bureau — ne pouvait pas voter.
 
+**La sixième, celle du super administrateur, n'est pas appliquée non plus** — et
+c'est mesuré de la même façon : la colonne `est_super_admin` n'existe pas encore,
+et une requête qui la nomme échoue (`42703`) au lieu de répondre. C'est le signe
+qu'il faut coller le sixième fichier, et non que quelque chose est cassé. C'est
+aussi pour cela que la seizième table n'apparaît pas encore dans la liste
+ci-dessous.
+
 1. Dans le menu de gauche, cliquez **Table Editor**.
-2. Vous devez voir les quinze tables : `agenda_events`, `annonces`,
-   `cantine_menus`, `cantine_reservations`, `conversation_messages`,
-   `conversations`, `discussion_messages`, `documents`, `messages`, `profiles`,
-   `push_tokens`, `signalements`, `sondage_choices`, `sondage_votes`, `sondages`.
-   Les trois dernières arrivées — `conversations`, `conversation_messages`,
-   `push_tokens` — sont celles du **troisième** fichier : si vous ne les voyez
-   pas, c'est qu'il n'a pas été collé.
+2. Vous devez voir les seize tables : `agenda_events`, `annonces`,
+   `cantine_menus`, `cantine_reservations`, `commentaires`,
+   `conversation_messages`, `conversations`, `discussion_messages`, `documents`,
+   `messages`, `profiles`, `push_tokens`, `signalements`, `sondage_choices`,
+   `sondage_votes`, `sondages`.
+   Les trois arrivées avec le **troisième** fichier sont `conversations`,
+   `conversation_messages` et `push_tokens` ; la seizième, `commentaires`, arrive
+   avec le **sixième**. Si l'une des trois premières manque, c'est le troisième
+   fichier qui n'a pas été collé ; si c'est la dernière, c'est le sixième.
 3. Cliquez sur **annonces** : le jeu d'essai en pose **2 lignes**, et ce nombre ne
    bouge plus si vous relancez `seed.sql`. Il **grandit** en revanche à chaque
    actualité que vous publiez : c'est normal, et c'est même souhaitable.
@@ -479,6 +537,21 @@ précaution de style : le verrou lit `auth.uid()`, qui vaut `NULL` dans l'édite
 Sans cette parenthèse, la commande échoue sur « Seul un administrateur peut modifier le
 rôle d'un membre » — le message exact de ce que vous cherchez à faire.
 
+**Elle pose deux colonnes, et la seconde est la plus importante.** Depuis le
+sixième fichier, la commande écrit aussi `est_super_admin = true`. Valider une
+adhésion, lire les messages des familles, traiter un signalement, publier un
+commentaire : ces quatre gestes sont désormais réservés au **super
+administrateur**. Un compte promu administrateur sans cette colonne verrait tous
+les écrans du bureau, et se verrait refuser chacune de ces actions — avec la
+phrase « Réservé au super administrateur. », qui dit la cause sans dire le
+remède.
+
+> **Si vous êtes déjà administrateur, recollez la commande après le sixième
+> fichier.** Elle ne fait pas de mal : elle remet les deux colonnes à la même
+> valeur. C'est même le seul moyen de devenir super administrateur, puisque
+> l'application ne peut pas l'écrire — un déclencheur l'interdit, exactement
+> comme pour `role`.
+
 ### 1.9 Accepter votre propre adhésion, puis celles des familles
 
 **Le piège, et il est silencieux.** Depuis la troisième migration, une inscription
@@ -486,6 +559,14 @@ est une **demande** : un compte neuf naît `en_attente`. Vous promouvoir
 administrateur vous donne le droit de **décider** — pas d'être accepté. Votre
 propre compte reste donc `en_attente`, et l'écran de discussion vous répondra une
 **liste vide** : un refus, ici, ne dit jamais pourquoi.
+
+**Et depuis le sixième fichier, ce droit appartient au seul super
+administrateur.** Un second compte promu simple administrateur ne peut plus ni
+valider une adhésion, ni lire les messages des familles, ni traiter un
+signalement, ni publier un commentaire : c'est exactement ce qui a été demandé.
+Si l'écran des adhésions vous répond « Réservé au super administrateur. », c'est
+que votre compte n'a pas `est_super_admin` — recollez la commande de §1.8, elle
+pose les deux colonnes.
 
 La promotion et l'acceptation sont deux gestes différents, et l'ordre est celui-ci :
 
@@ -886,19 +967,28 @@ lien utilisable. Les deux adresses sont recopiées du fichier
       peut répondre à un sondage _(sans lui, la politique d'insertion des votes ne
       vise que le rôle anonyme, et le refus dit « vous n'avez pas les droits
       nécessaires » — quelle que soit la réponse choisie)_
+- [ ] `20260921150000_super_admin.sql` collé et exécuté → le rôle **super
+      administrateur**, la table `commentaires` (la seizième), et la colonne
+      `image_path` des actualités _(sans lui : pas de validation des commentaires,
+      pas de photo sous un article, et les adhésions restent décidées par tout
+      administrateur — **mesuré absent le 20 septembre 2026**, la colonne
+      `est_super_admin` répond `42703`)_
 - [x] Compartiment `documents` **privé** dans Storage — **mesuré** : l'adresse  
       publique du compartiment répond `Bucket not found`, et sa liste répond `200`  
       _(il existe donc, et n'est pas public)_
 - [ ] Ses **cinq** politiques collées _(sans elles, l'écran Documents est vide ou  
       échoue : une politique manquante rend une liste vide, pas une erreur)_ —  
-      les trois d'écriture sont celles dont le tableau de bord a besoin
+      les trois d'écriture sont celles dont le tableau de bord a besoin, et la
+      première porte désormais la branche des **photos d'actualité** : sans elle,
+      une photo ne s'affiche que pour les adhérents connectés
 - [x] `seed.sql` collé et exécuté → **mesuré** : `annonces` a 2 lignes lues par la  
       clé publique, et `cantine_menus` en a 10 — huit, plus deux d'une seconde  
       exécution un autre jour, ce qui est le comportement décrit en §1.5
 - [x] Table Editor : `annonces` a les 2 lignes du jeu d'essai — plus, depuis, celles
       que le bureau a publiées
-- [x] Table Editor : les quinze tables sont là — **mesuré depuis l'extérieur**, les  
-      quinze répondent : huit refusent la clé publique, sept l'acceptent
+- [x] Table Editor : les quinze tables de l'époque sont là — **mesuré depuis
+      l'extérieur** : huit refusent la clé publique, sept l'acceptent _(la
+      seizième, `commentaires`, arrive avec le sixième fichier)_
 - [x] Project URL et publishable key envoyées dans la conversation
 - [x] Compte Expo créé — nom d'utilisateur `mchiker`
 - [x] Jeton d'accès posé en secret du dépôt, et compilation lancée

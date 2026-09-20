@@ -110,6 +110,7 @@ const MIGRATIONS_ATTENDUES = [
   '20260920120000_acces_public.sql',
   '20260921090000_administration.sql',
   '20260921120000_vote_connecte.sql',
+  '20260921150000_super_admin.sql',
 ];
 
 /**
@@ -132,6 +133,11 @@ const MIGRATIONS_ATTENDUES = [
  *     **aucune ligne n'est supprimée** — les messages déjà reçus restent en
  *     base, effacés en cascade avec le compte de leur auteur, comme
  *     `SECURITY.md` le promet.
+ *   - les deux politiques de lecture et de modification des `signalements`
+ *     changent de nom dans la sixième migration : un nom qui annonce `admin`
+ *     sous une condition qui interroge `is_super_admin()` est un mensonge que le
+ *     prochain lecteur croira. L'ancien nom est donc retiré, et le nouveau
+ *     créé — deux retraits, et ils sont ici pour cette raison.
  *
  * Les nommer vaut mieux que de tolérer des gardes en surnombre : la liste dit
  * lesquelles, et le test vérifie que chacune est bien retirée et bien absente
@@ -142,6 +148,8 @@ const RETRAITS = [
   'discussion_messages_select_authenticated',
   'messages_insert_own',
   'messages_select_own_or_admin',
+  'signalements_select_own_or_admin',
+  'signalements_update_own_or_admin',
   'sondage_votes_select_own_or_admin',
 ];
 

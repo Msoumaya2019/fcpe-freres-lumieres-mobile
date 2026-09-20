@@ -721,11 +721,21 @@ revoke all on public.discussion_messages  from anon;
 --  transactionnel, un échec de la mise à jour annule la désactivation, et le
 --  verrou ne peut pas rester ouvert par accident.
 --
+--  LES DEUX COLONNES VONT ENSEMBLE. `est_super_admin` n'existe pas encore ici —
+--  elle est ajoutée par `20260921150000_super_admin.sql`, la sixième migration
+--  —, mais la commande de promotion est écrite **une seule fois** dans ce
+--  dépôt, et elle doit nommer les deux. Depuis cette sixième migration, valider
+--  une adhésion, lire les messages des familles, traiter un signalement et
+--  publier un commentaire sont réservés au super administrateur : un compte
+--  promu administrateur sans `est_super_admin` verrait les écrans du bureau et
+--  se verrait refuser chacune de ces actions.
+--
 --    begin;
 --    alter table public.profiles disable trigger profiles_prevent_role_change;
 --
 --    update public.profiles
---       set role = 'admin'
+--       set role = 'admin',
+--           est_super_admin = true
 --      from auth.users
 --     where auth.users.id = public.profiles.id
 --       and auth.users.email = 'votre.adresse@exemple.fr';

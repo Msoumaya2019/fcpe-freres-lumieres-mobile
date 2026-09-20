@@ -18,6 +18,7 @@ export type DocumentVisibility = Database['public']['Enums']['document_visibilit
 export type MessageCategory = Database['public']['Enums']['message_category'];
 export type AnnonceCategory = Database['public']['Enums']['annonce_category'];
 export type ConversationStatus = Database['public']['Enums']['conversation_status'];
+export type CommentaireStatut = Database['public']['Enums']['commentaire_statut'];
 
 export type Profile = Tables<'profiles'>;
 export type Annonce = Tables<'annonces'>;
@@ -34,6 +35,7 @@ export type MemberMessage = Tables<'messages'>;
 export type Conversation = Tables<'conversations'>;
 export type ConversationMessage = Tables<'conversation_messages'>;
 export type PushToken = Tables<'push_tokens'>;
+export type Commentaire = Tables<'commentaires'>;
 
 /**
  * Un message accompagné du nom de son auteur.
@@ -79,6 +81,21 @@ export const ANNONCE_CATEGORY_LABELS: Readonly<Record<AnnonceCategory, string>> 
   cantine: 'Cantine',
   evenement: 'Événement',
   reunion: 'Réunion',
+};
+
+/**
+ * Les trois états d'un commentaire.
+ *
+ * Le libellé de `en_attente` est écrit **au futur**, et ce n'est pas un détail
+ * de rédaction : il est affiché au parent qui vient de déposer son commentaire,
+ * et « En attente de validation » décrit un état tandis que « Sera publié après
+ * validation » décrit ce qui va se passer. Le second est la seule des deux
+ * phrases qui réponde à la question qu'il se pose.
+ */
+export const COMMENTAIRE_STATUT_LABELS: Readonly<Record<CommentaireStatut, string>> = {
+  en_attente: 'Sera publié après validation',
+  publie: 'Publié',
+  refuse: 'Refusé',
 };
 
 export const DOCUMENT_CATEGORY_LABELS: Readonly<Record<DocumentCategory, string>> = {

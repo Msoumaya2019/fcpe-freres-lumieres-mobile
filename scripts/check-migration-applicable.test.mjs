@@ -98,7 +98,11 @@
  */
 
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
 import { MIGRATION, RUBRIQUES, SEED, appliquer, ouvrirBase } from './essai-postgres.mjs';
 
 /**
@@ -484,5 +488,196 @@ test('la seconde migration, collée seule, est refusée — et le refus nomme an
     refus,
     /relation "public\.annonces" does not exist/,
     `le refus doit nommer la table que le premier fichier crée :\n  ${refus}`,
+  );
+});
+
+/**
+ * =============================================================================
+ *  Toutes les migrations, dans l'ordre, deux fois
+ * =============================================================================
+ *
+ *  Les deux sections précédentes s'arrêtent à la première et à la deuxième
+ *  migration. Elles mesurent un **état intermédiaire**, et c'est délibéré — mais
+ *  cela laissait un trou, et il a fallu le mesurer pour le voir : les fichiers
+ *  **quatre, cinq et six** n'étaient exécutés par **aucun banc**. Trois fichiers,
+ *  dont le dernier pèse vingt-deux kilo-octets et crée une table, deux colonnes
+ *  et neuf politiques, étaient versionnés, formatés, analysés, lus par deux
+ *  autres contrôles — et jamais joués.
+ *
+ *  C'est exactement la famille de défaut qui a produit ce fichier-ci : une
+ *  affirmation vraie le jour où elle est écrite, et que rien ne re-mesure. Le
+ *  premier collage a échoué chez l'adhérent sur `42P01`, et **tout le reste
+ *  était vert**. Le sixième fichier est plus long que le premier.
+ *
+ *  Ce n'est donc pas un troisième état intermédiaire : c'est la **suite
+ *  complète**, lue depuis le dossier plutôt que listée à la main. Un fichier
+ *  ajouté plus tard entre ici sans qu'on y pense — et c'est ce qu'on veut,
+ *  puisque c'est lui qu'on colle ensuite.
+ *
+ *  La liste fermée, elle, vit dans `check-migration-rejouable.test.mjs` : ce
+ *  banc-ci mesure que la suite **s'exécute**, pas qu'elle est complète. Les deux
+ *  questions sont distinctes, et les mêler aurait rendu les deux réponses
+ *  ambiguës.
+ *
+ *  Deux passages, comme pour les deux premières : appliquer puis **rejouer**.
+ *  C'est ce que le guide demande à l'adhérent de pouvoir faire, et c'est la seule
+ *  mesure qui porte sur les gardes `if not exists` et les `drop policy if exists`
+ *  que `check-migration-rejouable` déduit du texte.
+ */
+
+const DOSSIER_MIGRATIONS = fileURLToPath(new URL('../supabase/migrations', import.meta.url));
+
+const SUITE = readdirSync(DOSSIER_MIGRATIONS)
+  .filter((nom) => nom.endsWith('.sql'))
+  .sort();
+
+const dbSuite = await ouvrirBase();
+const echecsSuite = [];
+let toursComplets = 0;
+
+for (let tour = 1; tour <= 2 && echecsSuite.length === 0; tour += 1) {
+  let passage = true;
+
+  for (const nom of SUITE) {
+    const echec = await appliquer(dbSuite, readFileSync(join(DOSSIER_MIGRATIONS, nom), 'utf8'));
+
+    if (echec !== null) {
+      echecsSuite.push(`tour ${tour}, ${nom} :\n  ${echec}`);
+      passage = false;
+      break;
+    }
+  }
+
+  if (passage) {
+    toursComplets = tour;
+  }
+}
+
+/** Échoue avec la bonne cause : sans la suite, les contrôles suivants ne mesurent rien. */
+function exigerLaSuite() {
+  assert.deepEqual(
+    echecsSuite,
+    [],
+    'la suite de migrations ne s’applique pas — c’est le défaut qui a bloqué la mise ' +
+      'en service, et c’est le fichier fautif qui est nommé ici',
+  );
+}
+
+/** Les tables du schéma `public`, triées. */
+async function tablesDeLaSuite() {
+  const { rows } = await dbSuite.query(
+    "select tablename from pg_tables where schemaname = 'public' order by tablename",
+  );
+  return rows.map(({ tablename }) => tablename);
+}
+
+test('les migrations s’appliquent toutes, dans l’ordre, et se rejouent', () => {
+  // Le contrôle de complétude du dossier : sans lui, un `readdir` qui ne
+  // trouverait rien ferait passer les tests suivants sur un schéma vide.
+  assert.ok(SUITE.length >= 6, `migrations trouvées : ${SUITE.join(', ')}`);
+  exigerLaSuite();
+  assert.equal(toursComplets, 2, 'la suite n’a pas été jouée deux fois');
+});
+
+test('la suite complète produit les seize tables attendues, et aucune autre', async () => {
+  exigerLaSuite();
+  assert.deepEqual(await tablesDeLaSuite(), [
+    'agenda_events',
+    'annonces',
+    'cantine_menus',
+    'cantine_reservations',
+    'commentaires',
+    'conversation_messages',
+    'conversations',
+    'discussion_messages',
+    'documents',
+    'messages',
+    'profiles',
+    'push_tokens',
+    'signalements',
+    'sondage_choices',
+    'sondage_votes',
+    'sondages',
+  ]);
+});
+
+test('aucune table de la suite n’est laissée sans RLS', async () => {
+  // Le défaut que rien d'autre ne rattrape : une table créée dans l'éditeur SQL
+  // de Supabase n'a **pas** la RLS activée, et ses politiques ne sont alors
+  // jamais consultées. Elle est lisible et modifiable par tout porteur de la clé
+  // publique. Mesuré sur la sixième migration : c'était le cas de
+  // `commentaires`, et `check-rls-guards` l'a dit avant que ce banc-ci existe.
+  exigerLaSuite();
+  const { rows } = await dbSuite.query(
+    "select relname from pg_class where relnamespace = 'public'::regnamespace " +
+      "and relkind = 'r' and not relrowsecurity order by relname",
+  );
+  assert.deepEqual(
+    rows.map(({ relname }) => relname),
+    [],
+    'une table sans RLS est ouverte à tout porteur de la clé publique',
+  );
+});
+
+test('les fonctions du super administrateur existent, dans le bon langage', async () => {
+  // Le langage n'est pas un détail : un corps `language sql` est analysé **à sa
+  // création**, donc `is_super_admin()` ne peut pas précéder la colonne qu'il
+  // lit. C'est le défaut qui a coûté une migration à ce projet, et la sixième le
+  // rejoue — elle écrit deux fonctions en `sql` au-dessus d'une colonne ajoutée
+  // trois sections plus haut.
+  exigerLaSuite();
+  const { rows } = await dbSuite.query(
+    'select p.proname as nom, l.lanname as langage from pg_proc p ' +
+      'join pg_namespace n on n.oid = p.pronamespace ' +
+      'join pg_language l on l.oid = p.prolang ' +
+      "where n.nspname = 'public' and p.proname in ('is_admin', 'is_super_admin') " +
+      'order by p.proname',
+  );
+  assert.deepEqual(
+    rows.map(({ nom, langage }) => [nom, langage]),
+    [
+      ['is_admin', 'sql'],
+      ['is_super_admin', 'sql'],
+    ],
+  );
+});
+
+test('les trois colonnes ajoutées après coup sont bien là, avec leur défaut', async () => {
+  // Un `alter table … add column if not exists` qui ne s'exécute pas ne lève
+  // rien : il **fait** quelque chose, ou rien, et les deux se ressemblent. Le
+  // seul juge est le catalogue — et le défaut compte autant que la colonne,
+  // puisque c'est lui qui laisse les lignes existantes dans leur état.
+  exigerLaSuite();
+  const { rows } = await dbSuite.query(
+    'select table_name as t, column_name as c, is_nullable as n, column_default as d ' +
+      'from information_schema.columns ' +
+      "where table_schema = 'public' " +
+      "and ((table_name = 'profiles' and column_name = 'est_super_admin') " +
+      "or (table_name = 'annonces' and column_name in ('is_draft', 'image_path'))) " +
+      'order by table_name, column_name',
+  );
+  assert.deepEqual(
+    rows.map(({ t, c, n, d }) => [t, c, n, d]),
+    [
+      ['annonces', 'image_path', 'YES', null],
+      ['annonces', 'is_draft', 'NO', 'false'],
+      ['profiles', 'est_super_admin', 'NO', 'false'],
+    ],
+  );
+});
+
+test('l’énumération des commentaires porte ses trois états, dans l’ordre', async () => {
+  // L'ordre compte : c'est celui du SQL, et `check-schema-types` compare le
+  // miroir TypeScript à cette liste-là. Une valeur ajoutée en fin d'énumération
+  // décalerait un libellé sans qu'aucun autre outil ne le voie.
+  exigerLaSuite();
+  const { rows } = await dbSuite.query(
+    'select e.enumlabel as valeur from pg_enum e ' +
+      'join pg_type t on t.oid = e.enumtypid ' +
+      "where t.typname = 'commentaire_statut' order by e.enumsortorder",
+  );
+  assert.deepEqual(
+    rows.map(({ valeur }) => valeur),
+    ['en_attente', 'publie', 'refuse'],
   );
 });
