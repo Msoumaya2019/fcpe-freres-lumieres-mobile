@@ -64,8 +64,8 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "libpg-query": "^18.1.4",
-    "prettier": "^3.9.7",
+    "libpg-query": "^18.1.5",
+    "prettier": "^3.9.8",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.70.0",
     "yaml": "^2.9.1"
