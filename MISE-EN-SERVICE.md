@@ -42,7 +42,7 @@ service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 | 3   | Un jeton Expo pour GitHub _(facultatif)_                                                    | ~2 min  | le secret `EXPO_TOKEN`, qui réveille la compilation automatique |
 | 4   | Recopier les quatre identifiants SMTP                                                       | ~5 min  | ✅ les e-mails partent, jusqu'au clic sur le lien               |
 | 5   | Installer l'APK, ou signer l'IPA puis l'installer                                           | ~2 min  | les vérifications sur appareil réel                             |
-| 6   | Les quatre réglages du tableau de bord                                                      | ~5 min  | le contrôle des quatre valeurs                                  |
+| 6   | Les réglages du tableau de bord (§6)                                                        | ~5 min  | **deux mesurés en place** ; deux écrans à regarder              |
 | 7   | Une clef Firebase pour les notifications Android                                            | ~15 min | `google-services.json` placé, l'APK recompilé et redéposé       |
 
 **Où en est la mise en service : la « liste à cocher », plus bas, fait foi.** Les  
@@ -56,8 +56,8 @@ tables, les fonctions et les colonnes que chaque fichier crée seul répondent �
 clé publique, et la photographie de l'école se signe **sans compte**. Viennent ensuite, dans cet ordre : installer l'application  
 (§5), créer votre compte, **vous promouvoir administrateur** (§1.8 — une commande  
 à coller, qui ne peut pas être la mienne), **accepter votre propre adhésion** (§1.9 —  
-sans elle, la discussion vous répond une liste vide), puis les quatre réglages du  
-tableau de bord (§6).
+sans elle, la discussion vous répond une liste vide), puis les réglages du  
+tableau de bord (§6) — dont **deux sont déjà mesurés en place**.
 
 Les deux binaires, eux, sont à jour du code actuel : la page des versions nomme, pour  
 chacun, le commit dont il est né. Un binaire antérieur à la refonte vous montrerait  
@@ -1038,22 +1038,23 @@ l'autorisation de l'appareil.
 
 ## Étape 6 — Les quatre réglages du tableau de bord _(~5 min, plus tard)_
 
-Ces cinq réglages vivent dans le tableau de bord Supabase et **pas** dans un  
+Ces **cinq** réglages vivent dans le tableau de bord Supabase et **pas** dans un  
 fichier du dépôt : aucun test ne les protège, donc ils sont consignés dans le  
-`README.md` (§4) plutôt que laissés à la mémoire. Je vous les donnerai un par un,  
-avec l'écran et la valeur, **après** le premier essai sur téléphone — les changer  
-maintenant n'apporterait rien, et il vaut mieux les régler quand on peut mesurer  
-leur effet.
+`README.md` (§4) plutôt que laissés à la mémoire.
+
+**Quatre restaient à faire, et deux ne le sont plus** — mesurés le 21 septembre 2026
+par `npm run verifier:redirection`, qui interroge GoTrue et dit, pour chaque adresse,
+si elle est retenue ou remplacée par le repli. Le cinquième, le SMTP, était déjà fait.
 
 Pour que vous sachiez de quoi il s'agit :
 
-| #   | Écran                                              | Valeur                                                                                                         |
-| --- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| 1   | Authentication > URL Configuration > Redirect URLs | **deux** adresses : `fcpefl://reinitialisation` et `fcpefl://confirmation`                                     |
-| 2   | Authentication > URL Configuration > Site URL      | `https://fcpe-freres-lumieres-admin.vercel.app/confirmation` — mesurée `200` sans session le 21 septembre 2026 |
-| 3   | Authentication > Email Templates > Reset password  | le lien doit être `{{ .ConfirmationURL }}` (c'est le défaut)                                                   |
-| 4   | Authentication > Providers > Email                 | _Minimum password length_ = **6**, et la confirmation d'e-mail activée                                         |
-| 5   | Authentication > SMTP Settings                     | les identifiants de l'étape 4                                                                                  |
+| #   | Écran                                              | Valeur                                                                                                                |
+| --- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| 1   | Authentication > URL Configuration > Redirect URLs | **deux** adresses : `fcpefl://reinitialisation` et `fcpefl://confirmation` — **mesuré en place** le 21 septembre 2026 |
+| 2   | Authentication > URL Configuration > Site URL      | `https://fcpe-freres-lumieres-admin.vercel.app/confirmation` — **mesuré en place** le 21 septembre 2026               |
+| 3   | Authentication > Email Templates > Reset password  | le lien doit être `{{ .ConfirmationURL }}` (c'est le défaut)                                                          |
+| 4   | Authentication > Providers > Email                 | _Minimum password length_ = **6**, et la confirmation d'e-mail activée                                                |
+| 5   | Authentication > SMTP Settings                     | les identifiants de l'étape 4 — **fait**, vérifié jusqu'au clic sur le lien                                           |
 
 Le réglage 1 est **le plus important** : Supabase refuse toute redirection absente de  
 cette liste, et l'adhérent qui a oublié son mot de passe ne recevrait alors aucun  
@@ -1238,7 +1239,10 @@ y changer.
 
 - [x] Compte Supabase créé
 - [x] Projet créé — il répond à l'adresse que vous m'avez envoyée
-- [ ] La **région** est européenne — je ne peux pas la lire sans vos identifiants
+- [x] La **région** est européenne — **confirmé par le bureau le 21 septembre
+      2026**. La note RGPD ne bloque donc plus. Pour la citer nommément dans le
+      registre, elle se relit en trente secondes dans **Project Settings >
+      General > Region**
 - [ ] Mot de passe de la base noté
 - [x] `20260916120000_init.sql` collé et exécuté → les six premières tables existent
 - [x] `20260919120000_rubriques.sql` collé et exécuté → **mesuré** : les tables des  
@@ -1302,6 +1306,15 @@ y changer.
       refuse d'épingler, avec le message qui nomme la colonne manquante — et
       l'accueil de l'application **reste lisible**, dans l'ordre d'avant : c'est
       le repli de `fetchAnnonces`, tenu par `check-async-wiring`)_
+- [x] `20260922130000_jeton_appareil.sql` collé et exécuté → un appareil
+      **enregistre et rafraîchit** son jeton en une seule opération, sans dépendre
+      d'une politique de lecture
+      _(**mesuré présent le 21 septembre 2026** : la fonction `enregistrer_jeton`
+      appelée avec une plateforme que la contrainte de la table refuse rend
+      `23514` — elle existe donc, et **aucune ligne n'est écrite**. Un appel
+      réussi aurait été un sondage qui écrit. Absente, elle rendrait `PGRST202`.
+      C'est le seul marqueur de cette migration, qui ne pose aucune colonne : elle
+      retire une politique et ajoute une fonction)_
 - [x] Compartiment `documents` **privé** dans Storage — **mesuré** : l'adresse  
       publique du compartiment répond `Bucket not found`, et sa liste répond `200`  
       _(il existe donc, et n'est pas public)_
@@ -1352,7 +1365,11 @@ pas.
 - [ ] **Publier un premier contenu** — une annonce, un menu, un sondage (§1.11). Sans
       eux, l'application s'ouvre sur des listes vides, et rien ne distingue « le
       bureau n'a rien publié » de « l'application ne marche pas »
-- [ ] Les quatre réglages du tableau de bord
+- [ ] Les réglages du tableau de bord (§6) — **deux sont mesurés en place** le
+      21 septembre 2026 par `npm run verifier:redirection` : les deux adresses de
+      retour sont retenues, et le « Site URL » n'est plus `localhost`. Restent deux
+      écrans à regarder : les modèles d'e-mail et la longueur minimale du mot de
+      passe
 - [ ] **Une clef Firebase**, pour que les notifications Android partent (§7) — et
       **tout se fait dans un navigateur** : les gestes de la console Firebase, puis
       le dépôt de la clef chez EAS (§7.4, voie sans terminal — la machine n'a pas
@@ -1380,5 +1397,6 @@ sur le lien reçu, et la documentation.
 ## Une seule chose à retenir
 
 **Plus rien ne bloque l'ouverture aux adhérents, côté outillage.** Les e-mails partent,
-les deux binaires sont livrés. Restent les quatre réglages du tableau de bord et
-l'installation sur un téléphone — deux gestes qui demandent vos accès.
+les deux binaires sont livrés, et deux des réglages du tableau de bord sont **mesurés
+en place**. Restent l'installation sur un téléphone, deux écrans à regarder dans
+Supabase, et la clef Firebase — des gestes qui demandent vos accès.

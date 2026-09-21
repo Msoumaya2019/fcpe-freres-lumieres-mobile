@@ -574,6 +574,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-paquet.mjs           le contenu d'un paquet compilé : clefs, URL, fuites
 │   ├── provenance-release.mjs     le texte d'une version : le commit de chaque binaire déposé
 │   ├── verifier-redirection.mjs   les adresses de retour, éprouvées contre Supabase
+│   ├── sonder-base.mjs            où en est la base, mesuré avec la seule clé publique
 │   ├── alias-loader.mjs           résolution de « @/ » pour node:test
 │   ├── register-alias.mjs         branchement du chargeur, avant les tests
 │   ├── essai-postgres.mjs         la doublure de Supabase, partagée par les bancs qui exécutent

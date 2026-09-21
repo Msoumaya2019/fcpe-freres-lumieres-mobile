@@ -23,6 +23,7 @@
     "sql:check": "node scripts/check-sql.mjs",
     "check:install": "node scripts/check-install-integrity.mjs",
     "verifier:redirection": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/verifier-redirection.mjs",
+    "verifier:base": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/sonder-base.mjs",
     "check:workflows": "node scripts/check-workflows.mjs",
     "check:paquet": "node scripts/check-paquet.mjs",
     "release:provenance": "node scripts/provenance-release.mjs",
