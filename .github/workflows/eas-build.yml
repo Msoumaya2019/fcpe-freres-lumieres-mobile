@@ -175,7 +175,7 @@ jobs:
             # existe, et c'est exactement ce que vérifie le bloc suivant.
             printf '' | node scripts/provenance-release.mjs > "$RUNNER_TEMP/corps-version.md"
             gh release create "$TAG" \
-              --title "FCPE Frères Lumières $VERSION" \
+              --title "Parents d'élèves des Frères Lumières $VERSION" \
               --notes-file "$RUNNER_TEMP/corps-version.md" \
               --target "$GITHUB_SHA" || true
           fi

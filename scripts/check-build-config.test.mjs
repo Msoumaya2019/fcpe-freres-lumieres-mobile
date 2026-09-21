@@ -786,3 +786,51 @@ test('`google-services.json` présent est `google-services.json` déclaré', () 
       'sans que rien ne le signale',
   );
 });
+
+/**
+ * Le titre d'une version, avec le nom qu'il annonce.
+ *
+ * Les deux flux passent leur titre en **littéral** à `gh release create` — la
+ * seule chaîne du dépôt qui nomme l'application sans être lue nulle part.
+ */
+function nomsAnnoncesParLeTitre() {
+  return ['eas-build.yml', 'ios-unsigned.yml'].map((flux) => {
+    const correspondance = lire(`.github/workflows/${flux}`).match(
+      /--title\s+"([^"]*?)\s*\$VERSION"/,
+    );
+
+    assert.notEqual(
+      correspondance,
+      null,
+      `${flux} ne passe plus de titre à \`gh release\` : la page des versions ` +
+        'n’annoncerait plus quelle application elle livre',
+    );
+
+    return { flux, nom: correspondance[1] };
+  });
+}
+
+test('le titre des versions porte le nom que `app.json` déclare', () => {
+  // Le défaut, mesuré le 21 septembre 2026. `app.json` a été renommé en
+  // `d61bffb` — « FCPE Frères Lumières » devenait « Parents d’élèves des Frères
+  // Lumières » — et **les deux flux ont gardé l’ancien nom**. La version
+  // `v0.1.0` portait un titre corrigé à la main, donc rien ne se voyait ; c’est
+  // la compilation suivante qui a réintroduit l’ancien, sur la page même d’où
+  // un parent télécharge. Un nom recopié dans un YAML ne se relit par personne.
+  //
+  // Le contrôle porte sur les **deux** flux : une correction qui n’en
+  // atteindrait qu’un laisserait l’autre remettre l’ancien nom à la compilation
+  // suivante — et c’est exactement ce qui a produit le défaut, la version
+  // publiée l’ayant été par l’autre flux.
+  const nom = JSON.parse(lire('app.json')).expo.name;
+
+  for (const { flux, nom: annonce } of nomsAnnoncesParLeTitre()) {
+    assert.equal(
+      annonce,
+      nom,
+      `${flux} intitule ses versions « ${annonce} », alors que \`app.json\` déclare ` +
+        `« ${nom} » : la page de téléchargement nommerait l’application autrement ` +
+        'que sous son icône',
+    );
+  }
+});
