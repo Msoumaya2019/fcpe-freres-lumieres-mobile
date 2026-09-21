@@ -3,10 +3,11 @@
 > **En résumé.** Les étapes 1 à 4 sont faites : Supabase répond, le projet Expo est
 > créé, le jeton est posé, et **les e-mails partent** — vérifié jusqu'au clic sur le
 > lien reçu. **Les deux binaires se recompilent** — l'APK Android et l'IPA non signé.
-> Ce qui reste tient en quatre gestes : **deux fichiers SQL** (§1.3 — le vote des
-> membres connectés, puis les trois cibles d'un commentaire), **le compartiment des
-> documents et ses cinq politiques** (§1.4), les quatre réglages du tableau de
-> bord (§6), et installer l'application sur un téléphone.
+> **Les dix fichiers SQL sont appliqués** — mesuré le 21 septembre 2026 : les tables,
+> les fonctions et les colonnes que chacun crée seul répondent à la clé publique, et
+> un témoin inventé répond `42703`. Ce qui reste tient en trois gestes : les quatre
+> réglages du tableau de bord (§6), installer l'application sur un téléphone, et vos
+> propres gestes — votre compte, la promotion, l'adhésion.
 >
 > **Un binaire ne vaut que pour le commit dont il est né.** Ceux que je vous avais
 > envoyés dataient d'**avant la refonte visuelle** : 58 fichiers et 7 851 lignes les
@@ -46,12 +47,13 @@ service, c'est à moi qu'il faudrait demander, et je ne serai pas là.
 
 **Où en est la mise en service : la « liste à cocher », plus bas, fait foi.** Les  
 étapes 2, 3 et 4 sont faites — les e-mails fonctionnent jusqu'au clic sur le lien  
-reçu. De l'**étape 1**, il reste **trois gestes** : le cinquième fichier SQL (§1.3,  
-celui du vote des membres connectés), le septième (§1.3, celui des trois cibles d'un  
-commentaire), et le compartiment des documents avec ses **cinq** politiques (§1.4).  
-Les six premiers fichiers SQL, eux, sont appliqués : **mesuré depuis l'extérieur**  
-le 20 septembre 2026, les six tables publiques répondent à la clé publique, et tout  
-le reste la refuse. Viennent ensuite, dans cet ordre : installer l'application  
+reçu. De l'**étape 1**, il ne reste rien de mesurable : **les dix fichiers SQL  
+sont appliqués**, et le compartiment des documents porte ses cinq politiques. Seul  
+le cinquième (§1.3, le vote des membres connectés) reste **non mesurable** de  
+l'extérieur : la clé publiable ne distingue pas sa politique avant et après, et le  
+sonder demanderait d'**écrire** une ligne. **Mesuré le 21 septembre 2026** : les  
+tables, les fonctions et les colonnes que chaque fichier crée seul répondent à la  
+clé publique, et la photographie de l'école se signe **sans compte**. Viennent ensuite, dans cet ordre : installer l'application  
 (§5), créer votre compte, **vous promouvoir administrateur** (§1.8 — une commande  
 à coller, qui ne peut pas être la mienne), **accepter votre propre adhésion** (§1.9 —  
 sans elle, la discussion vous répond une liste vide), puis les quatre réglages du  
@@ -63,17 +65,17 @@ l'ancienne application — c'est pourquoi cette page porte cette ligne.
 
 ---
 
-## Étape 1 — Supabase _(~15 min)_ — **presque faite : un geste reste** (§1.4)
+## Étape 1 — Supabase _(~15 min)_ — **faite, et vérifiée le 21 septembre 2026**
 
 > **Faite, et vérifiée de l'extérieur le 18 septembre 2026** — pour les six tables de  
 > la première migration. Le projet que vous avez créé répond, et ces six tables  
 > **existent et refusent la clé publique** (`permission denied`). C'est exactement ce  
 > que la migration doit produire : une table qui existe et qui est fermée.
 >
-> **Reste à faire depuis ce guide : le compartiment des documents avec ses cinq  
-> politiques (§1.4).** Le quatrième fichier SQL est appliqué — mesuré le  
-> 20 septembre 2026. Les étapes  
-> 2 et suivantes n'en dépendent pas : vous pouvez continuer sans attendre.
+> **Le compartiment des documents porte ses cinq politiques** — mesuré le  
+> 21 septembre 2026 : la photographie de l'école se signe avec la seule clé  
+> publique (`200`), là où elle rendait `NoSuchKey` la veille. **Les dix fichiers  
+> SQL sont appliqués.** Rien ici n'attend plus votre mot de passe.
 
 Supabase, c'est la base de données et le service d'authentification. Le forfait  
 gratuit suffit.
@@ -1276,25 +1278,25 @@ y changer.
       ne distingue pas sa politique avant et après. Le recoller est sans risque :
       les deux colonnes sont posées en `if not exists` et la contrainte est
       retirée puis reposée)_
-- [ ] `20260921210000_reglages_et_moderation.sql` collé et exécuté → le titre du
+- [x] `20260921210000_reglages_et_moderation.sql` collé et exécuté → le titre du
       **bandeau d'accueil** se règle depuis le tableau de bord, et un message
       écrit par une famille se retire depuis la page « Messagerie »
       _(à coller **après** `20260921150000_super_admin.sql` : la fonction
       `supprimer_message_conversation()` s'appuie sur `is_super_admin()`, que le
-      sixième collage crée. **Mesurable depuis l'extérieur** : la sonde
+      sixième collage crée. **Mesuré présent le 21 septembre 2026** : la sonde
       « lecture publique de `reglages` » de `scripts/sonder-base.mjs` répond
       `200` avec la seule clé publiable, là où elle rend `42P01` avant le
       collage. Sans ce collage, l'accueil garde son titre d'avant — la lecture
       est repliée —, et c'est le tableau de bord qui le dit : la page
       « Accueil » refuse alors d'enregistrer, avec le message qui nomme la
       migration manquante)_
-- [ ] `20260922090000_annonce_epinglee.sql` collé et exécuté → une actualité
+- [x] `20260922090000_annonce_epinglee.sql` collé et exécuté → une actualité
       **épinglée** reste en tête de l'accueil **et** de la rubrique « Actualités »,
       quel que soit son âge
       _(à coller **après** le premier collage : il modifie la table `annonces`, que
       le premier crée, donc collé seul il est refusé sur
-      `relation "public.annonces" does not exist`. **Mesurable depuis
-      l'extérieur** : la sonde « colonne annonces.epinglee_at » de
+      `relation "public.annonces" does not exist`. **Mesuré présent le
+      21 septembre 2026** : la sonde « colonne annonces.epinglee_at » de
       `scripts/sonder-base.mjs` répond `200` avec la seule clé publiable, là où
       elle rend `42703` avant le collage. Sans ce collage, le tableau de bord
       refuse d'épingler, avec le message qui nomme la colonne manquante — et
@@ -1313,14 +1315,14 @@ y changer.
       tableau de bord sait fabriquer (il préfixe l'horodatage de l'instant),
       et cette image se relit sans aucun jeton : `200 image/png`,
       4 047 185 octets
-- [ ] **Recoller la première politique du compartiment** — celle des familles.
-      Elle porte désormais une branche de plus, sur le chemin `accueil/bandeau.jpg`
-      (le bloc de §1.4 l'écrit en clair), et c'est cette branche qui rend la
-      **photographie de l'école** visible **sans compte**. Le bloc commence par un
-      `drop policy if exists`, il se recolle donc tel quel, et le recoller ne
-      casse rien. Sans ce recollage, la photo déposée depuis le tableau de bord
-      ne s'afficherait que pour les adhérents **connectés** — et l'échec serait
-      discret : une politique absente rend une **liste vide**, pas un message
+- [x] **Première politique du compartiment recollée** — **mesuré le 21 septembre
+      2026 à 9 h 58** : la photographie de l'école se signe avec la seule clé
+      publique (`200`), là où elle rendait `NoSuchKey` la veille. Les témoins
+      signent toujours (`menu.pdf` et une photo d'actualité publiée, `200`), donc
+      la lecture n'est pas cassée : c'est bien la branche du chemin convenu qui
+      manquait. Un adhérent la voyait parce que sa politique couvre **tout** le
+      compartiment — et l'échec, lui, était discret : une politique absente rend
+      une **liste vide**, pas un message
 - [x] `seed.sql` collé et exécuté → **mesuré** : `cantine_menus` a 10 lignes sur  
       **10 dates distinctes** (du 18 au 28 septembre, sans le 24) — **aucun  
       doublon**, relevé le 20 septembre 2026. `annonces` en compte quatre à cette  
