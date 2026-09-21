@@ -86,6 +86,23 @@ export const ACCES_PUBLIC = readFileSync(
   'utf8',
 );
 
+/**
+ * Le texte de la dernière migration — l'enregistrement d'un jeton d'appareil.
+ *
+ * Elle répare un défaut que **seule une base réelle** pouvait montrer : une
+ * clause `WHERE` qui lit une colonne exige, en plus de la politique de
+ * modification, que la ligne soit lisible par une politique de `select`. La
+ * modification du jeton touchait donc zéro ligne **sans erreur**, et le client
+ * croyait avoir rafraîchi la date de son appareil.
+ *
+ * Ce banc-ci ne pouvait pas le voir : il joue `anon`, qui n'a aucune politique
+ * de lecture sur `push_tokens` — le défaut est précisément ce silence.
+ */
+export const JETON_APPAREIL = readFileSync(
+  new URL('supabase/migrations/20260922130000_jeton_appareil.sql', racine),
+  'utf8',
+);
+
 /** Le texte du jeu de données d'essai. */
 export const SEED = readFileSync(new URL('supabase/seed.sql', racine), 'utf8');
 

@@ -43,6 +43,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   ACCES_PUBLIC,
+  JETON_APPAREIL,
   MIGRATION,
   RUBRIQUES,
   SEED,
@@ -76,6 +77,7 @@ const echecs = {
   init: null,
   rubriques: null,
   acces: null,
+  jeton: null,
   comptes: null,
   donnees: null,
   seed: null,
@@ -87,6 +89,9 @@ if (echecs.init === null) {
 }
 if (echecs.init === null && echecs.rubriques === null) {
   echecs.acces = await appliquer(db, ACCES_PUBLIC);
+}
+if (echecs.acces === null) {
+  echecs.jeton = await appliquer(db, JETON_APPAREIL);
 }
 
 if (echecs.acces === null) {
@@ -180,6 +185,7 @@ function exigerLaBase() {
   assert.equal(echecs.init, null, `première migration :\n  ${echecs.init}`);
   assert.equal(echecs.rubriques, null, `seconde migration :\n  ${echecs.rubriques}`);
   assert.equal(echecs.acces, null, `troisième migration :\n  ${echecs.acces}`);
+  assert.equal(echecs.jeton, null, `migration du jeton d'appareil :\n  ${echecs.jeton}`);
   assert.equal(echecs.comptes, null, `comptes d'essai :\n  ${echecs.comptes}`);
   assert.equal(echecs.seed, null, `jeu de données :\n  ${echecs.seed}`);
   assert.equal(echecs.donnees, null, `données d'essai :\n  ${echecs.donnees}`);
@@ -517,8 +523,8 @@ test('un appareil enregistre son jeton, et ne peut pas lire ceux des autres', as
   const pose = await jouer(
     'anon',
     null,
-    "insert into public.push_tokens (token, platform) values ('ExponentPushToken[essai]', 'android')",
-    [],
+    'select public.enregistrer_jeton($1, $2)',
+    ['ExponentPushToken[essai]', 'android'],
     true,
   );
   assert.equal(pose.erreur, null, 'un appareil sans compte doit pouvoir s’enregistrer');
@@ -536,6 +542,125 @@ test('un appareil enregistre son jeton, et ne peut pas lire ceux des autres', as
 
   const parBureau = await jouer('authenticated', CHLOE, 'select token from public.push_tokens');
   assert.equal(parBureau.lignes.length, 1, 'le bureau doit pouvoir lister les appareils');
+
+  //  L'ANCIEN CHEMIN RESTE OUVERT, ET C'EST UNE DÉCISION
+  //  -----------------------------------------------
+  //  Le privilège d'insertion et sa politique ne sont pas retirés : une version
+  //  **déjà installée** de l'application écrit encore directement dans la table,
+  //  et lui refuser cette écriture ferait échouer son enregistrement. Le contrôle
+  //  est annulé, donc la ligne ne survit pas — c'est la permission qui est
+  //  mesurée, pas la donnée.
+  const ancienClient = await jouer(
+    'anon',
+    null,
+    "insert into public.push_tokens (token, platform) values ('ExponentPushToken[ancien-client]', 'android')",
+  );
+  assert.equal(
+    ancienClient.erreur,
+    null,
+    'une version déjà installée doit pouvoir continuer de s’enregistrer : retirer ' +
+      'ce privilège casserait les appareils qui n’ont pas encore mis à jour',
+  );
+});
+
+test('un appareil déjà connu rafraîchit sa date, et ne peut pas réécrire son jeton', async () => {
+  exigerLaBase();
+
+  //  LE DÉFAUT QUE CETTE MIGRATION RÉPARE, ET POURQUOI IL ÉTAIT INVISIBLE
+  //  -------------------------------------------------------------------
+  //  La version précédente modifiait la ligne (`update … where token = …`) avant
+  //  d'insérer. Or une clause `WHERE` qui lit une colonne exige, **en plus** de
+  //  la politique de modification, que la ligne soit lisible : PostgreSQL
+  //  applique alors les politiques de `select`. `anon` n'en a aucune sur
+  //  `push_tokens` — et ne doit pas en avoir.
+  //
+  //  La modification touchait donc **zéro ligne, sans erreur** : le client lisait
+  //  `error = null` et croyait avoir rafraîchi. `last_seen_at` restait figé à la
+  //  première installation, et l'écran du bureau, qui trie dessus, annonçait
+  //  comme « plus récent » un appareil vu des mois plus tôt.
+  //
+  //  La date de départ est **ancienne**, et posée en propriétaire : sur une date
+  //  du jour, le rafraîchissement serait invisible, et ce banc ne mesurerait rien.
+  //
+  //  L'ORDRE EST LE CŒUR DE CE CONTRÔLE, ET IL A ÉTÉ FAUX
+  //  ---------------------------------------------------
+  //  La première version reculait la date **avant** le premier enregistrement.
+  //  La ligne n'existait donc pas encore : la mise à jour en propriétaire ne
+  //  touchait rien, et l'appel suivant **créait** la ligne avec la date du jour.
+  //  Le rafraîchissement n'était jamais exercé — et le banc restait vert alors
+  //  qu'on avait retiré la clause qui le produit. Mesuré : la mutation
+  //  `do nothing` ne le faisait pas tomber.
+  //
+  //  Il faut donc trois temps : enregistrer, reculer, **vérifier que la date a
+  //  bien été reculée**, puis rappeler. Le contrôle du milieu est le témoin sans
+  //  lequel les deux autres ne prouvent rien.
+  const JETON = 'ExponentPushToken[rafraichi]';
+
+  const premier = await jouer(
+    'anon',
+    null,
+    'select public.enregistrer_jeton($1, $2)',
+    [JETON, 'android'],
+    true,
+  );
+  assert.equal(premier.erreur, null, 'un appareil sans compte doit pouvoir s’enregistrer');
+
+  await db.exec(`update public.push_tokens set last_seen_at = '2020-01-01T00:00:00Z'
+                  where token = '${JETON}'`);
+
+  const reculee = await db.query(
+    `select last_seen_at < now() - interval '1 year' as ancienne
+       from public.push_tokens where token = '${JETON}'`,
+  );
+  assert.equal(
+    reculee.rows[0]?.ancienne,
+    true,
+    'la date de l’appareil n’a pas été reculée : ce banc mesurerait sur une date ' +
+      'du jour, où un rafraîchissement ne se voit pas',
+  );
+
+  const rappel = await jouer(
+    'anon',
+    null,
+    'select public.enregistrer_jeton($1, $2)',
+    [JETON, 'android'],
+    true,
+  );
+  assert.equal(rappel.erreur, null, 'un appareil connu doit pouvoir se réenregistrer');
+
+  const apres = await db.query(
+    `select last_seen_at > now() - interval '1 minute' as frais
+       from public.push_tokens where token = '${JETON}'`,
+  );
+  assert.equal(
+    apres.rows[0]?.frais,
+    true,
+    'la date de l’appareil doit avoir été rafraîchie : c’est tout l’objet de la ' +
+      'fonction — sans elle, un appareil toujours installé vieillit sans fin',
+  );
+
+  //  ET LA MODIFICATION DIRECTE, ELLE, N'EST PLUS POSSIBLE
+  //  ---------------------------------------------------
+  //  La politique de modification a été retirée : elle était inerte pour une
+  //  modification filtrée — le seul usage que l'application en ait jamais fait —
+  //  et ouverte pour une modification **sans filtre**, qui touchait toutes les
+  //  lignes. Aucun appel légitime ne fait cela.
+  const reecriture = await jouer(
+    'anon',
+    null,
+    `update public.push_tokens set token = 'ExponentPushToken[detourne]' where token = '${JETON}'`,
+  );
+  assert.equal(
+    reecriture.touchees,
+    0,
+    'un visiteur ne doit pas pouvoir réécrire le jeton d’un appareil : il ' +
+      'détournerait les notifications de quelqu’un d’autre vers le sien',
+  );
+
+  const inchange = await db.query(
+    `select count(*)::int as n from public.push_tokens where token = '${JETON}'`,
+  );
+  assert.equal(inchange.rows[0].n, 1, 'la ligne visée doit être intacte');
 });
 
 test('le bureau décide une adhésion, un membre ordinaire en est incapable', async () => {

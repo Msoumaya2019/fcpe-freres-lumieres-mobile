@@ -726,6 +726,33 @@ export type Database = {
         };
         Returns: undefined;
       };
+      /**
+       * Enregistre ou rafraîchit le jeton de notification d'un appareil.
+       *
+       * POURQUOI ELLE EXISTE, ALORS QU'UNE ÉCRITURE DIRECTE EXISTE AUSSI
+       * ---------------------------------------------------------------
+       * `push_tokens` accorde toujours `insert` et `update` à `anon`, et
+       * l'application a longtemps écrit la ligne elle-même. Cette écriture ne
+       * marchait pas : la mise à jour était **filtrée** sur `token`, or une
+       * clause `where` qui lit une colonne exige, en plus de la politique
+       * d'écriture, une politique de **lecture** — et `anon` n'en a aucune sur
+       * cette table. PostgreSQL ne refuse pas : il ne touche **aucune ligne** et
+       * ne lève aucune erreur, donc le client lisait un succès sur une date
+       * restée figée. Mesuré sur sept cas, reproduit sur deux tables.
+       *
+       * Cette fonction est `security definer` : elle s'exécute avec les droits
+       * de son propriétaire et ne dépend donc d'aucune politique de lecture.
+       * `Returns: undefined` pour la même raison que les fonctions ci-dessus —
+       * `void` est le type d'une fonction qui ne rend rien à l'appelant, et une
+       * signature de retour doit être un type.
+       */
+      enregistrer_jeton: {
+        Args: {
+          p_token: string;
+          p_platform: string;
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
       member_role: 'membre' | 'admin';

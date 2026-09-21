@@ -72,12 +72,18 @@ export default tseslint.config(
   {
     // Scripts d'outillage exécutés par Node, hors de l'application : les
     // globales Node y sont déclarées à la main plutôt qu'en ajoutant une
-    // dépendance `globals` pour quatre identifiants.
+    // dépendance `globals` pour cinq identifiants.
+    //
+    // `fetch` est une globale de Node depuis la 18 : le déclarer ici est ce qui
+    // permet à `verifier-redirection.mjs` d'être lu par le lint. Ce n'est pas
+    // une commodité — sans lui, l'outil qui éprouve les deux réglages de
+    // redirection serait le seul fichier du dépôt que `npm run verify` refuse.
     files: ['scripts/**/*.mjs'],
     languageOptions: {
       globals: {
         Buffer: 'readonly',
         console: 'readonly',
+        fetch: 'readonly',
         process: 'readonly',
         URL: 'readonly',
       },

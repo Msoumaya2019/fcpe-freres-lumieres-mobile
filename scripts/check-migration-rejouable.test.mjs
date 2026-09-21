@@ -114,6 +114,7 @@ const MIGRATIONS_ATTENDUES = [
   '20260921180000_commentaires_trois_cibles.sql',
   '20260921210000_reglages_et_moderation.sql',
   '20260922090000_annonce_epinglee.sql',
+  '20260922130000_jeton_appareil.sql',
 ];
 
 /**
@@ -141,6 +142,12 @@ const MIGRATIONS_ATTENDUES = [
  *     sous une condition qui interroge `is_super_admin()` est un mensonge que le
  *     prochain lecteur croira. L'ancien nom est donc retiré, et le nouveau
  *     créé — deux retraits, et ils sont ici pour cette raison.
+ *   - `push_tokens_update_device` part sans remplaçante, et c'est un retrait
+ *     **mesuré** : pour une modification filtrée — le seul usage que
+ *     l'application en ait jamais fait — elle ne laissait rien passer, parce
+ *     qu'une clause `WHERE` qui lit une colonne exige en plus une politique de
+ *     lecture. Elle ouvrait en revanche la modification **sans filtre**, qui
+ *     touchait toutes les lignes. Aucun appel légitime ne fait cela.
  *
  * Les nommer vaut mieux que de tolérer des gardes en surnombre : la liste dit
  * lesquelles, et le test vérifie que chacune est bien retirée et bien absente
@@ -151,6 +158,7 @@ const RETRAITS = [
   'discussion_messages_select_authenticated',
   'messages_insert_own',
   'messages_select_own_or_admin',
+  'push_tokens_update_device',
   'signalements_select_own_or_admin',
   'signalements_update_own_or_admin',
   'sondage_votes_select_own_or_admin',

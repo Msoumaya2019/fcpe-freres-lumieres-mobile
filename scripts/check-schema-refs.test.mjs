@@ -643,6 +643,43 @@ function lireRequete(noeud, portees, contexte, rapport) {
     return;
   }
 
+  //  `insert … on conflict do update` ouvre une pseudo-relation `excluded`, dont
+  //  les colonnes sont celles de la table visée. C'est PostgreSQL qui la fournit ;
+  //  cet analyseur l'ignorait, et faisait donc tomber le contrôle sur du SQL
+  //  juste — mesuré le 21 septembre 2026, en écrivant `enregistrer_jeton` :
+  //  `excluded.platform` était rapporté comme « ni une table ni un alias de la
+  //  portée ». Un banc qui tombe sur du code juste est un défaut du banc.
+  //
+  //  La portée n'est ouverte que pour l'action `ONCONFLICT_UPDATE` : c'est la
+  //  seule où `excluded` existe, et l'accepter ailleurs ferait passer une
+  //  référence que PostgreSQL refuserait. Le nom de cette action a été **lu dans
+  //  l'arbre**, pas supposé : c'est `ONCONFLICT_UPDATE`, et non la forme SQL
+  //  `DO UPDATE` — une première version comparait au texte du langage, et la
+  //  portée n'était donc jamais ouverte.
+  //
+  //  Le schéma est celui de la table visée, pour qu'une cible hors de `public`
+  //  rende « colonnes inconnues » plutôt qu'une liste fausse.
+  const insertion = noeud.InsertStmt;
+  if (insertion !== undefined && insertion.onConflictClause?.action === 'ONCONFLICT_UPDATE') {
+    const exclue = [
+      {
+        nom: 'excluded',
+        schema: insertion.relation.schemaname ?? SCHEMA_PUBLIC,
+        table: insertion.relation.relname,
+      },
+    ];
+
+    for (const [cle, valeur] of Object.entries(insertion)) {
+      lireRequete(
+        valeur,
+        cle === 'onConflictClause' ? [exclue, ...portees] : portees,
+        contexte,
+        rapport,
+      );
+    }
+    return;
+  }
+
   const select = noeud.SelectStmt;
   if (select !== undefined) {
     const entrees = portee(select, rapport, contexte);

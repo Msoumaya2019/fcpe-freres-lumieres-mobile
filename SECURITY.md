@@ -223,42 +223,58 @@ même chose et dans le même ordre.
 
 ## Ce que la relecture des politiques a établi
 
-Les **vingt et un** appels de `src/services/` ont été croisés un par un avec les
-politiques des migrations. Dix-sept clés distinctes — quatre appels s'ajoutent à
-une clé déjà comptée : `profiles.select` est écrit trois fois, `annonces.select`
-trois (la liste, sa lecture de repli, l'article par son identifiant) —, et **une
-seule écrit une ligne existante** : `push_tokens.update`, par laquelle un appareil
-déjà connu rafraîchit sa date.
+Les **vingt** appels de `src/services/` ont été croisés un par un avec les
+politiques des migrations. Seize clés distinctes — quatre appels s'ajoutent à une
+clé déjà comptée : `profiles.select` est écrit trois fois, `annonces.select`
+trois (la liste, sa lecture de repli, l'article par son identifiant) —, et
+**aucun n'écrit une ligne existante**.
+
+C'est un changement, et il vient d'un défaut mesuré. Le seul geste qui modifiait
+une ligne était le rafraîchissement de la date d'un appareil, et il **ne
+fonctionnait pas** : une clause `WHERE` qui lit une colonne exige, en plus de la
+politique de modification, que la ligne soit lisible par une politique de
+**lecture** — or `push_tokens` n'en a aucune pour un visiteur sans compte, et ne
+doit pas en avoir, elle rendrait publics les jetons de tous les appareils. La
+modification touchait donc zéro ligne, **sans erreur** : le client lisait
+`error = null` et croyait avoir rafraîchi.
+
+Le geste est passé dans `public.enregistrer_jeton`, une fonction
+`security definer` qui s'exécute avec les droits de son propriétaire : elle
+enregistre l'appareil **ou** met sa date à jour, sans jamais dépendre d'une
+politique de lecture. La politique `push_tokens_update_device` a été retirée, et
+son retrait est déclaré dans `scripts/check-migration-rejouable.test.mjs`. Que la
+date bouge réellement est mesuré par `check-acces-public`, qui la recule d'abord,
+appelle la fonction sous le rôle anonyme, puis la relit.
 
 Le relevé ci-dessous n'est pas la source : la source est
 `scripts/check-rls-guards.test.mjs`, qui tient la liste **close** et tombe dès
 qu'un appel apparaît ou disparaît sans être déclaré. Ce tableau le recopie, et
 c'est ce banc qu'il faut relire en cas de désaccord.
 
-| Requête                      | Table                  | Opération          | Politique                                                               |
-| ---------------------------- | ---------------------- | ------------------ | ----------------------------------------------------------------------- |
-| `fetchAgendaEvents`          | `agenda_events`        | select             | `agenda_events_select_public` · `…_select_authenticated`                |
-| `fetchAnnonces`              | `annonces`             | select             | `annonces_select_public` · `…_select_authenticated`                     |
-| `fetchAnnonce`               | `annonces`             | select             | `annonces_select_public` · `…_select_authenticated`                     |
-| `fetchUpcomingMenus`         | `cantine_menus`        | select             | `cantine_menus_select_public` · `…_select_authenticated`                |
-| `fetchCommentaires`          | `commentaires`         | select             | `commentaires_select_publies_anon` · `…_select_publies`                 |
-| `publierCommentaire`         | `commentaires`         | insert             | `commentaires_insert_public`                                            |
-| `fetchDiscussionMessages`    | `discussion_messages`  | select             | `discussion_messages_select_member`                                     |
-| `postDiscussionMessage`      | `discussion_messages`  | insert             | `discussion_messages_insert_member`                                     |
-| `fetchDocuments`             | `documents`            | select             | `documents_select_public` · `…_select_authenticated`                    |
-| `documentUrl`                | _(bucket `documents`)_ | `createSignedUrl`  | `storage_documents_select_familles` · `storage_documents_select_bureau` |
-| `documentsUrls`              | _(bucket `documents`)_ | `createSignedUrls` | `storage_documents_select_familles` · `storage_documents_select_bureau` |
-| `enregistrerAppareil` (pose) | `push_tokens`          | insert             | `push_tokens_insert_device`                                             |
-| `enregistrerAppareil` (date) | `push_tokens`          | update             | `push_tokens_update_device`                                             |
-| `fetchProfile`               | `profiles`             | select             | `profiles_select_authenticated`                                         |
-| `fetchAuthorNames`           | `profiles`             | select             | `profiles_select_authenticated`                                         |
-| `listerAdhesions`            | `profiles`             | select             | `profiles_select_authenticated`                                         |
-| `fetchReglagesBandeau`       | `reglages`             | select             | `reglages_select_public`                                                |
-| `fetchMySignalements`        | `signalements`         | select             | `signalements_select_own_or_admin`                                      |
-| `createSignalement`          | `signalements`         | insert             | `signalements_insert_own`                                               |
-| `fetchSondages` (sondages)   | `sondages`             | select             | `sondages_select_public` · `…_select_authenticated`                     |
-| `fetchSondages` (choix)      | `sondage_choices`      | select             | `sondage_choices_select_public` · `…_select_authenticated`              |
-| `castVote`                   | `sondage_votes`        | insert             | `sondage_votes_insert_public` · `sondage_votes_insert_own`              |
+| Requête                      | Table                  | Opération           | Politique                                                               |
+| ---------------------------- | ---------------------- | ------------------- | ----------------------------------------------------------------------- |
+| `fetchAgendaEvents`          | `agenda_events`        | select              | `agenda_events_select_public` · `…_select_authenticated`                |
+| `fetchAnnonces`              | `annonces`             | select              | `annonces_select_public` · `…_select_authenticated`                     |
+| `fetchAnnonce`               | `annonces`             | select              | `annonces_select_public` · `…_select_authenticated`                     |
+| `fetchUpcomingMenus`         | `cantine_menus`        | select              | `cantine_menus_select_public` · `…_select_authenticated`                |
+| `fetchCommentaires`          | `commentaires`         | select              | `commentaires_select_publies_anon` · `…_select_publies`                 |
+| `publierCommentaire`         | `commentaires`         | insert              | `commentaires_insert_public`                                            |
+| `fetchDiscussionMessages`    | `discussion_messages`  | select              | `discussion_messages_select_member`                                     |
+| `postDiscussionMessage`      | `discussion_messages`  | insert              | `discussion_messages_insert_member`                                     |
+| `fetchDocuments`             | `documents`            | select              | `documents_select_public` · `…_select_authenticated`                    |
+| `documentUrl`                | _(bucket `documents`)_ | `createSignedUrl`   | `storage_documents_select_familles` · `storage_documents_select_bureau` |
+| `documentsUrls`              | _(bucket `documents`)_ | `createSignedUrls`  | `storage_documents_select_familles` · `storage_documents_select_bureau` |
+| `enregistrerAppareil` (pose) | `push_tokens`          | insert              | `push_tokens_insert_device`                                             |
+| `enregistrerAppareil` (date) | _(aucune)_             | `enregistrer_jeton` | fonction `security definer`, droits du propriétaire                     |
+| `fetchProfile`               | `profiles`             | select              | `profiles_select_authenticated`                                         |
+| `fetchAuthorNames`           | `profiles`             | select              | `profiles_select_authenticated`                                         |
+| `listerAdhesions`            | `profiles`             | select              | `profiles_select_authenticated`                                         |
+| `fetchReglagesBandeau`       | `reglages`             | select              | `reglages_select_public`                                                |
+| `fetchMySignalements`        | `signalements`         | select              | `signalements_select_own_or_admin`                                      |
+| `createSignalement`          | `signalements`         | insert              | `signalements_insert_own`                                               |
+| `fetchSondages` (sondages)   | `sondages`             | select              | `sondages_select_public` · `…_select_authenticated`                     |
+| `fetchSondages` (choix)      | `sondage_choices`      | select              | `sondage_choices_select_public` · `…_select_authenticated`              |
+| `castVote`                   | `sondage_votes`        | insert              | `sondage_votes_insert_public` · `sondage_votes_insert_own`              |
 
 Trois remarques que le tableau seul ne dirait pas. Les **sept** tables publiques
 portent **deux** politiques de lecture et non une : `*_select_public` pour le

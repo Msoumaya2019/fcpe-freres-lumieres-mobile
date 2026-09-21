@@ -1077,32 +1077,41 @@ function lireFichier(cheminRelatif) {
  * réserver. Le retrait de cette ligne fait tomber le test le jour où un `delete`
  * réapparaîtrait — c'est exactement ce qu'on veut, puisqu'une suppression est la
  * seule opération qui **détruit** une donnée, et qu'elle mérite d'être décidée.
+ *
+ * `update` n'y figure plus non plus, et c'est un **retrait mesuré**, pas un
+ * oubli : l'application ne modifie plus aucune table directement. Le
+ * rafraîchissement de la date d'un appareil — la seule modification qu'elle ait
+ * jamais faite — est passé dans la fonction `public.enregistrer_jeton`, qui
+ * s'exécute avec les droits de son propriétaire. La ligne reste dehors pour que
+ * le jour où un `update` réapparaîtrait dans `src/services/`, le test tombe et
+ * oblige à le décider.
  */
 const METHODES = new Map([
   ['select', 'select'],
   ['insert', 'insert'],
-  ['update', 'update'],
 ]);
 
 /**
  * Les seules tables que l'application **modifie**, et la raison de chacune.
  *
- * Jusqu'à l'enregistrement des notifications, cette liste était vide : le code
- * n'écrivait que des lignes nouvelles. Un appareil déjà connu doit pourtant
- * rafraîchir sa date, sinon il serait purgé alors qu'il est toujours installé.
+ * La liste est **vide**, et ce n'est pas un oubli : le rafraîchissement de la
+ * date d'un appareil — la seule modification que l'application ait jamais faite
+ * — est passé dans `public.enregistrer_jeton`. Une fonction `security definer`
+ * n'est pas une requête de `src/services/` : elle n'entre pas dans l'analyse
+ * ci-dessous, et c'est pourquoi `push_tokens` a quitté cette liste.
  *
- * La liste est close, et c'est tout son intérêt : ajouter une modification
+ * Le geste n'a pas disparu pour autant : il est **mesuré** par
+ * `check-acces-public`, qui recule la date d'un appareil, appelle la fonction
+ * sous le rôle anonyme, et vérifie que la date a bougé. Un appareil déjà connu
+ * doit rafraîchir sa date, sinon il serait purgé alors qu'il est toujours
+ * installé.
+ *
+ * La liste reste close, et c'est tout son intérêt : ajouter une modification
  * ailleurs demande de l'écrire ici, donc de la décider. Une modification est
  * toujours plus large qu'une insertion — elle peut viser une ligne qu'on n'a pas
  * créée — et c'est ce qui justifie qu'elle ne passe pas inaperçue.
  */
-const TABLES_MODIFIEES = new Map([
-  [
-    'push_tokens',
-    'l’appareil rafraîchit `last_seen_at` de la ligne dont il connaît déjà le ' +
-      'jeton ; sans quoi une purge par date finirait par retirer un appareil actif',
-  ],
-]);
+const TABLES_MODIFIEES = new Map();
 
 /**
  * Requêtes de la couche d'accès aux données, une entrée par appel.
@@ -1217,12 +1226,12 @@ const ALLOWANCES = new Map([
   ],
 ]);
 
-test('l’analyse des requêtes trouve les vingt et un appels attendus', () => {
+test('l’analyse des requêtes trouve les vingt appels attendus', () => {
   // Contrôle, et invariant en même temps : le nombre est celui que SECURITY.md
   // annonce. Une expression régulière trop stricte qui ne trouverait rien ferait
   // passer les quatre tests suivants sur zéro cas.
   //
-  // Vingt et un **appels** pour dix-sept clés distinctes : quatre appels
+  // Vingt **appels** pour seize clés distinctes : quatre appels
   // s'ajoutent à une clé déjà comptée. Le décompte porte sur les appels parce que
   // c'est ce que l'analyse parcourt ; la liste, elle, porte sur les clés, parce
   // qu'une politique se réclame par couple et non par appel.
@@ -1266,7 +1275,17 @@ test('l’analyse des requêtes trouve les vingt et un appels attendus', () => {
   // Une clé entre avec les réglages : `reglages.select`, pour le titre et la
   // devise du bandeau. L'écriture, elle, n'est pas exercée ici — elle vit dans le
   // tableau de bord, et ses trois politiques sont nommées dans `NON_EXERCEES`.
-  assert.equal(REQUETES.length, 21);
+  //
+  // Une clé **sort** avec le jeton d'appareil : `push_tokens.update`. Le
+  // rafraîchissement de la date d'un appareil ne passe plus par une modification
+  // de la table, mais par `public.enregistrer_jeton` — une fonction
+  // `security definer`, donc invisible à cette analyse. La politique de
+  // modification qu'elle réclamait a été retirée, et son retrait est déclaré dans
+  // `check-migration-rejouable`. Le geste, lui, reste mesuré : `check-acces-public`
+  // recule la date, appelle la fonction sous le rôle anonyme, et vérifie qu'elle a
+  // bougé. C'est l'appel qui compte — un `update` filtré ne touchait **zéro
+  // ligne** sans erreur, faute de politique de lecture.
+  assert.equal(REQUETES.length, 20);
   assert.deepEqual(CLES_REQUETES, [
     'agenda_events.select',
     'annonces.select',
@@ -1278,7 +1297,6 @@ test('l’analyse des requêtes trouve les vingt et un appels attendus', () => {
     'documents.select',
     'profiles.select',
     'push_tokens.insert',
-    'push_tokens.update',
     'reglages.select',
     'signalements.insert',
     'signalements.select',

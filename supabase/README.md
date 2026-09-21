@@ -90,6 +90,11 @@ Le schéma et les politiques ne suffisent pas : la réinitialisation de mot de p
 et la confirmation d'inscription demandent aussi que Supabase accepte de renvoyer
 l'adhérent vers l'application.
 
+- **Authentication > URL Configuration > Site URL** : une adresse **réelle**,
+  jamais la valeur par défaut `http://localhost:3000`. C'est le repli de tout
+  lien dont l'adresse n'est pas retenue, et de tout lien ouvert sur un
+  ordinateur. Laissé par défaut, il fait lire « ce site est inaccessible » à un
+  adhérent dont le compte est pourtant confirmé.
 - **Authentication > URL Configuration > Redirect URLs** : ajouter
   `fcpefl://reinitialisation` **et** `fcpefl://confirmation`. Une entrée
   manquante ne produit aucune erreur visible : l'adhérent reçoit l'e-mail, le

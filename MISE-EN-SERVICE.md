@@ -1036,7 +1036,7 @@ l'autorisation de l'appareil.
 
 ## Étape 6 — Les quatre réglages du tableau de bord _(~5 min, plus tard)_
 
-Ces quatre réglages vivent dans le tableau de bord Supabase et **pas** dans un  
+Ces cinq réglages vivent dans le tableau de bord Supabase et **pas** dans un  
 fichier du dépôt : aucun test ne les protège, donc ils sont consignés dans le  
 `README.md` (§4) plutôt que laissés à la mémoire. Je vous les donnerai un par un,  
 avec l'écran et la valeur, **après** le premier essai sur téléphone — les changer  
@@ -1048,14 +1048,26 @@ Pour que vous sachiez de quoi il s'agit :
 | #   | Écran                                              | Valeur                                                                     |
 | --- | -------------------------------------------------- | -------------------------------------------------------------------------- |
 | 1   | Authentication > URL Configuration > Redirect URLs | **deux** adresses : `fcpefl://reinitialisation` et `fcpefl://confirmation` |
-| 2   | Authentication > Email Templates > Reset password  | le lien doit être `{{ .ConfirmationURL }}` (c'est le défaut)               |
-| 3   | Authentication > Providers > Email                 | _Minimum password length_ = **6**, et la confirmation d'e-mail activée     |
-| 4   | Authentication > SMTP Settings                     | les identifiants de l'étape 4                                              |
+| 2   | Authentication > URL Configuration > Site URL      | une adresse **réelle**, jamais `http://localhost:3000`                     |
+| 3   | Authentication > Email Templates > Reset password  | le lien doit être `{{ .ConfirmationURL }}` (c'est le défaut)               |
+| 4   | Authentication > Providers > Email                 | _Minimum password length_ = **6**, et la confirmation d'e-mail activée     |
+| 5   | Authentication > SMTP Settings                     | les identifiants de l'étape 4                                              |
 
 Le réglage 1 est **le plus important** : Supabase refuse toute redirection absente de  
 cette liste, et l'adhérent qui a oublié son mot de passe ne recevrait alors aucun  
 lien utilisable. Les deux adresses sont recopiées du fichier  
 `src/auth/redirectPaths.ts`, et un test vérifie qu'elles restent d'accord.
+
+Le réglage 2 ne se voit que le jour où il manque : c'est le repli de tout lien dont  
+l'adresse n'est pas retenue, et celui de tout lien ouvert sur un ordinateur, où le  
+schéma `fcpefl://` n'ouvre rien. Mesuré le 21 septembre 2026 : il valait encore  
+`http://localhost:3000`, la valeur par défaut de Supabase, et **les deux adresses  
+ci-dessus étaient refusées**. L'adhérent qui confirmait son adresse lisait « ce site  
+est inaccessible » alors que son compte était bel et bien confirmé.
+
+Ces deux réglages-là sont aussi les seuls que l'on puisse **éprouver** sans les  
+essayer : `npm run verifier:redirection` interroge GoTrue et dit, pour chaque adresse,  
+si elle est retenue ou remplacée par le repli.
 
 ---
 

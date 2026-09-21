@@ -274,16 +274,24 @@ L'adhérent qui a oublié son mot de passe n'a plus besoin de passer par le
 bureau. Depuis l'écran de connexion, « Mot de passe oublié ? » envoie un lien ;
 le lien rouvre l'application et propose de choisir un nouveau mot de passe.
 
-**Deux réglages sont nécessaires dans le tableau de bord Supabase, et sans eux
+**Trois réglages sont nécessaires dans le tableau de bord Supabase, et sans eux
 le flux ne peut pas fonctionner :**
 
-1. **Authentication > URL Configuration > Redirect URLs** — ajouter exactement
+1. **Authentication > URL Configuration > Site URL** — une adresse **réelle**,
+   jamais la valeur par défaut `http://localhost:3000`. C'est le repli de tout
+   lien dont l'adresse n'est pas retenue, et celui de tout lien ouvert sur un
+   ordinateur, où un schéma `fcpefl://` n'ouvre rien. Le laisser par défaut
+   produit la confusion la plus coûteuse qui soit : l'adhérent lit « ce site est
+   inaccessible » alors que son compte est **bel et bien confirmé**. L'adresse du
+   tableau de bord convient — `…/confirmation`, page d'arrivée qui dit quoi faire.
+
+2. **Authentication > URL Configuration > Redirect URLs** — ajouter exactement
    `fcpefl://reinitialisation`. Supabase refuse toute redirection absente de
    cette liste, et l'adhérent ne reçoit alors aucun lien utilisable. Le chemin
    vient de `RECOVERY_REDIRECT_PATH` dans `src/auth/redirectPaths.ts` ; les deux
    valeurs doivent rester identiques.
 
-2. **Authentication > Email Templates > Reset password** — le lien doit être
+3. **Authentication > Email Templates > Reset password** — le lien doit être
    `{{ .ConfirmationURL }}`, ce qui est le cas du modèle par défaut. Un modèle
    qui pointe ailleurs casserait le retour vers l'application.
 
@@ -403,21 +411,29 @@ toucher au code :
 | désactivé        | une **session**      | rien : le paquet a déjà notifié `SIGNED_IN`    |
 | activé (attendu) | aucune session       | un message d'attente, et retour à la connexion |
 
-**Trois réglages du tableau de bord, et sans eux le flux ne peut pas
+**Quatre réglages du tableau de bord, et sans eux le flux ne peut pas
 fonctionner :**
 
-1. **Authentication > SMTP Settings** — un serveur d'envoi. Sans lui, deux
+1. **Authentication > URL Configuration > Site URL** — la même adresse réelle
+   que pour la réinitialisation, et pour la même raison : c'est le repli. Elle
+   est décrite plus haut, dans « Réinitialisation de mot de passe ».
+2. **Authentication > SMTP Settings** — un serveur d'envoi. Sans lui, deux
    e-mails par heure, et rien d'autre ne le signale.
-2. **Authentication > Providers > Email > Confirm email** — activé.
-3. **Authentication > URL Configuration > Redirect URLs** — ajouter exactement
+3. **Authentication > Providers > Email > Confirm email** — activé.
+4. **Authentication > URL Configuration > Redirect URLs** — ajouter exactement
    `fcpefl://confirmation`, **en plus** de `fcpefl://reinitialisation`. Le chemin
    vient de `SIGNUP_REDIRECT_PATH` dans `src/auth/redirectPaths.ts`.
 
-> **Ce que la vérification automatique ne couvre pas.** Ces trois réglages ne
-> vivent que dans le tableau de bord — comme les exigences de mot de passe
-> ci-dessus, aucun test ne peut tenir leur accord avec le code. Il n'existe pas
-> de `supabase/config.toml` dans ce dépôt. À vérifier avant de communiquer
-> l'application aux adhérents.
+> **Ce que la vérification automatique couvre, et ce qu'elle ne couvre pas.**
+> Ces réglages ne vivent que dans le tableau de bord — il n'existe pas de
+> `supabase/config.toml` dans ce dépôt —, et **aucun test ne peut tenir leur
+> accord avec le code**. Ce n'est pas la même chose que « rien ne les mesure » :
+> `npm run verifier:redirection` les **éprouve** en interrogeant GoTrue, et
+> distingue une adresse retenue d'une adresse remplacée par le repli. Il demande
+> le réseau, et ne fait donc pas partie de `npm run verify`.
+>
+> Ce qu'il ne dit pas : si le courrier part. Le serveur SMTP et l'activation de
+> la confirmation sont deux autres réglages, qu'aucun appel public ne révèle.
 
 **L'adresse de retour est ce qui ramène l'adhérent dans l'application.** Sans
 `emailRedirectTo`, `signUp` n'envoie aucun `redirect_to` et GoTrue retombe sur le
@@ -552,6 +568,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-workflows.mjs        les flux GitHub : forme du YAML, épinglage, `bash -n`
 │   ├── check-paquet.mjs           le contenu d'un paquet compilé : clefs, URL, fuites
 │   ├── provenance-release.mjs     le texte d'une version : le commit de chaque binaire déposé
+│   ├── verifier-redirection.mjs   les adresses de retour, éprouvées contre Supabase
 │   ├── alias-loader.mjs           résolution de « @/ » pour node:test
 │   ├── register-alias.mjs         branchement du chargeur, avant les tests
 │   ├── essai-postgres.mjs         la doublure de Supabase, partagée par les bancs qui exécutent
