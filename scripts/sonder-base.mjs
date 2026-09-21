@@ -126,6 +126,32 @@ const MARQUEURS = [
 ];
 
 /**
+ * Les marqueurs des migrations qui n'ajoutent **aucune colonne**.
+ *
+ * La onzième crée une table, et rien d'autre : aucune colonne d'une table
+ * existante ne peut donc la signaler. Un marqueur de colonne chercherait
+ * `cantine_items.category` et lirait `42703` avant le collage, `200` après —
+ * mais `42703` ne dit pas « la table n'est pas là », il dit « la colonne n'est
+ * pas là », et le jour où la table existerait sans sa colonne, la sonde
+ * accuserait la migration à tort.
+ *
+ * La lecture est ici **attendue ouverte** : `cantine_items` se lit avec la seule
+ * clé publiable, parce que c'est ce que les familles consultent sans compte. Un
+ * `42501` n'est donc pas « la migration manque » — il dit que la table est là et
+ * que sa politique ou son `grant` ne l'est pas, ce qui est un défaut d'une autre
+ * nature, et le message le nomme.
+ */
+const MARQUEURS_TABLES = [
+  {
+    chemin: 'cantine_items',
+    table: 'cantine_items',
+    colonne: 'category',
+    migration: 11,
+    lecture: 'lisible sans compte — c’est ce que les familles consultent',
+  },
+];
+
+/**
  * Les fonctions, sondées **sans écrire**.
  *
  * `enregistrer_jeton` reçoit une plateforme que la contrainte de la table
@@ -237,6 +263,30 @@ for (const { chemin, table, colonne, migration } of MARQUEURS) {
     manquants.push(`${chemin} — réponse inattendue ${code} (migration ${migration})`);
 }
 
+//  Les tables qui portent à elles seules leur migration. Elles ne se contentent
+//  pas d'exister : leur lecture est le **service** qu'elles rendent, et un refus
+//  y est un défaut distinct de l'absence.
+console.log('\nMarqueurs de table');
+for (const { chemin, table, colonne, migration, lecture } of MARQUEURS_TABLES) {
+  const resultat = await sonder(`/rest/v1/${table}?select=${colonne}&limit=0`);
+  const code = resultat.statut === 200 ? 200 : Number(resultat.code) || resultat.statut;
+  const lisible = code === 200;
+
+  console.log(
+    `  ${lisible ? '✔' : '✘'} ${chemin.padEnd(34)} ` +
+      `${lisible ? lecture : `obtenue ${resultat.statut} ${resultat.code ?? code}`}  [migration ${migration}]`,
+  );
+
+  if (!lisible) {
+    manquants.push(
+      code === 42501
+        ? `${chemin} — la table est là, mais la lecture anonyme est refusée : ` +
+            `la politique ou le grant manque (migration ${migration})`
+        : `${chemin} (migration ${migration})`,
+    );
+  }
+}
+
 console.log('\nFonctions du bureau');
 for (const { nom, chemin, corps, migration, present, lecture } of FONCTIONS) {
   const resultat = await sonder(chemin, corps);
@@ -250,7 +300,7 @@ for (const { nom, chemin, corps, migration, present, lecture } of FONCTIONS) {
 
 console.log('\n--- verdict ---');
 if (manquants.length === 0) {
-  console.log('tous les marqueurs des dix migrations répondent.');
+  console.log('tous les marqueurs des onze migrations répondent.');
   console.log('la cinquième n’a pas de marqueur mesurable : elle remplace une politique,');
   console.log('et aucun appel public ne l’observe — la recoller est sans risque.');
   process.exit(0);
@@ -269,4 +319,5 @@ console.log('  7  20260921180000_commentaires_trois_cibles.sql');
 console.log('  8  20260921210000_reglages_et_moderation.sql');
 console.log('  9  20260922090000_annonce_epinglee.sql');
 console.log('  10 20260922130000_jeton_appareil.sql');
+console.log('  11 20260922190000_cantine_items.sql');
 process.exit(1);

@@ -1420,6 +1420,25 @@ lieu, au lieu de dire seulement que « quelque chose a échoué ».
       réussi aurait été un sondage qui écrit. Absente, elle rendrait `PGRST202`.
       C'est le seul marqueur de cette migration, qui ne pose aucune colonne : elle
       retire une politique et ajoute une fonction)_
+- [x] `20260922190000_cantine_items.sql` collé et exécuté → un jour de cantine
+      porte des **aliments**, rangés sous six catégories, et **les menus déjà
+      saisis continuent de s'afficher**
+      _(à coller **après** `20260916120000_init.sql` : il crée la table
+      `cantine_items` (la dix-huitième) et la rattache à `cantine_menus`, que le
+      premier collage crée. **Mesuré présent le 21 septembre 2026** : la sonde
+      « lecture publique de `cantine_items` » de `scripts/sonder-base.mjs`
+      répond `200` avec la seule clé publiable — un `42501` y aurait dit
+      « la table est là, la politique manque », un `404` « elle est absente ».
+      Et la **reprise a eu lieu** : la lecture de la base avec la clé publiable
+      rend **10 journées et 30 aliments**, chaque journée portant ses trois
+      aliments — l'ancien `starter` sous « autres », l'ancien `main_course` sous
+      « plat », l'ancien `dessert` sous « dessert ». Aucun aliment ne porte de
+      pastille, ce qui est juste : la conversion ne devine aucun type de plat.
+      Les anciennes colonnes sont **conservées** dans `cantine_menus`, donc rien
+      n'est perdu si la reprise devait être rejouée — elle est gardée par
+      `not exists`. **Sans ce collage**, l'écran Cantine retombe sur les trois
+      anciennes colonnes et affiche les menus comme avant : c'est le repli de
+      `fetchCantine`, qui ne tolère que `42P01` et `PGRST205`)_
 - [x] Compartiment `documents` **privé** dans Storage — **mesuré** : l'adresse  
       publique du compartiment répond `Bucket not found`, et sa liste répond `200`  
       _(il existe donc, et n'est pas public)_
