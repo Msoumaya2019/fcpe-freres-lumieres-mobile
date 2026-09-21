@@ -1045,13 +1045,13 @@ leur effet.
 
 Pour que vous sachiez de quoi il s'agit :
 
-| #   | Écran                                              | Valeur                                                                     |
-| --- | -------------------------------------------------- | -------------------------------------------------------------------------- |
-| 1   | Authentication > URL Configuration > Redirect URLs | **deux** adresses : `fcpefl://reinitialisation` et `fcpefl://confirmation` |
-| 2   | Authentication > URL Configuration > Site URL      | une adresse **réelle**, jamais `http://localhost:3000`                     |
-| 3   | Authentication > Email Templates > Reset password  | le lien doit être `{{ .ConfirmationURL }}` (c'est le défaut)               |
-| 4   | Authentication > Providers > Email                 | _Minimum password length_ = **6**, et la confirmation d'e-mail activée     |
-| 5   | Authentication > SMTP Settings                     | les identifiants de l'étape 4                                              |
+| #   | Écran                                              | Valeur                                                                                                         |
+| --- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 1   | Authentication > URL Configuration > Redirect URLs | **deux** adresses : `fcpefl://reinitialisation` et `fcpefl://confirmation`                                     |
+| 2   | Authentication > URL Configuration > Site URL      | `https://fcpe-freres-lumieres-admin.vercel.app/confirmation` — mesurée `200` sans session le 21 septembre 2026 |
+| 3   | Authentication > Email Templates > Reset password  | le lien doit être `{{ .ConfirmationURL }}` (c'est le défaut)                                                   |
+| 4   | Authentication > Providers > Email                 | _Minimum password length_ = **6**, et la confirmation d'e-mail activée                                         |
+| 5   | Authentication > SMTP Settings                     | les identifiants de l'étape 4                                                                                  |
 
 Le réglage 1 est **le plus important** : Supabase refuse toute redirection absente de  
 cette liste, et l'adhérent qui a oublié son mot de passe ne recevrait alors aucun  

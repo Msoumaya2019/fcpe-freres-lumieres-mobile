@@ -165,7 +165,10 @@ if (refusees.length > 0) {
   console.log(
     '\nCe qu’il reste à faire, dans le tableau de bord Supabase :\n' +
       '  Authentication > URL Configuration\n' +
-      `    • Site URL     : une adresse réelle, jamais « http://localhost:3000 »\n` +
+      '    • Site URL     : une adresse réelle, jamais « http://localhost:3000 ».\n' +
+      '                     Celle du tableau de bord convient, et elle est mesurée\n' +
+      '                     joignable sans session :\n' +
+      '                     https://fcpe-freres-lumieres-admin.vercel.app/confirmation\n' +
       `    • Redirect URLs : ajouter ${refusees.join(', ')}\n` +
       'puis relancer ce script : les trois lignes doivent passer au vert.',
   );

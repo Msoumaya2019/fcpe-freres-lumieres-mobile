@@ -283,7 +283,12 @@ le flux ne peut pas fonctionner :**
    ordinateur, où un schéma `fcpefl://` n'ouvre rien. Le laisser par défaut
    produit la confusion la plus coûteuse qui soit : l'adhérent lit « ce site est
    inaccessible » alors que son compte est **bel et bien confirmé**. L'adresse du
-   tableau de bord convient — `…/confirmation`, page d'arrivée qui dit quoi faire.
+   tableau de bord convient, et elle a été **mesurée** le 21 septembre 2026 :
+   `https://fcpe-freres-lumieres-admin.vercel.app/confirmation` répond `200`
+   **sans session**, et dit à l'adhérent ce qui vient de se passer et où
+   retourner. Mesurer plutôt que supposer compte ici : la même page, avant
+   correction de la garde du tableau de bord, répondait `307` vers `/connexion` —
+   un mur de connexion pour quelqu'un qui n'a pas encore de compte.
 
 2. **Authentication > URL Configuration > Redirect URLs** — ajouter exactement
    `fcpefl://reinitialisation`. Supabase refuse toute redirection absente de

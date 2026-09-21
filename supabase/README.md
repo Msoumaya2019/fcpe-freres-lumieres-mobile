@@ -94,7 +94,10 @@ l'adhérent vers l'application.
   jamais la valeur par défaut `http://localhost:3000`. C'est le repli de tout
   lien dont l'adresse n'est pas retenue, et de tout lien ouvert sur un
   ordinateur. Laissé par défaut, il fait lire « ce site est inaccessible » à un
-  adhérent dont le compte est pourtant confirmé.
+  adhérent dont le compte est pourtant confirmé. L'adresse mesurée le
+  21 septembre 2026 est celle du tableau de bord,
+  `https://fcpe-freres-lumieres-admin.vercel.app/confirmation` — elle répond
+  `200` sans session.
 - **Authentication > URL Configuration > Redirect URLs** : ajouter
   `fcpefl://reinitialisation` **et** `fcpefl://confirmation`. Une entrée
   manquante ne produit aucune erreur visible : l'adhérent reçoit l'e-mail, le
