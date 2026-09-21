@@ -1,11 +1,12 @@
 import { useNavigation } from '@react-navigation/native';
 import { useCallback, useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, StyleSheet, View } from 'react-native';
 
 import { useAuth } from '@/auth/AuthProvider';
 import { AppText, Button, Card, ErrorNotice, Screen, TextField } from '@/components';
+import { INFORMATION_DONNEES_URL } from '@/config/liens';
 import { userMessage } from '@/errors';
-import { spacing } from '@/theme';
+import { colors, spacing } from '@/theme';
 
 /**
  * Les cinq visages du même écran.
@@ -461,6 +462,36 @@ export function ConnexionScreen() {
   }, [clearMessages]);
 
   /**
+   * Ouvre l'information sur les données personnelles, et dit quand elle ne
+   * s'ouvre pas.
+   *
+   * POURQUOI UNE PHRASE EN CAS D'ÉCHEC, ALORS QUE RIEN N'EST CASSÉ
+   * --------------------------------------------------------------
+   * Un `openURL` qui échoue ne laisse **aucune trace** : le parent appuie sur
+   * le lien, il ne se passe rien, et il en conclut que l'information n'existe
+   * pas — au moment précis où on la lui doit. La phrase nomme donc où la
+   * retrouver, et l'e-mail de confirmation la porte depuis le 21 septembre 2026.
+   *
+   * Elle passe par `userMessage` : sans cela, `ErrorNotice` la prendrait pour un
+   * message technique anglais et la remplacerait par le message générique.
+   */
+  const ouvrirInformationDonnees = useCallback(() => {
+    void (async () => {
+      try {
+        await Linking.openURL(INFORMATION_DONNEES_URL);
+      } catch {
+        setNotice(
+          userMessage(
+            'La page sur les données personnelles n’a pas pu s’ouvrir. ' +
+              'Vous la retrouverez dans l’e-mail de confirmation, et depuis l’accueil ' +
+              'de l’application.',
+          ),
+        );
+      }
+    })();
+  }, []);
+
+  /**
    * Abandonner la récupération déconnecte.
    *
    * C'est volontaire, et c'est le point à ne pas rater : le lien a ouvert une
@@ -673,6 +704,33 @@ export function ConnexionScreen() {
 
               {error === null ? null : <ErrorNotice error={error} />}
               {notice === null ? null : <ErrorNotice tone="info" error={notice} />}
+
+              {/*  L'information sur les données personnelles, posée à
+                  l'inscription **seulement**, et juste avant le geste qui crée
+                  le compte : c'est le moment où la collecte commence, et donc
+                  celui que l'article 13 du RGPD vise.
+
+                  Il n'y a **rien à cocher**, et c'est délibéré : l'article 13 du
+                  RGPD demande d'**informer**, pas de recueillir un accord. Les
+                  bases de traitement sont l'intérêt légitime et l'exécution du
+                  service, et le consentement ne porte que sur deux choses —
+                  publier un message dans la discussion, et déposer le jeton de
+                  l'appareil —, dont aucune ne se recueille à cet endroit. Le
+                  geste demandé ici est donc seulement de pouvoir **lire**. */}
+              {isSignUp ? (
+                <AppText variant="caption">
+                  Ce que l’association conserve de vous, pendant combien de temps, et vos droits :{' '}
+                  <AppText
+                    variant="caption"
+                    color={colors.primary}
+                    accessibilityRole="link"
+                    onPress={ouvrirInformationDonnees}
+                  >
+                    vos données personnelles
+                  </AppText>
+                  .
+                </AppText>
+              ) : null}
 
               <Button
                 label={isSignUp ? 'Créer mon compte' : 'Se connecter'}

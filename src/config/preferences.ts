@@ -7,7 +7,7 @@
  * téléphone. Ce fichier-ci garde le reste, et passe par `AsyncStorage`, qui n'a
  * pas la limite de taille de `SecureStore` ni son coût.
  *
- * CINQ FAMILLES DE CLÉS, DEUX SONT DES PRÉFÉRENCES
+ * SIX FAMILLES DE CLÉS, TROIS SONT DES PRÉFÉRENCES
  * ------------------------------------------------
  * Le préfixe `fcpe.` isole ces clés de celles qu'une autre bibliothèque
  * écrirait dans le même magasin. Il ne dit pas qu'elles se ressemblent :
@@ -34,6 +34,11 @@
  *                            d'autre : c'est une préférence au même titre que
  *                            les marques de lecture, à ceci près qu'aucun
  *                            bouton ne la remet à zéro.
+ *   `donnees.information`    la marque de l'avis sur les données personnelles,
+ *                            déjà lu. Même nature que la précédente : l'effacer
+ *                            repose l'avis une fois de plus, et rien d'autre —
+ *                            l'information elle-même reste publiée, et la page
+ *                            reste joignable depuis les Réglages.
  *
  * D'où la règle que tient ce module : **l'effacement emporte ce qui se recrée,
  * jamais ce qui ne se recrée pas.** Il portait auparavant sur toutes les clés du
@@ -120,6 +125,26 @@ export function cleConversation(): string {
  */
 export const INVITATION_NOTIFICATIONS = 'notifications.invitation';
 
+/**
+ * La marque de l'avis sur les données personnelles, posé une fois.
+ *
+ * POURQUOI UN AVIS, ET POURQUOI UNE MARQUE
+ * ----------------------------------------
+ * L'information sur les données personnelles n'est pas un consentement : elle
+ * se **donne**, et l'article 13 du RGPD demande qu'elle le soit au moment de la
+ * collecte. Il n'y a donc rien à recueillir ici, et aucune réponse à retenir —
+ * seulement le fait que le parent l'a vue.
+ *
+ * Cette marque sert à une seule chose : que l'avis ne se repose pas à chaque
+ * ouverture. Elle ne dit pas si le parent a **lu** la page, et c'est voulu :
+ * prétendre le savoir demanderait de le lui demander, ce qui transformerait une
+ * information en formulaire.
+ *
+ * Comme la précédente, elle est sans conséquence à effacer : la perdre repose
+ * l'avis une fois de plus, rien d'autre.
+ */
+export const INFORMATION_DONNEES = 'donnees.information';
+
 export async function lirePreference(cle: string): Promise<string | null> {
   return AsyncStorage.getItem(PREFIXE + cle);
 }
@@ -133,7 +158,7 @@ export async function ecrirePreference(cle: string, valeur: string): Promise<voi
  *
  * Le filtre porte sur la famille des marques, et non sur le préfixe entier.
  * C'est la propriété que tient le banc : ce qui est effacé se recalcule, ce qui
- * ne se recalcule pas reste. Les trois autres familles sont nommées dans
+ * ne se recalcule pas reste. Les **cinq** autres familles sont nommées dans
  * l'en-tête de ce fichier, avec la raison de chacune.
  *
  * Le filtre reste nécessaire même réduit à une famille : `AsyncStorage` est

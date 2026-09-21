@@ -4,14 +4,15 @@
  * POURQUOI CE FICHIER
  * -------------------
  * `src/config/preferences.ts` portait `effacerPreferences()`, qui effaçait
- * **toutes** les clés du préfixe `fcpe.`. Cinq familles vivent sous ce
- * préfixe, et deux sont des préférences :
+ * **toutes** les clés du préfixe `fcpe.`. Six familles vivent sous ce
+ * préfixe, et trois sont des préférences :
  *
  *   `discussion.lu.*`          une marque de lecture — se recalcule ;
  *   `appareil.cle`             la clé qui empêche de voter deux fois — une limite ;
  *   `sondage.vote.*`           le vote déposé par cet appareil — un fait ;
  *   `contact.conversations`    le **secret** des conversations avec le bureau ;
- *   `notifications.invitation` la marque de l'invitation déjà posée — se repose.
+ *   `notifications.invitation` la marque de l'invitation déjà posée — se repose ;
+ *   `donnees.information`      la marque de l'avis sur les données — se repose.
  *
  * Le quatrième est la raison de ce fichier. Le serveur ne garde qu'une
  * **empreinte** de ce secret, et ne le rend qu'à la création : le téléphone en
@@ -33,7 +34,9 @@
  * marque qu'elle désigne. C'est le point qui compte : une famille de clés
  * ajoutée au module et **oubliée ici** aurait été épargnée sans que rien ne le
  * dise — le banc serait resté vert, et sa liste d'exemptions aurait été fausse
- * par omission.
+ * par omission. La **sixième** est arrivée le même jour, avec l'avis sur les
+ * données personnelles, et le décompte en toutes lettres de `preferences.ts` a
+ * été corrigé dans la même passe : il annonçait encore cinq familles.
  *
  * La doublure d'`AsyncStorage` ne portait que `getItem`, `setItem` et
  * `removeItem` : `getAllKeys` et `multiRemove` manquaient, et ce module était
@@ -57,6 +60,7 @@ const PREFERENCES = new URL('../src/config/preferences.ts', import.meta.url).hre
 
 const {
   CLE_APPAREIL,
+  INFORMATION_DONNEES,
   INVITATION_NOTIFICATIONS,
   cleConversation,
   cleDerniereLectureDiscussion,
@@ -72,6 +76,7 @@ async function ecrireLesFamillesEpargnees() {
   await ecrirePreference(cleVoteSondage('sondage-1'), 'choix-2');
   await ecrirePreference(cleConversation(), JSON.stringify([{ id: 'fil-1', secret: 'secret-1' }]));
   await ecrirePreference(INVITATION_NOTIFICATIONS, 'vue');
+  await ecrirePreference(INFORMATION_DONNEES, 'vue');
 }
 
 test("l'effacement des marques de lecture laisse intact ce qui ne se recrée pas", async () => {
@@ -113,6 +118,14 @@ test("l'effacement des marques de lecture laisse intact ce qui ne se recrée pas
     await lirePreference(INVITATION_NOTIFICATIONS),
     'vue',
     "la marque de l'invitation a été effacée : la question serait reposée à la prochaine ouverture",
+  );
+  //  Même nature que la précédente, et même conséquence : l'avis sur les
+  //  données se reposerait à chaque ouverture. L'information elle-même n'est pas
+  //  perdue — elle est publiée, et la page reste joignable.
+  assert.equal(
+    await lirePreference(INFORMATION_DONNEES),
+    'vue',
+    "la marque de l'avis sur les données a été effacée : l'avis serait reposé à la prochaine ouverture",
   );
 });
 

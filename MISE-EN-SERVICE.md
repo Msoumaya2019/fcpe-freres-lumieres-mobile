@@ -1528,7 +1528,7 @@ pas.
 Pour que vous sachiez ce que vous n'avez pas à faire : les quatorze écrans et leur  
 navigation, l'authentification et la réinitialisation de mot de passe, les seize tables  
 et leurs politiques de sécurité, les contrôles de schéma et de politiques, la chaîne  
-de vérification complète (`npm run verify`, **39 fichiers de test**), les  
+de vérification complète (`npm run verify`, **40 fichiers de test**), les  
 trois flux GitHub Actions, le dépôt public sans aucun secret, les deux binaires  
 compilés — l'APK Android et l'IPA non signé —, les e-mails vérifiés jusqu'au clic  
 sur le lien reçu, et la documentation.

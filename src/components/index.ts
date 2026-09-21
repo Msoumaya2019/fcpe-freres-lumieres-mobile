@@ -6,6 +6,7 @@ export {
   type AsyncErrorBannerProps,
   type AsyncFallbackProps,
 } from '@/components/AsyncFallback';
+export { AvisDonneesPersonnelles } from '@/components/AvisDonneesPersonnelles';
 export { Badge, type BadgeProps } from '@/components/Badge';
 export { Button, type ButtonProps } from '@/components/Button';
 export { Card, type CardProps } from '@/components/Card';

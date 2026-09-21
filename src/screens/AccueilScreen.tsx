@@ -17,6 +17,7 @@ import {
   AppText,
   AsyncErrorBanner,
   AsyncFallback,
+  AvisDonneesPersonnelles,
   Badge,
   Button,
   Card,
@@ -275,6 +276,13 @@ export function AccueilScreen({ navigation }: BottomTabScreenProps<MainTabParamL
               hasData={annonces.length > 0}
               errorMessage={errorMessage}
             />
+
+            {/*  L'avis sur les données personnelles, posé une fois, juste après
+                le bandeau d'erreur et **avant** les raccourcis : c'est le
+                premier endroit où un parent qui découvre l'application pose les
+                yeux, et le seul écran que voient aussi bien un adhérent qu'un
+                visiteur sans compte. Le composant ne rend rien une fois lu. */}
+            <AvisDonneesPersonnelles />
 
             <View style={styles.raccourcis}>
               {RACCOURCIS.map((rangee, rang) => (

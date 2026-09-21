@@ -561,6 +561,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   │   ├── env.ts                 ★ lecture et validation des clés d'API
 │   │   ├── supabase.ts            ★ construction du client
 │   │   ├── storage.ts             session dans le Keychain / Keystore
+│   │   ├── liens.ts               les adresses qui sortent de l'application
 │   │   └── preferences.ts         ce que l'application garde sur l'appareil
 │   ├── auth/
 │   │   ├── AuthProvider.tsx       état de session, connexion, inscription,
@@ -597,6 +598,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── stubs/                     doublures des paquets natifs, pour les tests
 │   ├── check-env-guard.test.mjs   la garde sur les clés d'API
 │   ├── check-recovery-link.test.mjs  les liens reçus, les ordres du flux, les adresses
+│   ├── check-liens-externes.test.mjs  l'adresse publiée : écrite une fois, recopiée sans dérive
 │   ├── check-user-messages.test.mjs  les messages de l'adhérent, et l'ordre des règles
 │   ├── check-dates.test.mjs       les dates civiles, les jours impossibles, les fuseaux
 │   ├── check-rls-guards.test.mjs  les colonnes sous verrou, insertion comprise
@@ -2051,7 +2053,7 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Trente-neuf fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Quarante fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-effacement`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
@@ -2063,7 +2065,7 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   `check-rls-comportement`, `check-sdk-pins`, `check-scripts-executables`,
   `check-markdown-listes`, `check-audit-scope`, `check-parser-surface`,
   `check-non-lus`, `check-safe-area`, `check-commentaires`, `check-acces-public`,
-  `check-vignettes`, `check-clavier-liste`, `check-cantine` et
+  `check-liens-externes`, `check-vignettes`, `check-clavier-liste`, `check-cantine` et
   `check-notifications`
   couvrent les
   gardes, les

@@ -564,6 +564,38 @@ personnelle qui vit dans `auth.users`, lu par le seul intéressé ; le nom affic
 est une donnée **publiée aux autres adhérents**, ce qui n'est pas la même chose
 au regard de l'information des personnes.
 
+### Où cette information est donnée, et pourquoi il n'y a rien à cocher
+
+L'information est **publiée** sur une page ouverte à tous —
+`https://fcpe-freres-lumieres-admin.vercel.app/donnees-personnelles`, servie
+**sans compte** (mesuré le 21 septembre 2026 : `200` sans aucun cookie, alors
+qu'une page du bureau répond `307` vers la connexion) — et rappelée à trois
+endroits du parcours : le **courriel de confirmation d'inscription**, l'**avis
+posé une fois** sur l'accueil de l'application (`AvisDonneesPersonnelles`), et un
+**lien sur l'écran d'inscription**, juste avant le geste qui crée le compte.
+
+**Aucun de ces trois endroits ne demande d'accord**, et c'est délibéré. L'article
+13 demande d'**informer** ; il ne demande pas de recueillir un consentement pour
+ce qui ne repose pas sur lui. Les bases du tableau ci-dessus sont l'intérêt
+légitime et l'exécution du service, et le consentement n'en porte que **deux
+lignes** — publier un message dans la discussion, et déposer le jeton de
+l'appareil. Une case à cocher devant une information qui n'est pas un
+consentement le rendrait **non libre** : refuser fermerait l'application, alors
+que le refus doit rester possible sans conséquence. Le geste demandé est donc
+seulement de pouvoir **lire**.
+
+**Et la base de chaque ligne se relit dans deux documents, jamais dans un
+commentaire.** Une première rédaction de l'avis affirmait qu'**aucun** traitement
+ne reposait sur le consentement ; c'est faux, et c'est la confrontation du tableau
+ci-dessus avec la page publiée — qui écrit « Consentement (vous publiez) » en
+face des messages — qui l'a montré.
+
+**L'adresse de cette page n'est écrite qu'une fois dans le code** :
+`src/config/liens.ts`. `scripts/check-liens-externes.test.mjs` tient les deux
+moitiés de la règle — une seule copie sous `src/`, et des citations
+documentaires qui portent exactement l'adresse publiée, sans barre oblique
+ajoutée ni chemin d'hier.
+
 `profiles.id` référence `auth.users` avec `on delete cascade` : supprimer un
 compte efface en cascade le profil, les réservations, les signalements, les
 messages de discussion, les messages adressés à l’association et les votes. Une
