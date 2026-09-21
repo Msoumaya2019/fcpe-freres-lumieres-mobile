@@ -570,6 +570,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── errors/                    traduction des erreurs en français
 │   ├── theme/                     jetons visuels, et styles par catégorie
 │   ├── types/                     types de la base et du domaine
+│   ├── utils/cantine.ts           les six catégories d'un jour, et leurs pastilles
 │   ├── utils/date.ts              formatage des dates
 │   └── utils/pendingAction.ts     quand une action est encore en cours
 ├── supabase/                      migrations, seed, politiques RLS
