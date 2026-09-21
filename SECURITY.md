@@ -548,6 +548,16 @@ celle-là.
 | Réservations de cantine                            | Exécution du service              | Jusqu'à la suppression du compte |
 | Signalements                                       | Intérêt légitime                  | Jusqu'à la suppression du compte |
 | Messages de discussion                             | Consentement (publication)        | Jusqu'à la suppression du compte |
+| Notifications (`push_tokens` — jeton d'appareil)   | Consentement                      | Jusqu'au retrait du jeton        |
+
+La dernière ligne est la **seule qui ne suit pas le compte**, et elle est écrite
+ici parce que la conséquence se lit mal : `push_tokens` ne porte aucun
+identifiant de compte — un jeton, une plateforme, deux dates. Rien ne le relie à
+une personne, donc **rien ne l'efface en cascade**, et la table n'accorde ni
+`delete` ni politique de suppression : le retrait d'un jeton est un geste
+**manuel** du bureau, depuis l'éditeur SQL. Un appareil désinstallé cesse de
+renouveler son jeton, et celui-ci est alors refusé par le service d'envoi — il
+reste néanmoins dans la table tant que personne ne l'en retire.
 
 Les deux premières lignes sont séparées à dessein : l'e-mail est une donnée
 personnelle qui vit dans `auth.users`, lu par le seul intéressé ; le nom affiché
