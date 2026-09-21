@@ -1244,6 +1244,23 @@ la page des versions, qui nomme le commit de chaque fichier.
 déclenchement manuel du flux propose `preview` par défaut ; un tag `v*` pousse, lui, un
 build de production, donc un AAB.
 
+### 7.7 Éprouver la chaîne, sans rien publier _(~1 min)_
+
+Une fois la clef déposée (§7.4) et l'APK réinstallé, l'essai se fait **sans publier
+d'actualité** — et c'est ce qui le rend utile : il **sépare** la panne de notification de
+la panne de publication, deux choses qui se ressemblent à l'écran.
+
+1. Dans l'application : **Plus → Réglages → Notifications** → autorisez. L'écran doit dire
+   **« Autorisé »** _et_ **« Enregistré »**. Les deux mots sont séparés à dessein : le
+   second est celui qui dépend de la clef, et il vaut la vérification à lui seul.
+2. Dans le tableau de bord, page **« Notifications »** : copiez le jeton de votre appareil.
+3. Collez-le sur <https://expo.dev/notifications>, écrivez un titre, **Send a Notification**.
+
+**Si elle arrive, la chaîne entière est prouvée** : la clef, Firebase, et l'appareil. Et si
+elle n'arrive pas, le tableau de bord rend **un verdict par appareil** — c'est la forme de
+la réponse d'Expo, relevée dans `src/lib/expo.ts` —, donc le message dit _quel_ refus a eu
+lieu, au lieu de dire seulement que « quelque chose a échoué ».
+
 ---
 
 ## La liste à cocher
@@ -1383,13 +1400,16 @@ pas.
       retour sont retenues, et le « Site URL » n'est plus `localhost`. Restent deux
       écrans à regarder : les modèles d'e-mail et la longueur minimale du mot de
       passe
-- [ ] **Une clef Firebase**, pour que les notifications Android partent (§7) — et
-      **tout se fait dans un navigateur** : les gestes de la console Firebase, puis
-      le dépôt de la clef chez EAS (§7.4, voie sans terminal — la machine n'a pas
-      Node, donc `npx` n'y répond pas). `google-services.json`, lui, est **déjà
-      reçu et déclaré** (§7.6). Sans la clef, un téléphone peut **autoriser** les
-      notifications et n'en recevoir aucune : c'est exactement ce que la carte des
-      Réglages distingue, en disant « autorisé » et « enregistré » séparément
+- [x] **Une clef Firebase** déposée chez EAS — **fait le 21 septembre 2026 à 12 h 19**,
+      relevé sur l'écran « Credentials » d'Expo : le client de la clef est
+      `firebase-adminsdk-…@parentsfrereslumieres.iam.gserviceaccount.com`, donc le
+      **bon projet Firebase**. Le dépôt s'est fait dans un navigateur (§7.4, voie sans
+      terminal — la machine n'a pas Node, donc `npx` n'y répond pas).
+      `google-services.json`, lui, était **déjà reçu et déclaré** (§7.6).
+      Ce qui reste : **réinstaller l'APK**, puis l'essai ci-dessous. Sans la clef, un
+      téléphone peut **autoriser** les notifications et n'en recevoir aucune — c'est
+      exactement ce que la carte des Réglages distingue, en disant « autorisé » et
+      « enregistré » séparément
 - [ ] **Réinstaller l'APK** (§7.6) — il est **recompilé et à jour** depuis le 21 septembre
       2026 (commit `43c0123`, confirmé par EAS) : il ne reste que le geste d'installation
 - [x] Recopier les quatre valeurs SMTP dans Supabase — vérifié jusqu'au clic sur le lien
