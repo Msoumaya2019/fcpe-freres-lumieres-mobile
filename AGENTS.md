@@ -47,9 +47,12 @@ l'analyse du SQL et l'export Android. La CI exécute exactement la même chose.
 
 ## Les pièges qui coûtent une heure
 
-- **`npm run verify` échoue à sa dernière étape si `dist/` existe déjà** : le
-  garde-fou de suppression compte les suppressions **du tour courant**. Déplacez
-  `dist` avant de relancer, sans quoi l'échec ne dit rien du code.
+- **Une étape peut tomber sur un garde-fou de suppression, pas sur le code.**
+  Certains environnements d'agent interceptent les suppressions de fichiers et
+  refusent au-delà d'un quota **par tour** : la dernière étape de
+  `npm run verify` (`expo export`) échoue alors que tout le reste est vert.
+  Déplacez `dist` **hors du dépôt** avant de relancer. Sur une machine ordinaire
+  et en intégration continue, ce cas ne se produit pas.
 - **`npm audit fix --force` est interdit** : il casse la matrice de versions
   d'Expo.
 - **Il n'y a pas de `supabase/config.toml`** : les réglages vivent dans le tableau
