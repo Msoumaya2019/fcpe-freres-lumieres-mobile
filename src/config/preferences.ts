@@ -7,8 +7,8 @@
  * téléphone. Ce fichier-ci garde le reste, et passe par `AsyncStorage`, qui n'a
  * pas la limite de taille de `SecureStore` ni son coût.
  *
- * QUATRE FAMILLES DE CLÉS, UNE SEULE EST UNE PRÉFÉRENCE
- * -----------------------------------------------------
+ * CINQ FAMILLES DE CLÉS, DEUX SONT DES PRÉFÉRENCES
+ * ------------------------------------------------
  * Le préfixe `fcpe.` isole ces clés de celles qu'une autre bibliothèque
  * écrirait dans le même magasin. Il ne dit pas qu'elles se ressemblent :
  *
@@ -29,12 +29,17 @@
  *                            copie**. L'effacer, c'est perdre l'accès au fil
  *                            **définitivement** — là où un parent signale
  *                            parfois une situation personnelle.
+ *   `notifications.invitation` la marque de l'invitation déjà posée. L'effacer
+ *                            repose la question une fois de plus, et rien
+ *                            d'autre : c'est une préférence au même titre que
+ *                            les marques de lecture, à ceci près qu'aucun
+ *                            bouton ne la remet à zéro.
  *
  * D'où la règle que tient ce module : **l'effacement emporte ce qui se recrée,
  * jamais ce qui ne se recrée pas.** Il portait auparavant sur toutes les clés du
  * préfixe, et il détruisait donc en silence la seule copie des conversations
  * avec le bureau — sous un libellé qui parlait de badges de messages non lus.
- * `scripts/check-effacement.test.mjs` exerce les quatre familles à la fois.
+ * `scripts/check-effacement.test.mjs` exerce les cinq familles à la fois.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -92,6 +97,28 @@ export function cleVoteSondage(sondageId: string): string {
 export function cleConversation(): string {
   return 'contact.conversations';
 }
+
+/**
+ * La marque de l'invitation à activer les notifications, posée une fois.
+ *
+ * POURQUOI ELLE EST NÉCESSAIRE, ALORS QUE LE SYSTÈME SAIT DÉJÀ RÉPONDRE
+ * --------------------------------------------------------------------
+ * Le système rend `undetermined` tant que la question n'a jamais été posée, et
+ * c'est presque la même information — mais pas tout à fait. Un parent qui
+ * répond « Plus tard » ne change **pas** cet état : Android considère toujours
+ * n'avoir jamais demandé. Sans cette marque, l'invitation reviendrait donc à
+ * chaque ouverture, indéfiniment, jusqu'à ce que le parent cède ou refuse pour
+ * se débarrasser du message. Une question qui se répète n'est plus une question,
+ * c'est une pression — et le refus qu'elle finit par obtenir est **définitif**
+ * depuis Android 13.
+ *
+ * La marque vaut `vue` dès que le parent a répondu, dans un sens ou dans
+ * l'autre. Elle ne dit pas **ce qu'il** a répondu : l'état du système le dit
+ * déjà, et le recopier ici créerait deux copies d'une même vérité, dont la
+ * divergence serait silencieuse. C'est aussi ce qui la rend sans conséquence à
+ * effacer : la perdre repose la question une fois de plus, rien d'autre.
+ */
+export const INVITATION_NOTIFICATIONS = 'notifications.invitation';
 
 export async function lirePreference(cle: string): Promise<string | null> {
   return AsyncStorage.getItem(PREFIXE + cle);

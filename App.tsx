@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AuthProvider } from '@/auth/AuthProvider';
+import { InvitationNotifications } from '@/components';
 import { isSupabaseConfigured } from '@/config/env';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { ConfigurationScreen } from '@/screens/ConfigurationScreen';
@@ -42,8 +43,13 @@ const navigationTheme: Theme = {
  * exactement là où la configuration est valide.
  *
  * Il ne pose aucune question : `preparerNotifications` se tait tant que
- * l'autorisation n'a pas été accordée. La demande, elle, vit dans les Réglages,
- * sur un geste de l'adhérent.
+ * l'autorisation n'a pas été accordée. Un appareil qui a déjà répondu oui
+ * rafraîchit son jeton à chaque ouverture, ce qui est le but — un jeton se
+ * périme, et un jeton périmé ne se voit qu'en ne recevant rien.
+ *
+ * La question, elle, est posée **une seule fois** par `InvitationNotifications`,
+ * monté juste en dessous, et elle passe par l'application avant d'atteindre le
+ * système. Les deux ne se recouvrent pas : celui-ci rafraîchit, l'autre demande.
  */
 function EnregistrementAppareil() {
   useEffect(() => {
@@ -70,6 +76,11 @@ export default function App() {
           <NavigationContainer theme={navigationTheme}>
             <RootNavigator />
           </NavigationContainer>
+          {/*  Monté **après** la navigation, et c'est ce qui le fait passer
+              au-dessus : dans React Native, deux frères s'empilent dans l'ordre
+              où ils sont écrits. Le composant ne rend rien tant qu'il n'a pas
+              de question à poser, et sa `Modal` n'existe alors pas du tout. */}
+          <InvitationNotifications />
         </AuthProvider>
       ) : (
         <ConfigurationScreen />

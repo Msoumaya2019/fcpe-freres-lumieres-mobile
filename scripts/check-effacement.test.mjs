@@ -4,13 +4,14 @@
  * POURQUOI CE FICHIER
  * -------------------
  * `src/config/preferences.ts` portait `effacerPreferences()`, qui effaçait
- * **toutes** les clés du préfixe `fcpe.`. Quatre familles vivent sous ce
- * préfixe, et une seule est une préférence :
+ * **toutes** les clés du préfixe `fcpe.`. Cinq familles vivent sous ce
+ * préfixe, et deux sont des préférences :
  *
- *   `discussion.lu.*`        une marque de lecture — se recalcule ;
- *   `appareil.cle`           la clé qui empêche de voter deux fois — une limite ;
- *   `sondage.vote.*`         le vote déposé par cet appareil — un fait ;
- *   `contact.conversations`  le **secret** des conversations avec le bureau.
+ *   `discussion.lu.*`          une marque de lecture — se recalcule ;
+ *   `appareil.cle`             la clé qui empêche de voter deux fois — une limite ;
+ *   `sondage.vote.*`           le vote déposé par cet appareil — un fait ;
+ *   `contact.conversations`    le **secret** des conversations avec le bureau ;
+ *   `notifications.invitation` la marque de l'invitation déjà posée — se repose.
  *
  * Le quatrième est la raison de ce fichier. Le serveur ne garde qu'une
  * **empreinte** de ce secret, et ne le rend qu'à la création : le téléphone en
@@ -24,9 +25,15 @@
  * CE QUE CE BANC EXERCE, ET NON CE QU'IL RELIT
  * -------------------------------------------
  * Il n'inspecte pas le texte du module : il **appelle** l'effacement sur les
- * quatre familles à la fois, puis regarde ce qui reste dans le magasin. C'est la
- * seule mesure qui vaille ici — un contrôle qui lirait le motif du filtre
- * laisserait passer un `clear()` écrit juste à côté.
+ * familles à la fois, puis regarde ce qui reste dans le magasin. C'est la seule
+ * mesure qui vaille ici — un contrôle qui lirait le motif du filtre laisserait
+ * passer un `clear()` écrit juste à côté.
+ *
+ * La cinquième famille a été ajoutée le 21 septembre 2026, en même temps que la
+ * marque qu'elle désigne. C'est le point qui compte : une famille de clés
+ * ajoutée au module et **oubliée ici** aurait été épargnée sans que rien ne le
+ * dise — le banc serait resté vert, et sa liste d'exemptions aurait été fausse
+ * par omission.
  *
  * La doublure d'`AsyncStorage` ne portait que `getItem`, `setItem` et
  * `removeItem` : `getAllKeys` et `multiRemove` manquaient, et ce module était
@@ -34,8 +41,8 @@
  * rend pas un module difficile à tester, elle le rend intestable.
  *
  * Éprouvé dans les deux sens : en rétablissant l'effacement sur le préfixe
- * entier, le premier test tombe et nomme les trois clés disparues ; en réduisant
- * le filtre à une famille qui n'existe pas, le second tombe.
+ * entier, le premier test tombe et nomme les clés disparues ; en réduisant le
+ * filtre à une famille qui n'existe pas, le second tombe.
  */
 
 import assert from 'node:assert/strict';
@@ -50,6 +57,7 @@ const PREFERENCES = new URL('../src/config/preferences.ts', import.meta.url).hre
 
 const {
   CLE_APPAREIL,
+  INVITATION_NOTIFICATIONS,
   cleConversation,
   cleDerniereLectureDiscussion,
   cleVoteSondage,
@@ -59,17 +67,18 @@ const {
 } = await import(PREFERENCES);
 
 /** Ce que le téléphone retient, et que l'effacement doit laisser en place. */
-async function ecrireLesTroisFamillesEpargnees() {
+async function ecrireLesFamillesEpargnees() {
   await ecrirePreference(CLE_APPAREIL, 'cle-de-cet-appareil');
   await ecrirePreference(cleVoteSondage('sondage-1'), 'choix-2');
   await ecrirePreference(cleConversation(), JSON.stringify([{ id: 'fil-1', secret: 'secret-1' }]));
+  await ecrirePreference(INVITATION_NOTIFICATIONS, 'vue');
 }
 
 test("l'effacement des marques de lecture laisse intact ce qui ne se recrée pas", async () => {
   resetAsyncStorage();
 
   await ecrirePreference(cleDerniereLectureDiscussion('adherent-1'), '2026-09-19T20:00:00.000Z');
-  await ecrireLesTroisFamillesEpargnees();
+  await ecrireLesFamillesEpargnees();
 
   await effacerMarquesDeLecture();
 
@@ -95,6 +104,15 @@ test("l'effacement des marques de lecture laisse intact ce qui ne se recrée pas
     await lirePreference(cleVoteSondage('sondage-1')),
     'choix-2',
     "la trace du vote a été effacée : l'écran reproposerait de voter, et le serveur refuserait",
+  );
+  //  Épargner cette marque n'est pas une garantie de sécurité, et c'est écrit
+  //  ici pour que personne ne s'y trompe : l'effacer repose la question une
+  //  fois de plus, rien d'autre. Ce qui est tenu, c'est que l'effacement reste
+  //  **total sur sa famille** — il n'emporte pas ce qu'il n'annonce pas.
+  assert.equal(
+    await lirePreference(INVITATION_NOTIFICATIONS),
+    'vue',
+    "la marque de l'invitation a été effacée : la question serait reposée à la prochaine ouverture",
   );
 });
 

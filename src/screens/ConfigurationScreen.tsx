@@ -48,7 +48,8 @@ export function ConfigurationScreen() {
             à votre compte ni à votre téléphone.
           </AppText>
           <AppText variant="caption">
-            Signalez le problème au bureau de la FCPE : la correction se fait de leur côté.
+            Signalez le problème au bureau de l&apos;association : la correction se fait de leur
+            côté.
           </AppText>
         </Card>
       </Screen>

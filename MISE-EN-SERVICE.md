@@ -1096,17 +1096,24 @@ vôtres. Tout le reste est fait.
 - La demande d'autorisation vit dans `src/services/push.ts` ; le dépôt du jeton est  
   resté dans `src/services/notifications.ts`, qui ne connaît **aucun** module natif.  
   C'est cette séparation qui rend l'écriture vérifiable sans téléphone.
-- L'écran **Réglages** porte la carte « Notifications », et c'est **le seul endroit**  
-  qui pose la question. Au démarrage, l'application se tait : un appareil qui a déjà  
-  répondu oui rafraîchit son jeton, un appareil qui n'a jamais répondu reste en paix.
+- L'écran **Réglages** porte la carte « Notifications », et il s'ouvre désormais
+  **sans compte** — c'est le seul écran de commandes de l'application, et un parent
+  qui lit les menus sans adhérer a autant de raisons d'être prévenu qu'un adhérent.
+  Une invitation le propose **une seule fois**, à la première ouverture, après le
+  premier écran : c'est l'application qui pose la question en clair, avant que le
+  système n'en pose une. Au démarrage, l'application ne fait que rafraîchir un
+  jeton déjà accordé ; un appareil qui n'a jamais répondu reste en paix.
 - Le canal Android `default` est créé à l'exécution **et** annoncé au manifeste.  
   Vérifié par une précompilation réelle, et non par lecture du code : le manifeste  
   produit porte `com.google.firebase.messaging.default_notification_channel_id = "default"`.
 - Les politiques de `push_tokens` autorisent déjà l'insertion et la mise à jour par un  
   appareil **anonyme** : **aucun fichier SQL n'est à coller** pour cette étape.
-- Un banc tient les quatre accords — la frontière entre les deux moitiés, l'unicité de  
-  l'import natif, le canal identique des deux côtés, et l'appel **réel** depuis le point  
-  d'entrée. Il a été éprouvé dans les deux sens : **quatre mutations, quatre chutes.**
+- Un banc tient les cinq accords — la frontière entre les deux moitiés, l'unicité de  
+  l'import natif, le canal identique des deux côtés, l'appel **réel** depuis le point  
+  d'entrée, et l'invitation **montée** qui passe par le service en écrivant sa marque.  
+  Éprouvé dans les deux sens, défaut par défaut : la question non montée, l'appel hors  
+  du service, la marque écrite sous une autre clé, et l'effacement élargi au préfixe —  
+  **quatre mutations, quatre chutes.**
 
 **Ce que vous avez à faire tient en cinq gestes**, tous dans un navigateur sauf le  
 quatrième, qui demande un terminal.
@@ -1250,10 +1257,16 @@ Une fois la clef déposée (§7.4) et l'APK réinstallé, l'essai se fait **sans
 d'actualité** — et c'est ce qui le rend utile : il **sépare** la panne de notification de
 la panne de publication, deux choses qui se ressemblent à l'écran.
 
-1. Dans l'application : **Plus → Réglages → Notifications** → autorisez. L'écran doit dire
-   **« Autorisé »** _et_ **« Enregistré »**. Les deux mots sont séparés à dessein : le
-   second est celui qui dépend de la clef, et il vaut la vérification à lui seul.
-2. Dans le tableau de bord, page **« Notifications »** : copiez le jeton de votre appareil.
+1. Dans l'application : à la première ouverture, une invitation propose d'**activer les
+   notifications** — et si vous l'avez reportée, **Plus → Réglages → Notifications**.
+   Après l'appui, l'écran doit dire **« Ce téléphone est enregistré »**. Les deux faits
+   sont séparés à dessein : « autorisé » dépend du système, « enregistré » dépend de la
+   clef — et c'est le second qui décide si une notification arrivera.
+2. Dans le tableau de bord, page **« Notifications »** : chaque appareil y est affiché
+   avec son jeton entier, et le bouton **« Copier le jeton »** le met dans le
+   presse-papiers. _(Cette page demandait la colonne et n'affichait que le nombre
+   d'appareils jusqu'au 21 septembre 2026 ; c'est le contrôle `verifier-colonnes-lues`
+   qui tient désormais la règle.)_
 3. Collez-le sur <https://expo.dev/notifications>, écrivez un titre, **Send a Notification**.
 
 **Si elle arrive, la chaîne entière est prouvée** : la clef, Firebase, et l'appareil. Et si

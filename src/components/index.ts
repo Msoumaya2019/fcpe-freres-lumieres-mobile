@@ -19,6 +19,7 @@ export {
 } from '@/components/Commentaires';
 export { EmptyState, type EmptyStateProps } from '@/components/EmptyState';
 export { ErrorNotice, type ErrorNoticeProps } from '@/components/ErrorNotice';
+export { InvitationNotifications } from '@/components/InvitationNotifications';
 export { LoadingView, type LoadingViewProps } from '@/components/LoadingView';
 export { Screen, type ScreenProps } from '@/components/Screen';
 export { SectionHeader, type SectionHeaderProps } from '@/components/SectionHeader';

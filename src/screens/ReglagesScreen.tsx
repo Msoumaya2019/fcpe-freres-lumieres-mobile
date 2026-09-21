@@ -44,17 +44,37 @@ import { formatShortDate } from '@/utils/date';
  *
  * CE QUE L'APPLICATION PEUT FAIRE, ÉCRIT PLUTÔT QUE TU
  * ---------------------------------------------------
- * Les notifications existent désormais, et la carte ci-dessous est le **seul**
- * endroit qui les demande. Le démarrage, lui, se tait : un appareil qui a déjà
- * répondu oui rafraîchit son jeton, un appareil qui n'a jamais répondu reste en
- * paix. Poser la question à l'ouverture ferait apparaître une boîte système
- * avant que l'adhérent ait vu quoi que ce soit — et sur Android 13 et au-delà,
- * un refus à ce moment-là est **définitif**.
+ * Les notifications existent désormais, et la carte ci-dessous en est la porte
+ * **permanente** : elle reste ouverte après une invitation reportée, et c'est
+ * elle qui nomme le chemin des réglages d'Android lorsqu'un refus a été
+ * définitif — le seul cas où l'application ne peut plus rien.
+ *
+ * Le démarrage ne rafraîchit que ce qui existe déjà : un appareil qui a répondu
+ * oui redépose son jeton, un appareil qui n'a jamais répondu reste en paix. La
+ * question, quand elle est posée, vient d'`InvitationNotifications`, **une seule
+ * fois**, après le premier écran et à travers une phrase qui explique à quoi
+ * cela sert. La boîte système n'est donc jamais la première chose qu'un parent
+ * voit, et « Plus tard » ne consomme pas son unique demande — ce qui était
+ * exactement le risque de la poser à l'ouverture.
  *
  * Ce que la carte refuse de promettre : « autorisé » et « enregistré » sont deux
- * faits distincts, et ils sont dits séparément. Une autorisation accordée dont
- * le jeton n'a pas pu être déposé n'enverrait rien, et l'écran le dit à ce
- * moment-là plutôt que de laisser croire que tout va bien.
+ * faits distincts, et ils sont dits séparément — **dans les deux sens**. Une
+ * autorisation accordée dont le jeton n'a pas pu être déposé n'enverrait rien, et
+ * l'écran le dit à ce moment-là plutôt que de laisser croire que tout va bien ;
+ * un dépôt réussi est confirmé de la même façon, parce que c'est lui qui décide
+ * si une notification arrivera, et lui seul qui dépend de la clef de service.
+ * La phrase ne survit pas au redémarrage — l'écran ne garde pas trace du dépôt
+ * —, et c'est la page « Notifications » du tableau de bord qui fait foi.
+ *
+ * ET CET ÉCRAN S'OUVRE SANS COMPTE
+ * --------------------------------
+ * C'est le seul écran de commandes que l'application offre, et un parent qui
+ * consulte les menus sans jamais créer de compte a autant de raisons de vouloir
+ * être prévenu qu'un adhérent. L'entrée du menu « Plus » est donc ouverte à
+ * tous, et les pièces qui parlent d'un compte — le nom, l'adresse, le rôle, la
+ * déconnexion — ne s'affichent que lorsqu'il y en a un. Ce qui reste pour tout
+ * le monde est ce qui ne dépend d'aucun compte : les notifications, ce que le
+ * téléphone retient, et la version.
  *
  * L'application est en thème clair uniquement — `app.json` fixe
  * `userInterfaceStyle: "light"` —, et un sélecteur d'apparence ne changerait
@@ -79,8 +99,8 @@ function phraseNotifications(etat: EtatPush): string {
       return etat.peutRedemander
         ? 'Les notifications sont refusées. Le bouton ci-dessous repose la question.'
         : 'Les notifications sont refusées, et Android ne repose plus la question. Pour les ' +
-            'réactiver : Réglages du téléphone, puis Applications, puis FCPE Frères Lumières, ' +
-            'puis Notifications.';
+            'réactiver : Réglages du téléphone, puis Applications, puis Parents d’élèves des ' +
+            'Frères Lumières, puis Notifications.';
     case 'indisponible':
       return 'Cet appareil ne peut pas recevoir de notifications.';
   }
@@ -90,6 +110,14 @@ export function ReglagesScreen({
   navigation,
 }: NativeStackScreenProps<PlusStackParamList, 'Reglages'>) {
   const { profile, session, signOut } = useAuth();
+
+  //  Cet écran s'ouvre aussi sans compte — c'est la seule commande de
+  //  l'application qu'un parent qui n'a jamais adhéré peut avoir besoin
+  //  d'atteindre. Les pièces qui parlent d'un compte ne s'affichent donc que
+  //  lorsqu'il y en a un : montrer « Rôle inconnu » et une adresse « — » à
+  //  quelqu'un qui n'a jamais créé de compte lui ferait croire à un profil
+  //  abîmé.
+  const connecte = session !== null;
 
   const [confirmation, setConfirmation] = useState(false);
   const [occupe, setOccupe] = useState(false);
@@ -136,10 +164,19 @@ export function ReglagesScreen({
       // L'autorisation accordée et le jeton déposé sont deux faits. Quand le
       // second manque, le taire ferait croire à un parent qu'il sera prévenu —
       // alors que rien n'est enregistré, et qu'il ne recevra rien.
+      //
+      // Le succès est dit aussi, et pour la même raison : sans cette phrase,
+      // l'écran affiche « autorisé » et se tait sur le dépôt du jeton. Or c'est
+      // le dépôt qui décide si une notification arrivera, et c'est celui qui
+      // dépend de la clef de service — donc celui qu'il faut pouvoir lire.
       if (etat.autorisation === 'accordees' && !enregistre) {
         setMessageNotifications(
           "L'autorisation est accordée, mais ce téléphone n'a pas pu être enregistré. " +
             'Réessayez dans un instant.',
+        );
+      } else if (enregistre) {
+        setMessageNotifications(
+          'Ce téléphone est enregistré : le bureau peut désormais lui envoyer une notification.',
         );
       }
     } catch {
@@ -165,28 +202,30 @@ export function ReglagesScreen({
   return (
     <Screen scrollable edges={[]}>
       <View style={styles.contenu}>
-        <Card>
-          <AppText variant="caption" bold>
-            Compte
-          </AppText>
-          <AppText variant="body">{profile?.display_name ?? 'Adhérent'}</AppText>
-          <AppText variant="caption">{session?.user.email ?? '—'}</AppText>
-          <AppText variant="caption">
-            {profile === null
-              ? 'Rôle inconnu'
-              : profile.role === 'admin'
-                ? 'Bureau de l’association'
-                : 'Adhérent'}
-            {profile === null ? '' : ` · membre depuis le ${formatShortDate(profile.created_at)}`}
-          </AppText>
-          <Button
-            label="Voir mon profil"
-            variant="secondary"
-            onPress={() => {
-              navigation.navigate('Profil');
-            }}
-          />
-        </Card>
+        {connecte ? (
+          <Card>
+            <AppText variant="caption" bold>
+              Compte
+            </AppText>
+            <AppText variant="body">{profile?.display_name ?? 'Adhérent'}</AppText>
+            <AppText variant="caption">{session?.user.email ?? '—'}</AppText>
+            <AppText variant="caption">
+              {profile === null
+                ? 'Rôle inconnu'
+                : profile.role === 'admin'
+                  ? 'Bureau de l’association'
+                  : 'Adhérent'}
+              {profile === null ? '' : ` · membre depuis le ${formatShortDate(profile.created_at)}`}
+            </AppText>
+            <Button
+              label="Voir mon profil"
+              variant="secondary"
+              onPress={() => {
+                navigation.navigate('Profil');
+              }}
+            />
+          </Card>
+        ) : null}
 
         <Card>
           <AppText variant="caption" bold>
@@ -195,8 +234,8 @@ export function ReglagesScreen({
           <View style={styles.ligne}>
             <Ionicons name="phone-portrait-outline" size={16} color={colors.textSecondary} />
             <AppText variant="caption" style={styles.ligneTexte}>
-              Sur ce téléphone : jusqu’où vous avez lu la discussion, et la clé de vote qui empêche
-              d’y voter deux fois.
+              Sur ce téléphone : la clé de vote qui empêche de voter deux fois à un sondage.
+              {connecte ? ' Et, pour la discussion, jusqu’où vous l’avez lue.' : ''}
             </AppText>
           </View>
           <View style={styles.ligne}>
@@ -207,19 +246,27 @@ export function ReglagesScreen({
               recréé.
             </AppText>
           </View>
-          <View style={styles.ligne}>
-            <Ionicons name="cloud-outline" size={16} color={colors.textSecondary} />
-            <AppText variant="caption" style={styles.ligneTexte}>
-              Sur le serveur : votre nom affiché et votre rôle. Jamais votre adresse de connexion.
-            </AppText>
-          </View>
-          <View style={styles.ligne}>
-            <Ionicons name="eye-off-outline" size={16} color={colors.textSecondary} />
-            <AppText variant="caption" style={styles.ligneTexte}>
-              Aucun autre adhérent ne voit votre adresse. La suppression de votre compte efface vos
-              messages par cascade.
-            </AppText>
-          </View>
+          {/*  Ces deux lignes ne parlent que d'un compte : les afficher à un
+              parent qui n'en a jamais créé lui ferait chercher un nom et une
+              adresse qui n'existent pas. */}
+          {connecte ? (
+            <>
+              <View style={styles.ligne}>
+                <Ionicons name="cloud-outline" size={16} color={colors.textSecondary} />
+                <AppText variant="caption" style={styles.ligneTexte}>
+                  Sur le serveur : votre nom affiché et votre rôle. Jamais votre adresse de
+                  connexion.
+                </AppText>
+              </View>
+              <View style={styles.ligne}>
+                <Ionicons name="eye-off-outline" size={16} color={colors.textSecondary} />
+                <AppText variant="caption" style={styles.ligneTexte}>
+                  Aucun autre adhérent ne voit votre adresse. La suppression de votre compte efface
+                  vos messages par cascade.
+                </AppText>
+              </View>
+            </>
+          ) : null}
         </Card>
 
         <Card>
@@ -319,13 +366,28 @@ export function ReglagesScreen({
           <AppText variant="caption">{version}</AppText>
         </Card>
 
-        <Button
-          label="Se déconnecter"
-          variant="secondary"
-          onPress={() => {
-            void signOut();
-          }}
-        />
+        {connecte ? (
+          <Button
+            label="Se déconnecter"
+            variant="secondary"
+            onPress={() => {
+              void signOut();
+            }}
+          />
+        ) : (
+          //  Sans compte, il n'y a rien à déconnecter — et proposer le bouton
+          //  quand même serait un bouton qui n'agit sur rien, ce que l'en-tête
+          //  de cet écran refuse. La porte de l'espace membres, elle, a un sens
+          //  ici : c'est le seul endroit où un parent qui a ouvert les Réglages
+          //  sans compte peut décider d'en créer un.
+          <Button
+            label="Se connecter ou adhérer"
+            variant="secondary"
+            onPress={() => {
+              navigation.navigate('AccesMembre');
+            }}
+          />
+        )}
       </View>
     </Screen>
   );

@@ -579,7 +579,7 @@ export function ConnexionScreen() {
         style={styles.flex}
       >
         <View style={styles.brand}>
-          <AppText variant="title">FCPE Frères Lumières</AppText>
+          <AppText variant="title">Parents d’élèves des Frères Lumières</AppText>
           <AppText variant="caption">Écoles Frères Lumières — Montmagny</AppText>
         </View>
 
@@ -626,10 +626,10 @@ export function ConnexionScreen() {
                   discussion est-elle vide ? » posée trois jours plus tard. */}
               {isSignUp ? (
                 <AppText variant="caption">
-                  Ce compte sert à rejoindre l’espace des membres de la FCPE. Votre demande sera
-                  examinée par le bureau de l’association : la discussion s’ouvrira une fois votre
-                  inscription acceptée. Pour lire les menus, l’agenda et les actualités, aucun
-                  compte n’est nécessaire.
+                  Ce compte sert à rejoindre l’espace des membres de l’association. Votre demande
+                  sera examinée par le bureau : la discussion s’ouvrira une fois votre inscription
+                  acceptée. Pour lire les menus, l’agenda et les actualités, aucun compte n’est
+                  nécessaire.
                 </AppText>
               ) : null}
 

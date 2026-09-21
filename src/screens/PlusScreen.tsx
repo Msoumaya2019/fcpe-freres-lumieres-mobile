@@ -132,10 +132,16 @@ const ENTREES: readonly Entree[] = [
   {
     cle: 'Reglages',
     titre: 'Réglages',
-    sousTitre: 'Préférences, confidentialité, déconnexion',
+    sousTitre: 'Notifications et confidentialité',
     icone: 'settings-outline',
     accent: 'bleu',
-    membres: true,
+    //  La seule entrée de ce menu qui s'ouvre **sans compte**, avec les
+    //  documents et les actualités. C'est délibéré : les notifications sont
+    //  utiles à un parent qui n'a jamais créé de compte — il lit les menus et
+    //  l'agenda, et veut savoir quand une actualité paraît. Lui fermer les
+    //  Réglages revenait à réserver la seule commande de l'application à ceux
+    //  qui ont déjà tout le reste.
+    membres: false,
     bureau: false,
   },
 ];

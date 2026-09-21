@@ -22,20 +22,26 @@
  * *recommande*, et c'est justement pourquoi il faut dire non : une
  * recommandation n'est pas une mesure.
  *
- * L'AUTORISATION NE SE DEMANDE PAS TOUTE SEULE
- * ---------------------------------------------
- * Deux chemins, et ils ne se recouvrent pas :
+ * L'AUTORISATION SE DEMANDE SUR UN GESTE, JAMAIS TOUTE SEULE
+ * ----------------------------------------------------------
+ * `demanderNotifications()` est la **seule** fonction qui ouvre la boîte de
+ * dialogue du système. Deux écrans l'appellent, et ils ne se recouvrent pas :
  *
- *   - `preparerNotifications()`, au démarrage : **ne pose aucune question**. Un
- *     appareil qui a déjà dit oui rafraîchit son jeton ; un appareil qui n'a
- *     jamais répondu reste en paix.
- *   - `demanderNotifications()`, depuis l'écran Réglages : le seul endroit qui
- *     ouvre la boîte de dialogue du système, et il le fait sur un geste.
+ *   - `InvitationNotifications`, monté à la racine : **une fois**, à la
+ *     première ouverture, après que le premier écran a été vu. C'est
+ *     l'application qui pose la question, en clair, avant que le système n'en
+ *     pose une.
+ *   - l'écran Réglages : la porte permanente, pour qui a reporté ou refusé.
  *
- * Une demande posée à l'ouverture ferait apparaître une boîte système avant que
- * l'adhérent ait vu quoi que ce soit. Et un refus, à ce moment-là, est
- * **définitif** : depuis Android 13, l'application ne peut plus le reposer —
- * c'est ce que `peutRedemander` rapporte, et ce que l'écran doit dire.
+ * `preparerNotifications()`, au démarrage, **ne pose aucune question** : un
+ * appareil qui a déjà dit oui rafraîchit son jeton ; un appareil qui n'a jamais
+ * répondu reste en paix.
+ *
+ * Ce qui reste vrai, et qui décide de tout : un refus est **définitif**. Depuis
+ * Android 13, l'application ne peut plus reposer la question — c'est ce que
+ * `peutRedemander` rapporte, et ce que l'écran doit dire. C'est précisément
+ * pourquoi la question de l'application précède celle du système : le parent
+ * peut répondre « Plus tard » sans avoir rien refusé.
  */
 
 import * as Notifications from 'expo-notifications';
