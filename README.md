@@ -1785,11 +1785,15 @@ générateur produit est la seule preuve que ces propriétés sont réellement
 | Déclaré dans `app.json`       | Écrit dans le projet natif                                                          |
 | ----------------------------- | ----------------------------------------------------------------------------------- |
 | `android.package`             | `namespace` et `applicationId` = `fr.fcpe.frereslumieres`                           |
-| `version`                     | `versionName "0.1.0"`, `versionCode 1`                                              |
+| `version`                     | `versionName "0.2.0"`, `versionCode 1`                                              |
 | `scheme: "fcpefl"`            | un `intent-filter` `VIEW` + `BROWSABLE` portant `<data android:scheme="fcpefl"/>`   |
 | `blockedPermissions` (trois)  | les trois, marquées `tools:node="remove"` — donc absentes du manifeste **fusionné** |
 | `userInterfaceStyle: "light"` | `<string name="expo_system_ui_user_interface_style">light</string>`                 |
 | greffon `expo-splash-screen`  | `splashscreen_background` = **`#2554D6`**                                           |
+
+La ligne `version` a été mesurée avec `0.1.0` déclaré, et le générateur a recopié
+cette valeur telle quelle : le champ suit donc `app.json`, qui porte `0.2.0` depuis le
+21 septembre 2026.
 
 Deux points méritent d'être soulignés :
 

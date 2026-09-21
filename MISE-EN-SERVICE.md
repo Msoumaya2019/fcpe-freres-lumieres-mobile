@@ -1039,13 +1039,21 @@ téléphone.
 
 ### Où se trouvent les deux fichiers
 
-Les deux binaires de la version **0.1.0** sont attachés à une page unique :
+Les deux binaires de la version **0.2.0** sont attachés à une page unique :
 `https://github.com/Msoumaya2019/fcpe-freres-lumieres-mobile/releases/latest`.
 
-Vous y trouverez `fcpe-freres-lumieres-0.1.0-android.apk` et
-`fcpe-freres-lumieres-0.1.0-non-signe.ipa`. **Le nom du fichier porte la version** :
+Vous y trouverez `fcpe-freres-lumieres-0.2.0-android.apk` et
+`fcpe-freres-lumieres-0.2.0-non-signe.ipa`. **Le nom du fichier porte la version** :
 c'est ce qui permet de savoir ce qu'on installe sans ouvrir le fichier — un binaire
 ne vaut que pour le commit dont il est né.
+
+**L'APK de cette version n'est pas encore là, et c'est daté.** L'IPA a été déposé le
+21 septembre ; l'APK **arrive le 1er octobre**, parce que le forfait gratuit d'Expo a
+épuisé ses compilations Android du mois et refuse de démarrer avant cette date. En
+attendant, l'APK publié le 21 septembre reste téléchargeable sur la page de la
+version précédente — `…/releases/tag/v0.1.0` — mais il a été compilé **six commits**
+avant l'état actuel : il ne porte ni l'avis sur l'accueil, ni le lien vers
+l'information des familles à l'inscription.
 
 Deux autres adresses circulent, et **aucune des deux ne marchera pour vous**, parce
 qu'elles demandent un compte : la page de compilation EAS affichée en fin de build
@@ -1057,7 +1065,9 @@ trois voies qu'un téléphone puisse suivre seul.
 ### Sur Android — l'APK
 
 1. Ouvrez la page des versions ci-dessus, **depuis le téléphone**, et téléchargez
-   `fcpe-freres-lumieres-0.1.0-android.apk`.
+   `fcpe-freres-lumieres-0.2.0-android.apk` — **à partir du 1er octobre**. D'ici là,
+   prenez l'APK de la version précédente, sur
+   `https://github.com/Msoumaya2019/fcpe-freres-lumieres-mobile/releases/tag/v0.1.0`.
 2. Android affiche un avertissement : « Pour votre sécurité, votre téléphone n'est  
    pas autorisé à installer des applications inconnues provenant de cette source ».  
    Touchez **Paramètres**, puis activez **Autoriser depuis cette source**.
@@ -1075,7 +1085,7 @@ que je produis n'est donc pas un produit fini, c'est un **produit intermédiaire
 compilation sans la signature — et c'est ESign qui pose la signature, sur le téléphone.
 
 1. Ouvrez la page des versions ci-dessus, **depuis l'iPhone**, et téléchargez
-   `fcpe-freres-lumieres-0.1.0-non-signe.ipa`.
+   `fcpe-freres-lumieres-0.2.0-non-signe.ipa`.
 2. Ouvrez ESign et importez le fichier.
 3. Signez-le avec un certificat obtenu **sur l'appareil** — c'est le geste que je ne
    peux pas faire à votre place, il engage votre identifiant Apple.
