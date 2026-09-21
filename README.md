@@ -1,7 +1,13 @@
-# FCPE Frères Lumières — application mobile
+# Parents d'élèves des Frères Lumières — application mobile
 
-Application mobile des adhérents de la FCPE des écoles Frères Lumières
-(Montmagny). Expo / React Native, React Navigation, Supabase.
+Application mobile des familles des écoles Frères Lumières (Montmagny).
+Expo / React Native, React Navigation, Supabase.
+
+> **Le nom affiché a changé le 21 septembre 2026 ; l'identité technique n'a pas bougé.**
+> `slug`, `scheme`, `package` et `bundleIdentifier` portent toujours `fcpe-freres-lumieres`,
+> `fcpefl` et `fr.fcpe.frereslumieres`. C'est volontaire : ils sont liés au projet Expo, aux
+> liens de confirmation envoyés par e-mail et à la clef Firebase. Les renommer casserait ces
+> trois choses **sans rien afficher**.
 
 ```
 Connexion ──┬── Informations      annonces du bureau

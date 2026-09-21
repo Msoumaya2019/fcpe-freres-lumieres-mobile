@@ -2,7 +2,7 @@
   "name": "fcpe-freres-lumieres-mobile",
   "version": "0.1.0",
   "private": true,
-  "description": "Application mobile FCPE des écoles Frères Lumières (Montmagny) — Expo, React Navigation, Supabase.",
+  "description": "Parents d'élèves des Frères Lumières (Montmagny) — application mobile Expo, React Navigation, Supabase.",
   "license": "UNLICENSED",
   "main": "index.ts",
   "engines": {

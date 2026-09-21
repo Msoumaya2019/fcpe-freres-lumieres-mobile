@@ -96,7 +96,7 @@ gratuit suffit.
 
 1. Sur le tableau de bord, cliquez **New project**.
 2. Si l'on vous demande de créer une **organisation** d'abord : donnez-lui un nom  
-   quelconque, par exemple `FCPE Frères Lumières`. Le forfait gratuit suffit.
+   quelconque, par exemple `Parents d'élèves des Frères Lumières`. Le forfait gratuit suffit.
 3. Remplissez le formulaire :
 
    | Champ                 | Valeur à mettre                                                  |
@@ -1123,9 +1123,15 @@ quatrième, qui demande un terminal.
 1. Ouvrez <https://console.firebase.google.com> et connectez-vous avec votre compte  
    Google.
 2. Cliquez sur **Create a project** — parfois écrit **Add project**.
-3. Nom du projet : `FCPE Freres Lumieres`. Google Analytics n'est pas nécessaire,  
-   vous pouvez le désactiver.
+3. Nom du projet : `parentsfrereslumieres`. **Ce nom n'est pas libre** : le fichier  
+   `google-services.json` déjà présent dans le dépôt déclare  
+   `"project_id": "parentsfrereslumieres"`. Un autre nom produirait un fichier qui ne  
+   s'applique pas à l'application. Google Analytics n'est pas nécessaire, vous pouvez  
+   le désactiver.
 4. Cliquez **Create project**, puis **Continue** quand la création est finie.
+
+> Le projet existe déjà sous ce nom — cette section décrit ce qui a été fait, et sert  
+> si vous devez un jour le refaire.
 
 ### 7.2 Y ajouter l'application Android _(~3 min)_
 
@@ -1153,7 +1159,7 @@ doit jamais passer par cette conversation.
 2. Ouvrez l'onglet **Service accounts**.
 3. Cliquez **Generate new private key**, puis confirmez avec **Generate key**.
 4. Un fichier `.json` se télécharge, sous un nom qui ressemble à  
-   `fcpe-freres-lumieres-firebase-adminsdk-xxxxx-xxxxxxxxxx.json`. **Ne le renommez  
+   `parentsfrereslumieres-firebase-adminsdk-xxxxx-xxxxxxxxxx.json`. **Ne le renommez  
    pas et ne le déplacez pas dans le projet.** Le dépôt l'ignore déjà — la ligne  
    `*firebase-adminsdk*.json` de `.gitignore` existe pour lui.
 
