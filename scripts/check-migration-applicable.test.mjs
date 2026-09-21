@@ -579,11 +579,12 @@ test('les migrations s’appliquent toutes, dans l’ordre, et se rejouent', () 
   assert.equal(toursComplets, 2, 'la suite n’a pas été jouée deux fois');
 });
 
-test('la suite complète produit les dix-sept tables attendues, et aucune autre', async () => {
+test('la suite complète produit les dix-huit tables attendues, et aucune autre', async () => {
   exigerLaSuite();
   assert.deepEqual(await tablesDeLaSuite(), [
     'agenda_events',
     'annonces',
+    'cantine_items',
     'cantine_menus',
     'cantine_reservations',
     'commentaires',
@@ -735,5 +736,134 @@ test('l’énumération des commentaires porte ses trois états, dans l’ordre'
   assert.deepEqual(
     rows.map(({ valeur }) => valeur),
     ['en_attente', 'publie', 'refuse'],
+  );
+});
+
+test('les six catégories de cantine sont dans le catalogue, dans l’ordre d’affichage', async () => {
+  // L'ORDRE DE CETTE ÉNUMÉRATION **EST** L'ORDRE DE L'ÉCRAN
+  // ------------------------------------------------------
+  // C'est la seule énumération du schéma dont le rang porte du sens : les six
+  // catégories d'un menu s'affichent dans l'ordre où elles sont déclarées, du
+  // plat aux « autres ». PostgreSQL range ses valeurs dans l'ordre de création
+  // et ne permet pas d'en insérer une au milieu : ajouter une catégorie en fin
+  // de liste la placerait après « autres », à l'écran, sans que rien ne le dise.
+  //
+  // Le texte de la migration est lu par `check-cantine`, qui le confronte à la
+  // constante TypeScript. Ici, c'est le **catalogue** qui parle — ce que la base
+  // a réellement retenu après avoir joué la suite deux fois.
+  exigerLaSuite();
+  const { rows } = await dbSuite.query(
+    'select e.enumlabel as valeur from pg_enum e ' +
+      'join pg_type t on t.oid = e.enumtypid ' +
+      "where t.typname = 'cantine_item_category' order by e.enumsortorder",
+  );
+  assert.deepEqual(
+    rows.map(({ valeur }) => valeur),
+    ['plat', 'accompagnement', 'laitage', 'dessert', 'menu', 'autres'],
+  );
+
+  // Le type de plat, lui, n'a pas d'ordre qui compte — mais ses trois valeurs
+  // sont nommées ici pour qu'une quatrième ajoutée sans libellé fasse tomber un
+  // banc plutôt que d'afficher `undefined` sur une pastille.
+  const { rows: plats } = await dbSuite.query(
+    'select e.enumlabel as valeur from pg_enum e ' +
+      'join pg_type t on t.oid = e.enumtypid ' +
+      "where t.typname = 'cantine_dish_type' order by e.enumsortorder",
+  );
+  assert.deepEqual(
+    plats.map(({ valeur }) => valeur),
+    ['viande', 'poisson', 'vegetarien'],
+  );
+});
+
+/**
+ * Le corps de la reprise, **lu dans la migration** plutôt que recopié.
+ *
+ * La première version de ce test en portait une copie, et la copie a vieilli
+ * toute seule : la migration a dû typer ses trois littéraux de catégorie — un
+ * `union all` réunit ses branches **avant** de les écrire, donc le type de la
+ * colonne est celui de la réunion, et un littéral non typé y reste du `text`,
+ * ce que PostgreSQL refuse —, et le test jouait toujours l'ancienne forme. Il
+ * est tombé sur le refus, ce qui est la bonne façon de l'apprendre, mais la
+ * cause n'était pas la migration : c'était la copie.
+ *
+ * `check-cantine` lit déjà le fichier pour la correspondance des anciennes
+ * colonnes. Ici la question est plus forte : on **exécute** ce qu'on lit. Une
+ * copie qui dérive ne mesure plus la migration, elle mesure son souvenir.
+ */
+function repriseDeLaMigration() {
+  const source = readFileSync(join(DOSSIER_MIGRATIONS, '20260922190000_cantine_items.sql'), 'utf8');
+  const debut = source.indexOf('with a_convertir as (');
+  const fin = source.indexOf(';', debut);
+
+  assert.ok(
+    debut !== -1 && fin !== -1,
+    'le corps de la reprise doit être lisible dans la migration : sans lui, ce ' +
+      'test ne mesurerait plus rien',
+  );
+
+  return source.slice(debut, fin + 1);
+}
+
+test('la reprise des journées déjà saisies n’écrase pas un menu déjà en aliments', async () => {
+  // LA MOITIÉ DE CETTE MIGRATION QUI NE SE LIT PAS DANS LE CATALOGUE
+  // ----------------------------------------------------------------
+  // Le fichier recopie les anciennes colonnes en aliments — une fois. C'est une
+  // écriture de données, et aucun banc ne la mesurait : les contrôles de
+  // migration regardent des tables, des colonnes, des politiques et des
+  // déclencheurs, jamais des **lignes**. Or c'est la partie qui touche aux menus
+  // déjà publiés, donc celle dont un défaut se verrait chez les familles.
+  //
+  // Ce qui est mesuré ici est la garde, et c'est elle qui compte : la reprise
+  // doit s'arrêter devant une journée qui a **déjà** des aliments. Sans elle, la
+  // suite jouée deux fois recopierait une seconde fois chaque ancienne colonne —
+  // et le menu afficherait deux fois le même plat, pour toujours.
+  exigerLaSuite();
+
+  // Une journée d'avant la migration : ses quatre colonnes, aucun aliment.
+  await dbSuite.query(
+    'insert into public.cantine_menus (id, service_date, starter, main_course, dessert, notes) values ' +
+      "('22222222-2222-4222-8222-222222222221', '2026-10-05', 'Salade', 'Roti de dinde', 'Compote', 'Sans porc') " +
+      'on conflict (id) do nothing',
+  );
+
+  // La reprise, jouée telle quelle : c'est le corps de la migration, lu dans le
+  // fichier plutôt que recopié ici.
+  await dbSuite.query(repriseDeLaMigration());
+
+  const lire = async () => {
+    const { rows } = await dbSuite.query(
+      'select category, label from public.cantine_items ' +
+        "where menu_id = '22222222-2222-4222-8222-222222222221' order by category, label",
+    );
+    return rows.map(({ category, label }) => `${category} ${label}`);
+  };
+
+  // Les trois colonnes deviennent trois aliments — et l'entrée va bien sous
+  // « autres », qui est la seule catégorie honnête pour elle.
+  //
+  // L'ORDRE DE CETTE LISTE EST CELUI DU CATALOGUE
+  // ---------------------------------------------
+  // `order by category` ne trie pas des mots : il trie le **rang** des valeurs
+  // dans l'énumération. Les trois aliments sortent donc dans l'ordre de
+  // l'écran — plat, dessert, autres — et non dans l'ordre alphabétique de leurs
+  // noms de catégorie, qui aurait donné autres, dessert, plat.
+  //
+  // C'est écrit ici parce que la première version de ce test attendait l'ordre
+  // alphabétique. Elle n'a jamais pu être verte : le test tombait avant, sur un
+  // refus de type. La correction a été trouvée en lisant le résultat, et elle
+  // vaut mieux qu'une explication — elle **mesure** l'ordre que l'autre test
+  // affirme sur le catalogue, depuis les lignes plutôt que depuis `pg_enum`.
+  assert.deepEqual(await lire(), ['plat Roti de dinde', 'dessert Compote', 'autres Salade']);
+
+  // Le témoin : la même reprise, rejouée **entière**. La garde doit la rendre
+  // inerte — et c'est bien la même, puisque c'est le même texte.
+  await dbSuite.query(repriseDeLaMigration());
+
+  assert.deepEqual(
+    await lire(),
+    ['plat Roti de dinde', 'dessert Compote', 'autres Salade'],
+    'la reprise rejouée doit être inerte : sans la garde « ce jour n’a pas encore ' +
+      'd’aliment », le menu afficherait deux fois la même entrée',
   );
 });

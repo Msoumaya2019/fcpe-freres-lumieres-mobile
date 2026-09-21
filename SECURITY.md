@@ -223,9 +223,9 @@ même chose et dans le même ordre.
 
 ## Ce que la relecture des politiques a établi
 
-Les **vingt** appels de `src/services/` ont été croisés un par un avec les
-politiques des migrations. Seize clés distinctes — quatre appels s'ajoutent à une
-clé déjà comptée : `profiles.select` est écrit trois fois, `annonces.select`
+Les **vingt et un** appels de `src/services/` ont été croisés un par un avec les
+politiques des migrations. Dix-sept clés distinctes — quatre appels s'ajoutent à
+une clé déjà comptée : `profiles.select` est écrit trois fois, `annonces.select`
 trois (la liste, sa lecture de repli, l'article par son identifiant) —, et
 **aucun n'écrit une ligne existante**.
 

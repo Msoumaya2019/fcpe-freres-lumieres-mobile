@@ -115,6 +115,7 @@ const MIGRATIONS_ATTENDUES = [
   '20260921210000_reglages_et_moderation.sql',
   '20260922090000_annonce_epinglee.sql',
   '20260922130000_jeton_appareil.sql',
+  '20260922190000_cantine_items.sql',
 ];
 
 /**

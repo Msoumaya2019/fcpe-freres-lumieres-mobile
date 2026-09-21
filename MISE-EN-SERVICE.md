@@ -116,11 +116,12 @@ gratuit suffit.
 > il est **irrécupérable**, et c'est le seul moyen de secours si un jour il faut  
 > accéder à la base directement.
 
-### 1.3 Créer les dix-sept tables
+### 1.3 Créer les dix-huit tables
 
 Dans le menu de gauche, cliquez **SQL Editor**, puis **New query**.
 
-Vous allez coller **huit fichiers**, l'un après l'autre, dans cet ordre.
+Vous allez coller **onze fichiers de migration**, l'un après l'autre, dans cet
+ordre — puis, si vous le souhaitez, un **douzième** qui n'est qu'un jeu d'essai.
 
 **Premier collage** — ouvrez ce fichier du projet et copiez tout son contenu :
 
@@ -300,7 +301,74 @@ de ce qu'elles lisaient la veille ; ce repli ne masque aucun autre refus, et
 `check-async-wiring` tient les deux moitiés — la colonne gardée, et l'ordre des
 deux lectures.
 
-**Dixième collage** — le jeu d'essai, et il est facultatif :
+**Dixième collage** — le jeton de l'appareil, et la politique qu'il remplace :
+
+```
+supabase/migrations/20260922130000_jeton_appareil.sql
+```
+
+Même geste, même message attendu. Ce fichier **ne crée aucune table** : il retire
+une politique de lecture sur `push_tokens` et ajoute une fonction,
+`enregistrer_jeton()`, qui écrit et rafraîchit un jeton d'appareil en une seule
+opération.
+
+Pourquoi retirer la politique : un appareil **sans compte** doit pouvoir
+enregistrer son jeton pour recevoir les notifications, mais rien ne justifie
+qu'il puisse **lire** la table des jetons — une lecture y montrerait les jetons
+des autres. La fonction fait donc le travail d'écriture, et vérifie elle-même ce
+qu'elle écrit.
+
+Il s'applique après le troisième collage, qui crée `push_tokens`. **Mesuré présent
+le 21 septembre 2026** : la fonction existe, et un appel avec une plateforme que
+la contrainte de la table refuse rend `23514` — donc elle est là, et **aucune
+ligne n'a été écrite**. C'est le seul marqueur de ce fichier, qui ne pose aucune
+colonne.
+
+**Onzième collage** — les aliments d'un jour de cantine :
+
+```
+supabase/migrations/20260922190000_cantine_items.sql
+```
+
+Même geste, même message attendu. C'est le fichier de la **nouvelle présentation
+des menus**.
+
+Ce qu'il apporte : une table `cantine_items`, et **deux listes fermées** qui
+vivent dans la base plutôt que dans l'application —
+
+- **les six catégories**, dans l'ordre d'affichage : `plat`, `accompagnement`,
+  `laitage`, `dessert`, `menu`, `autres`. C'est un type énuméré, donc l'ordre est
+  celui du catalogue de PostgreSQL : il ne peut pas glisser tout seul le jour où
+  une catégorie s'ajoute ;
+- **les trois types de plat**, et ils sont facultatifs : `viande`, `poisson`,
+  `vegetarien`. Ils ne servent qu'à colorer une pastille sous le nom du plat, et
+  aucun autre aliment n'en porte.
+
+Chaque ligne est **un aliment**, rattaché à un jour (`cantine_menus`) et rangé
+sous une catégorie. C'est ce qui permet **plusieurs aliments de la même
+catégorie** — deux plats, deux laitages, deux desserts — là où l'ancienne table
+n'avait qu'une colonne par catégorie.
+
+**Les journées déjà saisies sont reprises**, une seule fois : `starter` rejoint
+« autres », `main_course` rejoint « plat », `dessert` rejoint « dessert ». Rien
+n'est perdu, et les informations restent dans `cantine_menus.notes`, où elles
+continuent de s'afficher. La reprise ne touche **pas** une journée qui a déjà des
+aliments : la recoller ne double rien.
+
+> **À coller après le premier collage** : il lit `cantine_menus`, que le premier
+> crée. Collé seul, il s'arrête sur
+> `relation "public.cantine_menus" does not exist`.
+
+**Ce que l'application fait tant qu'il n'est pas collé** — les menus continuent de
+s'afficher, sous les trois mêmes catégories, à partir des anciennes colonnes.
+`fetchCantine` reconnaît les deux erreurs qui disent « cette table n'est pas
+là » — `42P01` et `PGRST205` —, et **elles seules** : tout autre refus est
+propagé tel quel, pour qu'une politique manquante ne se déguise pas en base en
+retard. Une base en retard ne doit pas priver les familles de ce qu'elles
+lisaient la veille ; `check-cantine` tient les deux moitiés — la table lue quand
+elle existe, et les anciennes colonnes quand elle n'existe pas.
+
+**Douzième collage** — le jeu d'essai, et il est facultatif :
 
 ```
 supabase/seed.sql
@@ -309,7 +377,7 @@ supabase/seed.sql
 **Attendu : `Success. No rows returned`** — un `insert` ne renvoie pas de lignes,  
 donc le message est le même. C'est normal.
 
-> **Les neuf fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
+> **Les douze fichiers sont rejouables.** Si un message d'erreur apparaît, corrigez  
 > ce qu'il signale et relancez **le même fichier** : il ne créera pas de doublon, et  
 > il n'y a pas besoin de repartir de zéro.
 
@@ -502,19 +570,16 @@ Le compartiment se crée donc à la main, une fois.
 Tant que le compartiment n'existe pas, l'écran Documents affiche une erreur de
 chargement — les autres écrans ne sont pas affectés.
 
-### 1.5 Vérifier que les seize tables sont là
+### 1.5 Vérifier que les dix-huit tables sont là
 
 C'est la vraie vérification : le message `Success` ne dit pas que les tables  
 existent, il dit que le SQL n'a pas échoué.
 
-**Les quinze premières ont été vérifiées pour vous**, depuis l'extérieur, avec la
-clé que vous m'avez envoyée : les quinze **existent**. C'est la vraie
-vérification, et elle est faite. Les deux moitiés comptent — une table absente
-répondrait `404`, une table ouverte aurait laissé passer la lecture.
-
-**La seizième, `commentaires`, arrive avec le sixième fichier** — celui du super
-administrateur —, qui n'est pas encore appliqué. Tant qu'il ne l'est pas, elle
-n'existe pas : c'est normal, et c'est la seule des seize dans ce cas.
+**Les dix-huit ont été vérifiées pour vous**, depuis l'extérieur, avec la clé que
+vous m'avez envoyée — une par une, et **La liste à cocher**, plus bas, porte la
+sonde qui l'a prouvée pour chacune des onze migrations. Les deux moitiés
+comptent : une table absente répondrait `404`, une table ouverte aurait laissé
+passer la lecture.
 
 Elle ne dit pas la même chose de toutes, et c'est ce qui la rend utile :
 
@@ -532,38 +597,25 @@ Elle ne dit pas la même chose de toutes, et c'est ce qui la rend utile :
 - **`push_tokens` répond aussi avec zéro ligne, et pour une autre raison** : elle
   accepte l'écriture d'un appareil sans compte, mais sa lecture est réservée au
   bureau. Le rôle anonyme n'y voit rien, exactement comme la politique le décrit.
-
-**Les quatre premières migrations sont appliquées**, et c'est mesuré — le
-20 septembre 2026, depuis l'extérieur : la colonne `is_draft` répond `200`, et les
-sept fonctions qu'appelle le tableau de bord existent. Chacune refuse la clé
-publiable (`401`, `permission denied`), sauf `resultats_sondage`, qui l'accepte
-(`200`) — ouverte à `anon` par décision écrite, parce qu'elle rend des compteurs
-par réponse et jamais une ligne de votant.
-
-**La cinquième, elle, n'est pas encore appliquée** — et c'est mesuré aussi : en
-rôle anonyme, un vote franchit le privilège et la politique, et c'est le
-déclencheur qui refuse une réponse étrangère au sondage (`23514`, « Le choix ne
-fait pas partie de ce sondage »). Le chemin anonyme fonctionne donc, et c'est le
-rôle `authenticated` qui n'avait aucune politique d'insertion : le seul compte
-existant — celui du bureau — ne pouvait pas voter.
-
-**La sixième, celle du super administrateur, n'est pas appliquée non plus** — et
-c'est mesuré de la même façon : la colonne `est_super_admin` n'existe pas encore,
-et une requête qui la nomme échoue (`42703`) au lieu de répondre. C'est le signe
-qu'il faut coller le sixième fichier, et non que quelque chose est cassé. C'est
-aussi pour cela que la seizième table n'apparaît pas encore dans la liste
-ci-dessous.
+- **`reglages` est la plus ouverte des dix-huit** : elle se lit avec la seule clé
+  publiable, sans aucun compte — c'est le titre du bandeau d'accueil, et il
+  s'affiche avant toute connexion.
+- **`cantine_items` se lit aussi sans compte** : les aliments des menus sont ce
+  que les familles viennent voir. Elle est vide tant qu'aucun aliment n'a été
+  ajouté — mais si vous aviez déjà des menus, la reprise du onzième fichier l'a
+  remplie, et un nombre non nul au premier regard est le signe que la
+  conversion a eu lieu.
 
 1. Dans le menu de gauche, cliquez **Table Editor**.
-2. Vous devez voir les seize tables : `agenda_events`, `annonces`,
-   `cantine_menus`, `cantine_reservations`, `commentaires`,
+2. Vous devez voir les dix-huit tables : `agenda_events`, `annonces`,
+   `cantine_items`, `cantine_menus`, `cantine_reservations`, `commentaires`,
    `conversation_messages`, `conversations`, `discussion_messages`, `documents`,
-   `messages`, `profiles`, `push_tokens`, `signalements`, `sondage_choices`,
-   `sondage_votes`, `sondages`.
+   `messages`, `profiles`, `push_tokens`, `reglages`, `signalements`,
+   `sondage_choices`, `sondage_votes`, `sondages`.
    Les trois arrivées avec le **troisième** fichier sont `conversations`,
-   `conversation_messages` et `push_tokens` ; la seizième, `commentaires`, arrive
-   avec le **sixième**. Si l'une des trois premières manque, c'est le troisième
-   fichier qui n'a pas été collé ; si c'est la dernière, c'est le sixième.
+   `conversation_messages` et `push_tokens` ; `commentaires` arrive avec le
+   **sixième**, `reglages` avec le **huitième**, `cantine_items` avec le
+   **onzième**. Si l'une manque, c'est ce collage-là qui n'a pas été fait.
 3. Cliquez sur **annonces** : le jeu d'essai en pose **2 lignes**, et ce nombre ne
    bouge plus si vous relancez `seed.sql`. Il **grandit** en revanche à chaque
    actualité que vous publiez : c'est normal, et c'est même souhaitable.
@@ -572,6 +624,10 @@ ci-dessous.
    le relancez un autre jour, huit menus **de plus** s'ajoutent pour les jours
    suivants. C'est le seul nombre de cette page qui puisse grandir — un compte
    supérieur à 8 n'est donc pas une erreur.
+5. Cliquez sur **cantine_items** : c'est là que vivent désormais les aliments
+   d'un jour. Une ligne par aliment, une colonne `category` qui dit sous quel
+   titre il s'affiche, et une colonne `dish_type` qui reste vide sauf pour un
+   plat de viande, de poisson ou végétarien.
 
 Si les tables sont là mais vides, c'est que `seed.sql` n'a pas été exécuté — ce  
 n'est pas grave, relancez-le.
@@ -1441,7 +1497,7 @@ pas.
 Pour que vous sachiez ce que vous n'avez pas à faire : les quatorze écrans et leur  
 navigation, l'authentification et la réinitialisation de mot de passe, les seize tables  
 et leurs politiques de sécurité, les contrôles de schéma et de politiques, la chaîne  
-de vérification complète (`npm run verify`, **38 fichiers de test**), les  
+de vérification complète (`npm run verify`, **39 fichiers de test**), les  
 trois flux GitHub Actions, le dépôt public sans aucun secret, les deux binaires  
 compilés — l'APK Android et l'IPA non signé —, les e-mails vérifiés jusqu'au clic  
 sur le lien reçu, et la documentation.

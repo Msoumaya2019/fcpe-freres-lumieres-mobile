@@ -73,7 +73,7 @@ const racine = fileURLToPath(new URL('../', import.meta.url));
 
 /** D'où vient le relevé ci-dessous, et quand il a été fait. */
 const SOURCE_DU_RELEVE =
-  'libpg-query 18.1.4, arbre des trois migrations et du jeu d’essai, relevé le 2026-09-19';
+  'libpg-query 18.1.4, arbre des migrations et du jeu d’essai, relevé le 2026-09-21';
 
 /**
  * Le SQL du projet, celui dont l'arbre est interrogé : **toutes** les migrations,
@@ -104,14 +104,20 @@ const FICHIERS_SQL = [
 const BANCS_QUI_LISENT_L_ARBRE = ['scripts/check-schema-refs.test.mjs', 'scripts/check-sql.mjs'];
 
 /**
- * Les types de nœud que le SQL du projet **produit**, relevés le 2026-09-19.
+ * Les types de nœud que le SQL du projet **produit**, relevés le 2026-09-21.
  *
- * Quarante-et-un, et le relevé est plus large que le précédent parce que son
+ * Quarante-deux, et le relevé est plus large que le premier parce que son
  * **sujet** l'est : il portait sur une seule migration sur trois. Les quatre
  * types que la troisième a fait apparaître sont `FunctionParameter` et
  * `TypeName` — la fonction `resultats_sondage` déclare un paramètre —,
  * `NullTest` et `UpdateStmt` — la colonne `voter_id` est rendue nullable, et
  * l'index partiel teste `is not null`.
+ *
+ * `JoinExpr` est le dernier arrivé, et il a une histoire : il figurait dans les
+ * types **lus** sans être produits, parce que le SQL du projet ne contenait
+ * aucune jointure. La reprise des journées de cantine joint `cantine_menus` aux
+ * journées à convertir, et le voici produit — la liste des orphelins s'est vidée
+ * d'elle-même, comme elle l'annonçait.
  *
  * `CreateEnumStmt` mérite d'être noté, parce qu'il ne se lit pas comme les
  * autres : il n'apparaît pas dans l'arbre du fichier. PostgreSQL n'a pas de
@@ -147,6 +153,7 @@ const TYPES_PRODUITS = [
   'IndexElem',
   'IndexStmt',
   'InsertStmt',
+  'JoinExpr',
   'List',
   'NullTest',
   'ObjectWithArgs',
@@ -207,17 +214,22 @@ const TYPES_LUS = [
 /**
  * Les types lus que le SQL **ne produit pas** — les branches que rien n'exerce.
  *
- * Un seul, et c'est mesuré : le SQL du projet ne contient **aucune jointure**.
- * `portee()` sait descendre dans un `JoinExpr`, mais rien ne l'y amène
- * aujourd'hui. Le nommer ici le fait exister ; la liste se rétrécira le jour où
- * une jointure entrera dans le schéma.
+ * **Vide, et c'est un aboutissement.** Cette liste a porté un seul nom,
+ * `JoinExpr`, pendant toute la vie du schéma : `portee()` sait descendre dans une
+ * jointure, et aucune migration n'en écrivait. Le commentaire d'alors annonçait
+ * qu'elle se rétrécirait « le jour où une jointure entrera dans le schéma » — et
+ * ce jour est arrivé avec la reprise des journées de cantine, qui joint
+ * `cantine_menus` aux journées à convertir. La liste n'a donc plus rien à
+ * nommer, et la garde reste : elle tombera le jour où un banc lira un type que
+ * le SQL ne produit pas.
  *
- * Ces branches ne sont pas pour autant sans preuve : elles sont éprouvées par
- * les campagnes de mutation, qui ajoutent la jointure absente à une copie du
- * SQL. C'est la même distinction que partout ailleurs — une garde s'éprouve, et
- * une garde que rien n'exerce n'existe pas tant qu'on ne l'a pas éprouvée.
+ * La forme vide est voulue, et elle porte une information : **aucune branche lue
+ * par les bancs n'est inerte**. Les campagnes de mutation qui ajoutaient la
+ * jointure absente à une copie du SQL n'ont plus d'objet — c'est la même
+ * distinction que partout ailleurs, appliquée jusqu'au bout : une garde
+ * s'éprouve, et une garde que rien n'exerce n'existe pas.
  */
-const TYPES_LUS_SANS_ETRE_PRODUITS = ['JoinExpr'];
+const TYPES_LUS_SANS_ETRE_PRODUITS = [];
 
 /** Retire commentaires de ligne et de bloc : un nom cité n'est pas un emploi. */
 function sansCommentaires(source) {
@@ -371,7 +383,7 @@ test('les bancs ne lisent que les types de nœud du relevé', () => {
   );
 });
 
-test('un seul type est lu sans être produit par le SQL, et il est nommé', () => {
+test('aucun type n’est lu sans être produit par le SQL, et la liste est vide', () => {
   const vivants = inventaireProduit();
   const orphelins = trie(typesLus()).filter((type) => !vivants.has(type));
 

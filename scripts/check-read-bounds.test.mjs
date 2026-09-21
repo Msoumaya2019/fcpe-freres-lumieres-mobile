@@ -172,9 +172,17 @@ test('l’extraction lit bien les services, et rien d’autre', () => {
   // lecture est bornée par construction : `.in('cle', …)`, une clé par texte
   // affiché. Il n'y a pas de « tous les réglages » à lire, et il n'y en aura
   // pas — c'est ce qui la dispense d'un `limit`.
+  //
+  // `cantine_items` est **entrée** avec la onzième, et sa borne n'est pas un
+  // `limit` mais un `.in('menu_id', …)` : la liste des journées affichées est
+  // déjà bornée en amont, et les aliments se lisent **pour ces journées-là**.
+  // Une lecture sans ce filtre aurait ramené toute la cantine de l'année pour
+  // n'en afficher qu'une semaine — le genre de défaut qui ne se voit pas sur un
+  // jeu d'essai et qui grandit tout seul.
   assert.deepEqual(tablesLues(), [
     'agenda_events',
     'annonces',
+    'cantine_items',
     'cantine_menus',
     'commentaires',
     'discussion_messages',

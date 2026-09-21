@@ -6,18 +6,30 @@ import {
   AppText,
   AsyncErrorBanner,
   AsyncFallback,
+  Badge,
   Button,
   Card,
   FilCommentaires,
   Screen,
 } from '@/components';
 import { useAsyncData } from '@/hooks/useAsyncData';
-import { fetchUpcomingMenus } from '@/services/cantine';
+import { fetchCantine } from '@/services/cantine';
 import { accents, colors, radius, spacing, tints } from '@/theme';
-import type { CantineMenu } from '@/types/models';
+import {
+  CANTINE_DISH_TYPE_ACCENTS,
+  type AlimentAffiche,
+  type GroupeCategorie,
+  type JourDeCantine,
+  joursDeCantine,
+  libelleElements,
+} from '@/utils/cantine';
+import { CANTINE_DISH_TYPE_LABELS, type CantineDishType } from '@/types/models';
 import { formatMenuDate } from '@/utils/date';
 
-const EMPTY_MENUS: readonly CantineMenu[] = [];
+const EMPTY_JOURS: readonly JourDeCantine[] = [];
+
+/** Les trois types de plat, dans l'ordre de la légende. */
+const TYPES_DE_PLAT: readonly CantineDishType[] = ['viande', 'poisson', 'vegetarien'];
 
 /**
  * La cantine : les menus, et rien d'autre.
@@ -37,13 +49,38 @@ const EMPTY_MENUS: readonly CantineMenu[] = [];
  * Consulter les menus, en revanche, ne demande **aucun compte** : c'est la
  * première chose qu'un parent vient chercher, et l'exiger aurait été le premier
  * obstacle de l'application.
+ *
+ * CE QUE CET ÉCRAN A APPRIS À FAIRE
+ * ---------------------------------
+ * Un jour ne porte plus quatre champs fixes mais **des aliments rangés par
+ * catégorie** : plusieurs plats, deux laitages, quatre éléments « au menu ». Une
+ * catégorie sans aliment ne paraît pas, et une pastille dit ce qu'un parent
+ * cherche d'un coup d'œil — viande, poisson, ou végétarien.
+ *
+ * TOUT CE QUI DÉCIDE EST AILLEURS
+ * -------------------------------
+ * Quelles catégories paraissent, dans quel ordre, et ce qu'un jour sans aliment
+ * montre à la place : ces règles vivent dans `src/utils/cantine.ts`, hors de
+ * React, et c'est un banc qui les exerce. L'écran ne fait plus que dessiner.
  */
 export function CantineScreen() {
-  const loader = useCallback(() => fetchUpcomingMenus(), []);
+  const loader = useCallback(() => fetchCantine(), []);
 
   const { status, data, errorMessage, refreshing, refresh, reload } = useAsyncData(loader);
 
-  const menus = data ?? EMPTY_MENUS;
+  const jours = data === null ? EMPTY_JOURS : joursDeCantine(data.menus, data.itemsParJour);
+
+  /**
+   * La légende des pastilles, et **seulement si une pastille s'affiche**.
+   *
+   * Une légende qui explique des couleurs absentes est du bruit : elle occupe le
+   * haut de l'écran, et le parent cherche dans les menus une pastille rouge qui
+   * n'y est pas. La condition est donc mesurée sur les données affichées, et non
+   * sur la présence de la fonctionnalité.
+   */
+  const aUnePastille = jours.some((jour) =>
+    jour.groupes.some((groupe) => groupe.aliments.some((aliment) => aliment.type !== null)),
+  );
 
   /**
    * Le jour dont le fil de commentaires est déplié, ou `null`.
@@ -64,57 +101,67 @@ export function CantineScreen() {
   const [filOuvert, setFilOuvert] = useState<string | null>(null);
 
   const renderItem = useCallback(
-    ({ item }: ListRenderItemInfo<CantineMenu>) => (
-      <Card>
-        {/*  Le carré vert et le jour, côte à côte. Un parent qui ouvre la
-            cantine cherche **un jour précis** ; le titre seul, en haut d'une
-            carte blanche, se lit comme la première ligne d'une liste et non
-            comme une date. Le carré reprend l'accent vert du raccourci
-            « Cantine » de l'accueil, ce qui rattache l'écran à la carte par
-            laquelle on y arrive. */}
-        <View style={styles.entete}>
-          <View style={styles.carre} accessibilityElementsHidden>
-            <Ionicons name="restaurant-outline" size={20} color={accents.vert.ink} />
+    ({ item }: ListRenderItemInfo<JourDeCantine>) => {
+      const { menu, groupes, elements } = item;
+
+      return (
+        <Card>
+          {/*  Le carré vert et le jour, côte à côte. Un parent qui ouvre la
+              cantine cherche **un jour précis** ; le titre seul, en haut d'une
+              carte blanche, se lit comme la première ligne d'une liste et non
+              comme une date. Le carré reprend l'accent vert du raccourci
+              « Cantine » de l'accueil, ce qui rattache l'écran à la carte par
+              laquelle on y arrive. */}
+          <View style={styles.entete}>
+            <View style={styles.carre} accessibilityElementsHidden>
+              <Ionicons name="restaurant-outline" size={20} color={accents.vert.ink} />
+            </View>
+            <View style={styles.titres}>
+              <AppText variant="heading">{formatMenuDate(menu.service_date)}</AppText>
+              {/*  Le compte se lit sous la date, en légende : il renseigne sur
+                  l'ampleur du repas sans concurrencer le jour. Il compte ce qui
+                  s'affiche, et rien d'autre — un compteur qui annoncerait
+                  « 11 éléments » au-dessus de neuf lignes ferait douter de
+                  l'écran entier. */}
+              <AppText variant="caption">{libelleElements(elements)}</AppText>
+            </View>
           </View>
-          <AppText variant="heading" style={styles.jour}>
-            {formatMenuDate(item.service_date)}
-          </AppText>
-        </View>
 
-        {item.starter === null ? null : (
-          <AppText variant="caption">Entrée · {item.starter}</AppText>
-        )}
-        {item.main_course === null ? null : <AppText>Plat · {item.main_course}</AppText>}
-        {item.dessert === null ? null : (
-          <AppText variant="caption">Dessert · {item.dessert}</AppText>
-        )}
-        {item.notes === null ? null : (
-          <AppText variant="caption" color={colors.warning}>
-            {item.notes}
-          </AppText>
-        )}
+          {groupes.map((groupe) => (
+            <Groupe key={groupe.categorie} groupe={groupe} />
+          ))}
 
-        <Button
-          label={filOuvert === item.id ? 'Masquer les commentaires' : 'Commentaires'}
-          variant="ghost"
-          onPress={() => {
-            setFilOuvert(filOuvert === item.id ? null : item.id);
-          }}
-        />
+          {/*  Les informations — allergies, plat de substitution — restent en
+              avertissement, et sous les aliments : elles se lisent après le
+              menu, pas avant. */}
+          {menu.notes === null ? null : (
+            <AppText variant="caption" color={colors.warning}>
+              {menu.notes}
+            </AppText>
+          )}
 
-        {filOuvert === item.id ? <FilCommentaires cible={{ type: 'menu', id: item.id }} /> : null}
-      </Card>
-    ),
+          <Button
+            label={filOuvert === menu.id ? 'Masquer les commentaires' : 'Commentaires'}
+            variant="ghost"
+            onPress={() => {
+              setFilOuvert(filOuvert === menu.id ? null : menu.id);
+            }}
+          />
+
+          {filOuvert === menu.id ? <FilCommentaires cible={{ type: 'menu', id: menu.id }} /> : null}
+        </Card>
+      );
+    },
     [filOuvert],
   );
 
   return (
     <Screen padded={false} edges={[]}>
       <FlatList
-        data={menus}
-        keyExtractor={(item) => item.id}
+        data={jours}
+        keyExtractor={(item) => item.menu.id}
         renderItem={renderItem}
-        contentContainerStyle={[styles.list, menus.length === 0 && styles.listEmpty]}
+        contentContainerStyle={[styles.list, jours.length === 0 && styles.listEmpty]}
         // `keyboardShouldPersistTaps` vaut « never » par défaut : la liste
         // consommerait le premier appui pour fermer le clavier, et « Envoyer »
         // ne le recevrait jamais. Mesuré par scripts/check-clavier-liste.test.mjs.
@@ -128,7 +175,7 @@ export function CantineScreen() {
           <>
             <AsyncErrorBanner
               status={status}
-              hasData={menus.length > 0}
+              hasData={jours.length > 0}
               errorMessage={errorMessage}
             />
             {/*  La phrase qui remplace le bouton. Elle est là **avant** les menus,
@@ -152,12 +199,14 @@ export function CantineScreen() {
                 votre repas.
               </AppText>
             </Card>
+
+            {aUnePastille ? <LegendePastilles /> : null}
           </>
         }
         ListEmptyComponent={
           <AsyncFallback
             status={status}
-            hasData={menus.length > 0}
+            hasData={jours.length > 0}
             errorMessage={errorMessage}
             onRetry={reload}
             emptyTitle="Aucun menu publié"
@@ -168,6 +217,83 @@ export function CantineScreen() {
         }
       />
     </Screen>
+  );
+}
+
+/**
+ * Une catégorie et ses aliments.
+ *
+ * Le titre est en **capitales grises**, comme une étiquette de section : il
+ * sépare sans crier, et c'est ce qui distingue « PLAT » du nom d'un plat, écrit
+ * en corps normal et en noir. Un titre de la même couleur que les aliments
+ * qu'il introduit se lirait comme le premier aliment de la liste.
+ */
+function Groupe({ groupe }: { readonly groupe: GroupeCategorie }) {
+  return (
+    <View style={styles.groupe}>
+      <AppText variant="caption" bold color={colors.textSecondary} style={styles.titreGroupe}>
+        {groupe.titre}
+      </AppText>
+
+      {groupe.aliments.map((aliment) => (
+        <LigneAliment key={aliment.cle} aliment={aliment} />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Un aliment : sa puce, son nom, et sa pastille s'il en porte une.
+ *
+ * LA PASTILLE EST SOUS LE NOM, ET C'EST VOULU
+ * -------------------------------------------
+ * À côté du nom, elle en prendrait la moitié de la largeur sur un téléphone
+ * étroit, et « Filet de colin sauce ciboulette » se replierait sur trois lignes
+ * pour laisser respirer une étiquette de six lettres. En dessous, elle se lit
+ * comme une précision sur le plat qui la précède.
+ *
+ * La puce, elle, reste **grise pour tous les aliments**. La couleur ne sert
+ * qu'à identifier le type de plat : une puce verte devant un laitage parce que
+ * le laitage serait « sain » ne dirait rien, et ferait douter du sens des
+ * pastilles.
+ */
+function LigneAliment({ aliment }: { readonly aliment: AlimentAffiche }) {
+  return (
+    <View style={styles.ligne}>
+      <View style={styles.puce} accessibilityElementsHidden />
+      <View style={styles.corps}>
+        <AppText>{aliment.nom}</AppText>
+        {aliment.type === null ? null : (
+          <Badge
+            label={CANTINE_DISH_TYPE_LABELS[aliment.type]}
+            accent={CANTINE_DISH_TYPE_ACCENTS[aliment.type]}
+          />
+        )}
+      </View>
+    </View>
+  );
+}
+
+/**
+ * La légende des trois pastilles.
+ *
+ * Elle n'est affichée que si au moins une pastille est visible dans les menus
+ * (voir `aUnePastille`), et elle énumère les trois types **dans l'ordre de la
+ * constante** : viande, poisson, végétarien. Elle est écrite ici plutôt que
+ * déduite des menus affichés, parce qu'une légende qui ne montrerait que les
+ * couleurs du jour n'apprendrait rien pour demain.
+ */
+function LegendePastilles() {
+  return (
+    <View style={styles.legende}>
+      {TYPES_DE_PLAT.map((type) => (
+        <Badge
+          key={type}
+          label={CANTINE_DISH_TYPE_LABELS[type]}
+          accent={CANTINE_DISH_TYPE_ACCENTS[type]}
+        />
+      ))}
+    </View>
   );
 }
 
@@ -211,9 +337,62 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  jour: {
+  titres: {
     // `flex: 1` : une date longue — « mercredi 30 septembre » — se replie au
     // lieu de pousser le carré hors de la carte.
     flex: 1,
+  },
+  /**
+   * Une catégorie : son titre, puis ses aliments.
+   *
+   * `marginTop: spacing.sm` s'ajoute à l'écart que la carte pose déjà entre ses
+   * enfants. Sans lui, le titre d'une catégorie serait aussi proche du groupe
+   * précédent que deux aliments le sont entre eux, et la séparation se perdrait
+   * — or c'est exactement ce que le regroupement doit rendre lisible.
+   */
+  groupe: {
+    marginTop: spacing.sm,
+    gap: spacing.sm,
+  },
+  /**
+   * Le titre de catégorie.
+   *
+   * `letterSpacing` et l'écart au-dessus viennent de la maquette de référence :
+   * un titre de section en capitales se lit d'autant mieux qu'il respire, et
+   * c'est ce qui le sépare visuellement des aliments sans qu'un trait soit
+   * nécessaire.
+   */
+  titreGroupe: {
+    letterSpacing: 0.8,
+  },
+  ligne: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  /**
+   * La puce d'un aliment.
+   *
+   * `marginTop: 7` l'aligne sur la **première ligne** du nom, et non sur le haut
+   * de la boîte : un nom qui se replie sur deux lignes laisserait sinon la puce
+   * collée au-dessus du texte. La valeur est dérivée de la hauteur de ligne du
+   * corps (15 px de corps, ligne de 22 px) moins la moitié du diamètre.
+   */
+  puce: {
+    width: 5,
+    height: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.borderInteractive,
+    marginTop: 8,
+  },
+  corps: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  legende: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xs,
   },
 });

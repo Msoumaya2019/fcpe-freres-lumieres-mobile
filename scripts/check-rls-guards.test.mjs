@@ -242,18 +242,19 @@ test('la condition d’insertion des signalements laisse le bureau décider du s
 });
 
 test('aucune politique d’insertion n’est perdue à la lecture', () => {
-  // Treize tables ont une politique d'insertion **réservée aux porteurs d'un
-  // jeton**, et elles se partagent en deux familles égales plus une. Six sont
+  // Quatorze tables ont une politique d'insertion **réservée aux porteurs d'un
+  // jeton**, et elles se partagent en deux familles inégales : **six** sont
   // insérables par un **membre** — `profiles`, `cantine_reservations`,
   // `signalements`, `discussion_messages`, `sondage_votes`, `messages` — et
-  // **sept** par le **bureau** — `annonces`, `cantine_menus`, `agenda_events`,
-  // `documents`, `sondages`, `sondage_choices`, et `reglages` depuis la huitième
-  // migration. L'analyse doit donc en trouver treize : sinon une expression
-  // régulière trop stricte aurait laissé passer une table, et l'invariant avec
-  // elle.
+  // **huit** par le **bureau** — `annonces`, `cantine_menus`, `agenda_events`,
+  // `documents`, `sondages`, `sondage_choices`, `reglages` depuis la huitième
+  // migration, et `cantine_items` depuis la onzième. L'analyse doit donc en
+  // trouver quatorze : sinon une expression régulière trop stricte aurait laissé
+  // passer une table, et l'invariant avec elle.
   assert.deepEqual([...INSERTIONS.keys()].sort(), [
     'agenda_events',
     'annonces',
+    'cantine_items',
     'cantine_menus',
     'cantine_reservations',
     'discussion_messages',
@@ -470,6 +471,12 @@ const SURFACE_PUBLIQUE = new Map([
     'les menus de la semaine, affichés par `cantine_menus_select_public` — c’est ' +
       'la première chose qu’un parent vient chercher',
   ],
+  [
+    'cantine_items',
+    'les aliments d’une journée, ouverts par `cantine_items_select_public` : sans ' +
+      'eux, la journée s’afficherait avec sa date et **rien dedans**, ce qui se lit ' +
+      'comme une panne plutôt que comme un menu',
+  ],
   ['agenda_events', 'les dates de l’agenda scolaire, ouvertes par `agenda_events_select_public`'],
   [
     'sondages',
@@ -548,7 +555,7 @@ const PROMOTION = [
   'README.md',
 ];
 
-test('les migrations déclarent les dix-sept tables attendues', () => {
+test('les migrations déclarent les dix-huit tables attendues', () => {
   // Contrôle : sans lui, une analyse qui ne lirait rien ferait passer les trois
   // invariants suivants sur zéro table. La liste est **close** : une table
   // ajoutée sans être déclarée ici fait tomber le test, et l'ajouter est une
@@ -572,6 +579,7 @@ test('les migrations déclarent les dix-sept tables attendues', () => {
     'push_tokens',
     'commentaires',
     'reglages',
+    'cantine_items',
   ]);
 });
 
@@ -874,7 +882,7 @@ const EFFACEMENT_DOCUMENTE = new Map([
   ['sondage_votes', 'les votes'],
 ]);
 
-test('le découpage par blocs voit les seize tables déclarées', () => {
+test('le découpage par blocs voit les dix-huit tables déclarées', () => {
   // Contrôle du contrôle, et non redondance : `tablesDeclarees` lit les en-têtes,
   // ce découpage lit les corps. S'ils divergent, l'analyse des clés étrangères
   // porterait sur un schéma partiel sans que rien ne le dise.
@@ -884,7 +892,7 @@ test('le découpage par blocs voit les seize tables déclarées', () => {
   );
 });
 
-test('l’analyse voit les dix-neuf clés étrangères du schéma', () => {
+test('l’analyse voit les vingt clés étrangères du schéma', () => {
   // Contrôle du contrôle, et il porte tout le reste de la famille : la fermeture
   // transitive ne vaut que par les arêtes qu'on lui donne. Une arête perdue
   // rétrécit la liste des tables effacées, et les tests suivants s'accorderaient
@@ -904,6 +912,7 @@ test('l’analyse voit les dix-neuf clés étrangères du schéma', () => {
     [
       'agenda_events.author_id → auth.users set null',
       'annonces.author_id → profiles set null',
+      'cantine_items.menu_id → cantine_menus cascade',
       'cantine_reservations.menu_id → cantine_menus cascade',
       'cantine_reservations.user_id → profiles cascade',
       'commentaires.annonce_id → annonces cascade',
@@ -1226,7 +1235,7 @@ const ALLOWANCES = new Map([
   ],
 ]);
 
-test('l’analyse des requêtes trouve les vingt appels attendus', () => {
+test('l’analyse des requêtes trouve les vingt et un appels attendus', () => {
   // Contrôle, et invariant en même temps : le nombre est celui que SECURITY.md
   // annonce. Une expression régulière trop stricte qui ne trouverait rien ferait
   // passer les quatre tests suivants sur zéro cas.
@@ -1285,10 +1294,19 @@ test('l’analyse des requêtes trouve les vingt appels attendus', () => {
   // recule la date, appelle la fonction sous le rôle anonyme, et vérifie qu'elle a
   // bougé. C'est l'appel qui compte — un `update` filtré ne touchait **zéro
   // ligne** sans erreur, faute de politique de lecture.
-  assert.equal(REQUETES.length, 20);
+  //
+  // Une clé entre avec les aliments de cantine : `cantine_items.select`, lu par
+  // `src/services/cantine.ts` en une requête pour toutes les journées affichées.
+  // Elle est écrite **à part** de `cantine_menus.select`, et non en jointure
+  // imbriquée — un `select('*, cantine_items(*)')` aurait été invisible à cette
+  // analyse, et la politique de lecture des aliments n'aurait alors été réclamée
+  // par personne. Le motif d'analyse lit `.from('…')`, et une table imbriquée ne
+  // s'écrit pas là.
+  assert.equal(REQUETES.length, 21);
   assert.deepEqual(CLES_REQUETES, [
     'agenda_events.select',
     'annonces.select',
+    'cantine_items.select',
     'cantine_menus.select',
     'commentaires.insert',
     'commentaires.select',
@@ -1593,6 +1611,9 @@ test('toute politique non exercée par l’application est nommée', () => {
       'annonces.delete',
       'annonces.insert',
       'annonces.update',
+      'cantine_items.delete',
+      'cantine_items.insert',
+      'cantine_items.update',
       'cantine_menus.delete',
       'cantine_menus.insert',
       'cantine_menus.update',

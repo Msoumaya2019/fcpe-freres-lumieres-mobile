@@ -622,6 +622,7 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 │   ├── check-acces-public.test.mjs  la surface publiée, jouée sous le rôle anonyme
 │   ├── check-vignettes.test.mjs   les vignettes d'une actualité, et le chemin du bandeau
 │   ├── check-clavier-liste.test.mjs  le premier appui qu'une liste ne doit pas consommer
+│   ├── check-cantine.test.mjs     les six catégories d'un jour, leur ordre, et les anciennes colonnes
 │   └── check-notifications.test.mjs  les deux moitiés d'une notification, et le canal tenu des deux côtés
 └── .github/workflows/             CI, build EAS, IPA non signé
 ```
@@ -2040,7 +2041,7 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   lui il est ignoré sur Android, et l'application suivrait le mode sombre du
   système avec une palette prévue pour le clair. Une seule palette est définie.
   Un thème sombre à moitié fait est pire qu'une interface claire cohérente.
-- **Trente-huit fichiers de test, et rien d'autre.** `check-env-guard`,
+- **Trente-neuf fichiers de test, et rien d'autre.** `check-env-guard`,
   `check-recovery-link`, `check-user-messages`, `check-dates`, `check-rls-guards`,
   `check-storage`, `check-effacement`, `check-build-config`, `check-input-limits`,
   `check-schema-types`, `check-async-wiring`, `check-contrast`,
@@ -2052,7 +2053,7 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   `check-rls-comportement`, `check-sdk-pins`, `check-scripts-executables`,
   `check-markdown-listes`, `check-audit-scope`, `check-parser-surface`,
   `check-non-lus`, `check-safe-area`, `check-commentaires`, `check-acces-public`,
-  `check-vignettes`, `check-clavier-liste` et
+  `check-vignettes`, `check-clavier-liste`, `check-cantine` et
   `check-notifications`
   couvrent les
   gardes, les
@@ -2205,19 +2206,25 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   introduisant un type nouveau ; les bancs lisent-ils toujours la même chose —
   cette liste-là est fermée dans les **deux** sens, une lecture nouvelle devant
   faire relire le relevé ; et lesquels sont lus sans être produits. Le relevé
-  porte **trente-sept** types, et non trente-six : `CreateEnumStmt` n'existe que
-  dans l'arbre obtenu en **réanalysant** le corps des blocs `do`, que l'analyseur
-  rend comme une chaîne. Un seul type est lu sans être produit — `JoinExpr` : le
-  SQL du projet ne contient **aucune jointure**, et `portee()` sait pourtant
-  descendre dans un `JoinExpr`. La branche existe donc sans que rien ne l'exerce,
-  et la nommer la fait exister ; la liste rétrécira d'elle-même le jour où une
-  jointure entrera dans le schéma. Les constantes du dépôt se distinguent des
+  porte **quarante-deux** types, et non quarante-et-un : `CreateEnumStmt` n'existe
+  que dans l'arbre obtenu en **réanalysant** le corps des blocs `do`, que
+  l'analyseur rend comme une chaîne. **Aucun** type n'est plus lu sans être
+  produit, et c'est un aboutissement : la liste des orphelins a porté `JoinExpr`
+  pendant toute la vie du schéma — le SQL du projet ne contenait **aucune
+  jointure**, alors que `portee()` sait descendre dans un `JoinExpr` —, jusqu'à
+  la reprise des journées de cantine, qui joint `cantine_menus` aux journées à
+  convertir. La liste a rétréci d'elle-même, comme elle l'annonçait, et la garde
+  reste : elle tombera le jour où un banc lira un type que le SQL ne produit pas.
+  Les constantes du dépôt se distinguent des
   types de nœud par leur **forme** — `SCHEMA` et `CIBLES_EXTERNES` sont en
   capitales d'un bout à l'autre, un type de nœud jamais —, ce qui évite la liste
   de mots à tenir à jour. Éprouvé par cinq mutations : trois tombent, chacune sur
   **son** cas et sur lui seul — le `grant` retiré du SQL fait disparaître
   `AccessPriv`, un banc qui se met à lire `IndexStmt` change la liste des
-  lectures, une jointure ajoutée rend `JoinExpr` produit — et deux témoins verts
+  lectures, et une jointure ajoutée au SQL rendait `JoinExpr` produit (cette
+  mutation-là est devenue sans objet : la reprise de la cantine a introduit la
+  jointure qu'elle ajoutait, et l'orphelin qu'elle guettait n'existe plus) — et
+  deux témoins verts
   vérifient qu'un réordonnancement du relevé et un commentaire qui nomme des
   types de nœud ne font rien tomber.
   `check-schema-refs` parcourt l'**arbre syntaxique** du
@@ -2233,8 +2240,10 @@ l'invariant, et interdit qu'un flux repasse un texte **littéral** à
   pas par la lecture : un `on` vit dans le `from`, que le parcours évite pour ne
   pas relire les sous-requêtes, et **rien ne le lisait**. Une jointure sur une
   colonne inexistante et une jointure sur une table inexistante laissaient le banc
-  vert — parce que le SQL du projet ne contient aucune jointure, et que la branche
-  n'était donc exercée par rien. Une table d'un autre schéma, elle, reste
+  vert — parce que le SQL du projet ne contenait aucune jointure, et que la branche
+  n'était donc exercée par rien. Elle l'est désormais : la reprise des journées de
+  cantine joint `cantine_menus` aux journées à convertir, et c'est ce qui a vidé la
+  liste des types lus sans être produits. Une table d'un autre schéma, elle, reste
   acceptée : ses colonnes ne sont pas dans nos migrations, et l'accepter est la
   seule réponse honnête — mais une table `public` non déclarée n'est pas
   « inconnue », elle n'existe pas, et les deux cas rendaient pourtant le même

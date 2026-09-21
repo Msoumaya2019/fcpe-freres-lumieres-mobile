@@ -19,10 +19,13 @@ export type MessageCategory = Database['public']['Enums']['message_category'];
 export type AnnonceCategory = Database['public']['Enums']['annonce_category'];
 export type ConversationStatus = Database['public']['Enums']['conversation_status'];
 export type CommentaireStatut = Database['public']['Enums']['commentaire_statut'];
+export type CantineItemCategory = Database['public']['Enums']['cantine_item_category'];
+export type CantineDishType = Database['public']['Enums']['cantine_dish_type'];
 
 export type Profile = Tables<'profiles'>;
 export type Annonce = Tables<'annonces'>;
 export type CantineMenu = Tables<'cantine_menus'>;
+export type CantineItem = Tables<'cantine_items'>;
 export type CantineReservation = Tables<'cantine_reservations'>;
 export type Signalement = Tables<'signalements'>;
 export type DiscussionMessage = Tables<'discussion_messages'>;
@@ -104,6 +107,61 @@ export const DOCUMENT_CATEGORY_LABELS: Readonly<Record<DocumentCategory, string>
   cantine: 'Cantine',
   activites: 'Activités',
   autre: 'Autre',
+};
+
+/**
+ * Les six catégories d'un menu de cantine, **dans l'ordre où elles s'affichent**.
+ *
+ * L'ORDRE EST ICI, ET NULLE PART AILLEURS
+ * ---------------------------------------
+ * C'est la liste que parcourt l'écran de cantine pour décider quels titres
+ * afficher. L'écrire une fois évite que deux écrans — ou l'écran et le tableau
+ * de bord — en proposent deux ordres différents, ce qui se verrait sans qu'on
+ * sache lequel est le bon.
+ *
+ * Il est le même que celui de l'énumération PostgreSQL, et
+ * `check-migration-applicable` relit cet ordre dans le catalogue : ajouter une
+ * catégorie en fin d'énumération sans la mettre ici ferait diverger les deux
+ * listes, et c'est un banc qui le dirait.
+ */
+export const CANTINE_ITEM_CATEGORIES: readonly CantineItemCategory[] = [
+  'plat',
+  'accompagnement',
+  'laitage',
+  'dessert',
+  'menu',
+  'autres',
+];
+
+/**
+ * Les titres affichés au-dessus de chaque groupe.
+ *
+ * Écrits en **capitales** parce que c'est ainsi qu'ils apparaissent à l'écran —
+ * un titre de section, pas une phrase —, et parce que la mise en capitales est
+ * faite ici plutôt que par un `textTransform` : une majuscule accentuée
+ * (`LAITAGE`, `DESSERT`) ne se transforme pas partout de la même façon, et le
+ * libellé doit rester lisible pour un lecteur d'écran.
+ */
+export const CANTINE_ITEM_CATEGORY_LABELS: Readonly<Record<CantineItemCategory, string>> = {
+  plat: 'PLAT',
+  accompagnement: 'ACCOMPAGNEMENT',
+  laitage: 'LAITAGE',
+  dessert: 'DESSERT',
+  menu: 'MENU',
+  autres: 'AUTRES',
+};
+
+/**
+ * Le type de plat, tel qu'il s'écrit sur la pastille.
+ *
+ * Ces trois libellés sont les seuls mots que l'application emploie pour
+ * distinguer les plats, et ils sont volontairement courts : une pastille se lit
+ * d'un coup d'œil, pas phrase par phrase.
+ */
+export const CANTINE_DISH_TYPE_LABELS: Readonly<Record<CantineDishType, string>> = {
+  viande: 'Viande',
+  poisson: 'Poisson',
+  vegetarien: 'Végétarien',
 };
 
 /**

@@ -151,6 +151,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      cantine_items: {
+        Row: {
+          id: string;
+          menu_id: string;
+          category: Database['public']['Enums']['cantine_item_category'];
+          label: string;
+          dish_type: Database['public']['Enums']['cantine_dish_type'] | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          menu_id: string;
+          category: Database['public']['Enums']['cantine_item_category'];
+          label: string;
+          dish_type?: Database['public']['Enums']['cantine_dish_type'] | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          menu_id?: string;
+          category?: Database['public']['Enums']['cantine_item_category'];
+          label?: string;
+          dish_type?: Database['public']['Enums']['cantine_dish_type'] | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       signalements: {
         Row: {
           id: string;
@@ -765,6 +795,8 @@ export type Database = {
       message_category: 'cantine' | 'transport' | 'vie_scolaire' | 'activites' | 'autre';
       conversation_status: 'nouveau' | 'en_cours' | 'clos';
       commentaire_statut: 'en_attente' | 'publie' | 'refuse';
+      cantine_item_category: 'plat' | 'accompagnement' | 'laitage' | 'dessert' | 'menu' | 'autres';
+      cantine_dish_type: 'viande' | 'poisson' | 'vegetarien';
     };
     CompositeTypes: {
       [_ in never]: never;
