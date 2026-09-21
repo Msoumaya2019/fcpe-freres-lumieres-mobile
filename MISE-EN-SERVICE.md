@@ -1227,9 +1227,22 @@ l'application obtient l'autorisation **sans jamais recevoir de jeton**. Le
 désaccord inverse — déclaré et absent — est bruyant, `expo prebuild` s'arrête
 sur « Cannot copy google-services.json ».
 
-**Il reste à réinstaller l'APK**, et il a été recompilé. Sans réinstallation, la
-carte « Notifications » des Réglages n'existera pas, et aucune clef ne pourra rien
-y changer.
+**Il reste à réinstaller l'APK**, et il est **à jour** — mesuré le 21 septembre 2026 à
+11 h 55 : le fichier publié est celui que la page des versions annonce comme `compilé
+depuis le commit 43c0123`, et EAS a confirmé ce commit lui-même. Sans réinstallation, la
+carte « Notifications » des Réglages n'existera pas, et aucune clef ne pourra rien y
+changer.
+
+**La version qui était en ligne avant cette date venait de `a7526c9`**, un commit
+antérieur au correctif de `src/services/notifications.ts` : elle s'installait et recevait
+des notifications, mais la date de dernier contact d'un appareil restait figée à sa
+première installation. C'est la raison de la recompilation — et la provenance se lit sur
+la page des versions, qui nomme le commit de chaque fichier.
+
+**Le profil de compilation compte** : c'est `preview` qui produit un **APK**, et
+`production` qui produit un **AAB**, lequel ne s'installe pas sur un téléphone. Le
+déclenchement manuel du flux propose `preview` par défaut ; un tag `v*` pousse, lui, un
+build de production, donc un AAB.
 
 ---
 
@@ -1377,8 +1390,8 @@ pas.
       reçu et déclaré** (§7.6). Sans la clef, un téléphone peut **autoriser** les
       notifications et n'en recevoir aucune : c'est exactement ce que la carte des
       Réglages distingue, en disant « autorisé » et « enregistré » séparément
-- [ ] **Réinstaller l'APK** après la recompilation (§7.6) — celui d'aujourd'hui a été
-      compilé avant ce travail, donc il ne porte pas la carte « Notifications »
+- [ ] **Réinstaller l'APK** (§7.6) — il est **recompilé et à jour** depuis le 21 septembre
+      2026 (commit `43c0123`, confirmé par EAS) : il ne reste que le geste d'installation
 - [x] Recopier les quatre valeurs SMTP dans Supabase — vérifié jusqu'au clic sur le lien
 - [ ] Le jeton Expo pour GitHub _(facultatif)_
 
