@@ -35,7 +35,7 @@
 
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -91,9 +91,44 @@ function jeton(role) {
 }
 
 /**
+ * Le nom affiché déclaré, lu comme le fait le contrôle : dans `app.json`.
+ *
+ * Le banc ne recopie pas la valeur. Une copie deviendrait fausse au premier
+ * renommage, et le banc refuserait alors un paquet sain — exactement le défaut
+ * qu'il est là pour empêcher.
+ */
+const NOM_DECLARE = JSON.parse(readFileSync(new URL('../app.json', import.meta.url), 'utf8')).expo
+  .name;
+
+/**
+ * Une table de ressources Android : ses chaînes sont rangées en **UTF-8**.
+ *
+ * Mesuré sur l'APK publié, pas supposé : le nom déclaré y est, et l'ancien nom
+ * — `FCPE Frères Lumières` — y est **absent**.
+ */
+function tableAndroid(nom) {
+  return Buffer.from(`\u0002\u0000res\u0000${nom}\u0000`, 'utf8');
+}
+
+/**
+ * Une plist binaire iOS : l'en-tête `bplist00`, puis le nom en **UTF-16BE**.
+ *
+ * Ce n'est pas une plist complète, et le banc ne le prétend pas : il reproduit
+ * l'**écriture** mesurée sur l'IPA publié — `bplist00`, chaîne accentuée en
+ * UTF-16BE. C'est l'écriture qu'un contrôle qui n'essaierait que l'UTF-8
+ * manquerait, et c'est donc elle qu'il faut exercer.
+ */
+function plistIos(nom) {
+  return Buffer.concat([Buffer.from('bplist00'), Buffer.from(nom, 'utf16le').swap16()]);
+}
+
+/**
  * Écrit un paquet dans un dossier temporaire et lance le contrôle dessus.
  *
  * `bundle` est une chaîne — un bundle iOS — ou un `Buffer` — une archive APK.
+ * `paquet` décrit à la place un **dossier** : c'est la forme d'une `.app` iOS,
+ * et c'est là que vit son `Info.plist`. Les deux ne se donnent pas ensemble.
+ *
  * Le nom du fichier est passé à part, parce que le contrôle ne décide de rien
  * d'après lui : il regarde la **signature** du contenu. Le nommer autrement fait
  * donc partie de ce qui est éprouvé.
@@ -102,15 +137,30 @@ function jeton(role) {
  * et non posée à vide : sur Windows, une variable vide n'est pas transmise, et
  * le cas « variable manquante » ne mesurerait alors rien.
  */
-function eprouver({ bundle, url = ADRESSE, clef = CLEF_PUBLIQUE, nom = 'main.jsbundle' }) {
+function eprouver({
+  bundle = null,
+  url = ADRESSE,
+  clef = CLEF_PUBLIQUE,
+  nom = 'main.jsbundle',
+  paquet = null,
+}) {
   const dossier = mkdtempSync(join(tmpdir(), 'fcpe-paquet-'));
 
   try {
-    const chemin = join(dossier, nom);
-    if (typeof bundle === 'string') {
-      writeFileSync(chemin, bundle, 'latin1');
+    let chemin;
+    if (paquet !== null) {
+      chemin = join(dossier, 'App.app');
+      mkdirSync(chemin, { recursive: true });
+      for (const fichier of paquet) {
+        writeFileSync(join(chemin, fichier.nom), fichier.octets);
+      }
     } else {
-      writeFileSync(chemin, bundle);
+      chemin = join(dossier, nom);
+      if (typeof bundle === 'string') {
+        writeFileSync(chemin, bundle, 'latin1');
+      } else {
+        writeFileSync(chemin, bundle);
+      }
     }
 
     const env = { ...process.env };
@@ -224,11 +274,11 @@ test('une variable vide est refusée, au lieu de rendre le contrôle muet', () =
  * écrite en méthode 8 — déflatée —, comme un APK réel.
  *
  * Ce que ce constructeur ne peut pas garantir, et qui a donc été mesuré
- * autrement : que le contrôle lise un **vrai** APK. Il l'a fait — le binaire
- * publié en `v0.1.0`, 80 998 248 octets, a rendu « 6 vérification(s),
- * 0 défaut(s) », la clef de 46 caractères retrouvée. Un constructeur et un
- * extracteur écrits par la même main peuvent se tromper de la même façon ; cette
- * mesure-là ne le peut pas.
+ * autrement : que le contrôle lise un **vrai** paquet. Il l'a fait — sur les
+ * deux binaires publiés de `v0.1.0`, l'APK comme l'`.app` extraite de l'IPA, qui
+ * ont rendu « 8 vérification(s), 0 défaut(s) », la clef de 46 caractères
+ * retrouvée. Un constructeur et un extracteur écrits par la même main peuvent se
+ * tromper de la même façon ; cette mesure-là ne le peut pas.
  *
  * @param {{ nom: string, contenu: string }[]} entrees les fichiers à ranger
  * @returns {Buffer} l'archive complète
@@ -300,9 +350,15 @@ test('un APK sain passe — le bundle est extrait de l’archive', () => {
   // Le format Android n'est pas celui d'iOS : le bundle est rangé dans une
   // archive, sous un nom fixé, et le contrôle doit l'y trouver. Ce cas éprouve
   // l'extraction elle-même.
+  //
+  // La table de ressources fait partie du paquet, et pas du décor : un APK réel
+  // en porte une, c'est là que le nom affiché est rangé. Une archive qui n'en
+  // aurait pas ne serait pas un APK sain, et le banc mesurerait un format qui
+  // n'existe pas.
   const archive = archiveZip([
     { nom: 'AndroidManifest.xml', contenu: 'manifeste factice' },
     { nom: 'assets/index.android.bundle', contenu: PAQUET_SAIN },
+    { nom: 'resources.arsc', contenu: tableAndroid(NOM_DECLARE).toString('latin1') },
   ]);
 
   const { code, sortie } = eprouver({ bundle: archive, nom: 'paquet.apk' });
@@ -343,4 +399,80 @@ test('un fichier nommé `.apk` qui n’est pas une archive est lu pour ce qu’i
 
   assert.equal(code, 0, sortie);
   assert.match(sortie, /0 défaut\(s\)/);
+});
+
+/**
+ * LE NOM AFFICHÉ — le seul réglage que le parent lit sans ouvrir l'application.
+ *
+ * Il est rangé dans l'enveloppe du paquet, pas dans le bundle, et dans une
+ * écriture différente selon la plateforme. Les quatre cas ci-dessous exercent
+ * les deux plateformes **dans les deux sens** : un paquet au bon nom passe, un
+ * paquet resté sur l'ancien nom tombe. Sans le second, un contrôle qui
+ * chercherait une chaîne toujours présente passerait pour un contrôle strict.
+ *
+ * Les deux binaires publiés ont servi de témoin avant d'écrire ces cas :
+ * `8 vérification(s), 0 défaut(s)` sur l'APK et sur l'`.app`, puis la même
+ * mesure avec `app.json` muté — les deux tombent sur `nom-affiche-absent`, et
+ * `app.json` restauré à l'empreinte près.
+ */
+const AUTRE_NOM = 'FCPE Frères Lumières';
+
+test('un paquet Android resté sur un autre nom fait tomber le contrôle', () => {
+  const archive = archiveZip([
+    { nom: 'assets/index.android.bundle', contenu: PAQUET_SAIN },
+    { nom: 'resources.arsc', contenu: tableAndroid(AUTRE_NOM).toString('latin1') },
+  ]);
+
+  const { code, sortie } = eprouver({ bundle: archive, nom: 'paquet.apk' });
+
+  assert.equal(code, 1);
+  assert.match(sortie, /\[nom-affiche-absent\]/);
+  assert.ok(sortie.includes(NOM_DECLARE), 'le défaut doit nommer la valeur attendue');
+});
+
+test('un paquet iOS passe quand son Info.plist porte le nom, en UTF-16BE', () => {
+  // L'écriture mesurée sur l'IPA publié. Un contrôle qui n'essaierait que
+  // l'UTF-8 refuserait ce paquet-ci, qui est sain.
+  const { code, sortie } = eprouver({
+    paquet: [
+      { nom: 'main.jsbundle', octets: Buffer.from(PAQUET_SAIN, 'latin1') },
+      { nom: 'Info.plist', octets: plistIos(NOM_DECLARE) },
+    ],
+  });
+
+  assert.equal(code, 0, sortie);
+  assert.match(sortie, /0 défaut\(s\)/);
+});
+
+test('un paquet iOS resté sur un autre nom fait tomber le contrôle', () => {
+  const { code, sortie } = eprouver({
+    paquet: [
+      { nom: 'main.jsbundle', octets: Buffer.from(PAQUET_SAIN, 'latin1') },
+      { nom: 'Info.plist', octets: plistIos(AUTRE_NOM) },
+    ],
+  });
+
+  assert.equal(code, 1);
+  assert.match(sortie, /\[nom-affiche-absent\]/);
+});
+
+test('un paquet iOS sans Info.plist est refusé, et le dit', () => {
+  // Deux défauts distincts : le nom est faux, ou le nom est introuvable. Un
+  // refus qui les confondrait ne dirait pas sur quoi il porte.
+  const { code, sortie } = eprouver({
+    paquet: [{ nom: 'main.jsbundle', octets: Buffer.from(PAQUET_SAIN, 'latin1') }],
+  });
+
+  assert.equal(code, 1);
+  assert.match(sortie, /\[nom-affiche-illisible\]/);
+  assert.doesNotMatch(sortie, /\[nom-affiche-absent\]/);
+});
+
+test('un bundle passé seul n’a pas d’enveloppe, et le contrôle se tait', () => {
+  // Le nom ne vit pas dans le bundle JavaScript. Refuser ici serait refuser un
+  // fichier sain pour un défaut qu'il ne peut pas porter.
+  const { code, sortie } = eprouver({ bundle: PAQUET_SAIN });
+
+  assert.equal(code, 0, sortie);
+  assert.doesNotMatch(sortie, /nom-affiche/);
 });

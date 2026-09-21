@@ -62,7 +62,10 @@
  *   - la clef attendue est présente, littéralement ;
  *   - la clef attendue est bien une clef **publique** — c'est le risque réel,
  *     un copier-coller depuis la mauvaise ligne du tableau de bord ;
- *   - le paquet ne contient aucun jeton `service_role`.
+ *   - le paquet ne contient aucun jeton `service_role` ;
+ *   - le **nom affiché** déclaré dans `app.json` se lit dans le paquet. C'est la
+ *     seule valeur que le parent voit sans ouvrir l'application, et elle n'était
+ *     relue par personne.
  *
  * Le dernier contrôle garde un motif, mais un motif **délimité** : un JWT a
  * trois segments séparés par des points, donc sa charge utile est bornée des
@@ -170,6 +173,44 @@ function problemeDeClef(clef) {
   }
 
   return null;
+}
+
+/**
+ * Le nom affiché déclaré, lu dans `app.json`.
+ *
+ * C'est la seule valeur de configuration que le parent voit **sans ouvrir
+ * l'application** : elle est écrite sous l'icône de son écran d'accueil. Le
+ * fichier est atteint par un chemin résolu depuis ce script, et non depuis le
+ * dossier courant : ce contrôle est appelé par deux flux de travail, et rien ne
+ * garantit qu'ils s'exécutent à la racine du dépôt.
+ */
+function nomDeclare() {
+  return JSON.parse(readFileSync(new URL('../app.json', import.meta.url), 'utf8')).expo.name;
+}
+
+/**
+ * Les écritures sous lesquelles un paquet peut ranger une chaîne.
+ *
+ * Ce ne sont pas des précautions : ce sont les deux formats réellement
+ * rencontrés, **mesurés sur les binaires publiés**.
+ *
+ *   - la table de ressources d'Android (`resources.arsc`) range ses chaînes en
+ *     **UTF-8** ;
+ *   - une plist binaire iOS (`bplist00`) range une chaîne non ASCII en
+ *     **UTF-16BE** — les caractères accentués du nom l'y forcent.
+ *
+ * Un contrôle qui n'essaierait qu'une seule écriture refuserait un paquet sain,
+ * et c'est exactement le défaut que ce fichier a connu quatre fois.
+ */
+const ECRITURES = [
+  (nom) => Buffer.from(nom, 'utf8'),
+  (nom) => Buffer.from(nom, 'utf16le'),
+  (nom) => Buffer.from(nom, 'utf16le').swap16(), // UTF-16BE
+];
+
+/** Le nom est-il rangé dans ces octets, dans l'une des écritures connues ? */
+function nomPresent(octets, nom) {
+  return ECRITURES.some((ecrire) => octets.includes(ecrire(nom)));
 }
 
 /**
@@ -309,6 +350,55 @@ function main() {
     contenu = extrait.toString('latin1');
   } else {
     contenu = octets.toString('latin1');
+  }
+
+  // ── Le nom affiché ─────────────────────────────────────────────────────────
+  // `expo.name` est ce que le parent lit sous l'icône, et c'était la **seule**
+  // valeur déclarée que rien ne relisait dans le paquet produit. Un paquet qui
+  // part avec l'ancien nom ne se distingue d'un paquet correct par rien : il
+  // s'installe, s'ouvre, fonctionne — sous un autre nom.
+  //
+  // Le nom ne vit pas dans le bundle JavaScript : il vit dans l'**enveloppe**.
+  // iOS le range dans `Info.plist`, donc dans un dossier ; Android dans la table
+  // de ressources, donc dans l'archive. Un `main.jsbundle` passé seul n'a pas
+  // d'enveloppe, et n'a donc pas de nom à lire : ce contrôle se tait plutôt que
+  // de refuser un fichier sain — c'est la règle qu'il applique déjà aux
+  // variables vides, refuser pour la bonne raison.
+  //
+  // Ce que ce contrôle ne dit pas : que la chaîne trouvée soit **celle** de
+  // l'étiquette. Il dit qu'elle est là. Cela suffit à refuser un paquet resté
+  // sur l'ancien nom — mesuré sur les deux binaires publiés : l'ancien nom y est
+  // **absent**, le nouveau y est.
+  const dossier = statSync(chemin).isDirectory();
+  const enveloppe = dossier || (octets.length >= 4 && octets.readUInt32LE(0) === ENTETE_ZIP);
+
+  if (enveloppe) {
+    const nom = nomDeclare();
+
+    let octetsNom = null;
+    if (dossier) {
+      try {
+        octetsNom = readFileSync(join(chemin, 'Info.plist'));
+      } catch {
+        octetsNom = null;
+      }
+    } else {
+      octetsNom = extraireDuZip(octets, 'resources.arsc');
+    }
+
+    verifier(octetsNom !== null, {
+      tag: 'nom-affiche-illisible',
+      message: dossier
+        ? 'aucun Info.plist lisible dans le paquet iOS : le nom affiché ne peut pas être vérifié'
+        : 'aucune table de ressources (resources.arsc) dans l’archive : le nom affiché ne peut pas être vérifié',
+    });
+
+    verifier(octetsNom === null || nomPresent(octetsNom, nom), {
+      tag: 'nom-affiche-absent',
+      message:
+        `le nom « ${nom} » déclaré dans app.json ne se lit pas dans le paquet : ` +
+        'l’application s’installerait sous un autre nom que celui annoncé',
+    });
   }
 
   verifier(contenu.includes(url), {
