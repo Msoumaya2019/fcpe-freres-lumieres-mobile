@@ -1051,9 +1051,9 @@ ne vaut que pour le commit dont il est né.
 21 septembre ; l'APK **arrive le 1er octobre**, parce que le forfait gratuit d'Expo a
 épuisé ses compilations Android du mois et refuse de démarrer avant cette date. En
 attendant, l'APK publié le 21 septembre reste téléchargeable sur la page de la
-version précédente — `…/releases/tag/v0.1.0` — mais il a été compilé **six commits**
-avant l'état actuel : il ne porte ni l'avis sur l'accueil, ni le lien vers
-l'information des familles à l'inscription.
+version précédente — `…/releases/tag/v0.1.0` — mais il a été compilé à **13:48** ce
+jour-là, **avant** l'avis sur l'accueil et le lien vers l'information des familles :
+il ne les contient pas.
 
 Deux autres adresses circulent, et **aucune des deux ne marchera pour vous**, parce
 qu'elles demandent un compte : la page de compilation EAS affichée en fin de build
