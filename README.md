@@ -553,6 +553,8 @@ appel de connexion ne doit se trouver dans la branche d'inscription.
 
 ```
 .
+├── AGENTS.md                      les consignes que lit un agent de code
+├── CLAUDE.md                      une ligne, le renvoi vers AGENTS.md
 ├── App.tsx                        SafeAreaProvider > AuthProvider > Navigation
 ├── index.ts                       point d'entrée Expo
 ├── types/globals.d.ts             typage des variables EXPO_PUBLIC_*
