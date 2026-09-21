@@ -1092,11 +1092,12 @@ l'autorisation de l'appareil.
 
 ---
 
-## Étape 6 — Les quatre réglages du tableau de bord _(~5 min, plus tard)_
+## Étape 6 — Les six réglages du tableau de bord _(~5 min, plus tard)_
 
-Ces **cinq** réglages vivent dans le tableau de bord Supabase et **pas** dans un  
-fichier du dépôt : aucun test ne les protège, donc ils sont consignés dans le  
-`README.md` (§4) plutôt que laissés à la mémoire.
+Ces **six** réglages vivent dans le tableau de bord Supabase et **pas** dans un  
+fichier du dépôt — sauf le modèle de courriel, dont une **copie de secours** est  
+dans `supabase/courriels/`. Aucun test ne peut lire ces réglages, donc ils sont  
+consignés dans le `README.md` (§4) plutôt que laissés à la mémoire.
 
 **Quatre restaient à faire, et deux ne le sont plus** — mesurés le 21 septembre 2026
 par `npm run verifier:redirection`, qui interroge GoTrue et dit, pour chaque adresse,
@@ -1104,13 +1105,14 @@ si elle est retenue ou remplacée par le repli. Le cinquième, le SMTP, était d
 
 Pour que vous sachiez de quoi il s'agit :
 
-| #   | Écran                                              | Valeur                                                                                                                |
-| --- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| 1   | Authentication > URL Configuration > Redirect URLs | **deux** adresses : `fcpefl://reinitialisation` et `fcpefl://confirmation` — **mesuré en place** le 21 septembre 2026 |
-| 2   | Authentication > URL Configuration > Site URL      | `https://fcpe-freres-lumieres-admin.vercel.app/confirmation` — **mesuré en place** le 21 septembre 2026               |
-| 3   | Authentication > Email Templates > Reset password  | le lien doit être `{{ .ConfirmationURL }}` (c'est le défaut)                                                          |
-| 4   | Authentication > Providers > Email                 | _Minimum password length_ = **6**, et la confirmation d'e-mail activée                                                |
-| 5   | Authentication > SMTP Settings                     | les identifiants de l'étape 4 — **fait**, vérifié jusqu'au clic sur le lien                                           |
+| #   | Écran                                              | Valeur                                                                                                                                                             |
+| --- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Authentication > URL Configuration > Redirect URLs | **deux** adresses : `fcpefl://reinitialisation` et `fcpefl://confirmation` — **mesuré en place** le 21 septembre 2026                                              |
+| 2   | Authentication > URL Configuration > Site URL      | `https://fcpe-freres-lumieres-admin.vercel.app/confirmation` — **mesuré en place** le 21 septembre 2026                                                            |
+| 3   | Authentication > Email Templates > Reset password  | le lien doit être `{{ .ConfirmationURL }}` (c'est le défaut)                                                                                                       |
+| 4   | Authentication > Providers > Email                 | _Minimum password length_ = **6**, et la confirmation d'e-mail activée                                                                                             |
+| 5   | Authentication > SMTP Settings                     | les identifiants de l'étape 4 — **fait**, vérifié jusqu'au clic sur le lien                                                                                        |
+| 6   | Authentication > Email Templates > Confirm signup  | le lien `{{ .ConfirmationURL }}`, **plus** le renvoi vers l'information des familles — le texte à coller est dans `supabase/courriels/confirmation-inscription.md` |
 
 Le réglage 1 est **le plus important** : Supabase refuse toute redirection absente de  
 cette liste, et l'adhérent qui a oublié son mot de passe ne recevrait alors aucun  

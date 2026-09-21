@@ -422,7 +422,7 @@ toucher au code :
 | désactivé        | une **session**      | rien : le paquet a déjà notifié `SIGNED_IN`    |
 | activé (attendu) | aucune session       | un message d'attente, et retour à la connexion |
 
-**Quatre réglages du tableau de bord, et sans eux le flux ne peut pas
+**Cinq réglages du tableau de bord, et sans eux le flux ne peut pas
 fonctionner :**
 
 1. **Authentication > URL Configuration > Site URL** — la même adresse réelle
@@ -434,6 +434,15 @@ fonctionner :**
 4. **Authentication > URL Configuration > Redirect URLs** — ajouter exactement
    `fcpefl://confirmation`, **en plus** de `fcpefl://reinitialisation`. Le chemin
    vient de `SIGNUP_REDIRECT_PATH` dans `src/auth/redirectPaths.ts`.
+5. **Authentication > Email Templates > Confirm signup** — le message doit porter
+   le lien `{{ .ConfirmationURL }}` **et** le renvoi vers l'information des
+   familles sur leurs données. Le texte à coller, mot pour mot, et le geste, sont
+   dans `supabase/courriels/confirmation-inscription.md`. C'est le seul réglage
+   de cette liste qui relève du RGPD, et il le doit à une propriété simple : ce
+   courriel est le **seul** message que reçoit **chaque** futur adhérent, au
+   moment précis où ses données sont collectées — le moment que l'article 13
+   vise. Il a un second mérite : il est servi par Supabase, donc il ne demande
+   **aucune recompilation** de l'application.
 
 > **Ce que la vérification automatique couvre, et ce qu'elle ne couvre pas.**
 > Ces réglages ne vivent que dans le tableau de bord — il n'existe pas de
