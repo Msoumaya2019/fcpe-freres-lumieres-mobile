@@ -1313,6 +1313,16 @@ la page des versions, qui nomme le commit de chaque fichier.
 déclenchement manuel du flux propose `preview` par défaut ; un tag `v*` pousse, lui, un
 build de production, donc un AAB.
 
+**Le forfait gratuit d'Expo limite les compilations Android par mois, et la limite a
+été atteinte le 21 septembre 2026.** Le refus est arrivé **après** le téléversement du
+projet, sur la seule ligne « This account has used its Android builds from the Free plan
+this month, which will reset in 9 days (on Thu Oct 01 2026) » — noyée dans une sortie
+normale dont la dernière ligne ne dit que `Error: build command failed.` Le projet, la
+clef et le jeton, eux, sont corrects. Conséquence à connaître : **l'APK ne peut pas être
+recompilé avant le 1er octobre 2026**, sauf à passer au forfait payant. **L'IPA n'est
+pas concerné** : le flux iOS compile sur un exécuteur macOS et ne passe pas par EAS, donc
+il reste disponible le jour même.
+
 ### 7.7 Éprouver la chaîne, sans rien publier _(~1 min)_
 
 Une fois la clef déposée (§7.4) et l'APK réinstallé, l'essai se fait **sans publier
